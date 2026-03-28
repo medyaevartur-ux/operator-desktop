@@ -7,6 +7,7 @@ export function AppUpdater() {
   const [status, setStatus] = useState<"idle" | "available" | "downloading" | "ready">("idle");
   const [version, setVersion] = useState("");
   const [progress, setProgress] = useState(0);
+  const [debugInfo, setDebugInfo] = useState("");
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -33,29 +34,43 @@ export function AppUpdater() {
   const handleUpdate = async () => {
     try {
       setStatus("downloading");
-      const update = await check();
-      if (!update) return;
+      setDebugInfo("Checking for update...");
 
+      const update = await check();
+      if (!update) {
+        setDebugInfo("No update found");
+        alert("No update found on second check");
+        setStatus("available");
+        return;
+      }
+
+      setDebugInfo("Starting download v" + update.version);
       let downloaded = 0;
       let contentLength = 0;
 
       await update.downloadAndInstall((event) => {
         if (event.event === "Started" && event.data.contentLength) {
           contentLength = event.data.contentLength;
+          setDebugInfo("Download started, size: " + contentLength);
         } else if (event.event === "Progress") {
           downloaded += event.data.chunkLength;
           if (contentLength > 0) {
             setProgress(Math.round((downloaded / contentLength) * 100));
           }
         } else if (event.event === "Finished") {
+          setDebugInfo("Download finished!");
           setStatus("ready");
         }
       });
 
+      setDebugInfo("downloadAndInstall completed, relaunching...");
+      alert("Download complete! About to relaunch.");
       await relaunch();
     } catch (e: any) {
+      const msg = e?.message || e?.toString() || JSON.stringify(e);
       console.error("Update failed:", e);
-      alert("Update error: " + (e?.message || JSON.stringify(e)));
+      setDebugInfo("ERROR: " + msg);
+      alert("UPDATE ERROR:\n" + msg);
       setStatus("available");
     }
   };
@@ -86,6 +101,7 @@ export function AppUpdater() {
             <div className={s.progressBar} style={{ width: `${progress}%` }} />
           </div>
           <div className={s.progressText}>{progress}%</div>
+          {debugInfo && <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>{debugInfo}</div>}
         </>
       )}
 
