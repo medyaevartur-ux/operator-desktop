@@ -71,7 +71,15 @@ export function InboxRail() {
         <Tooltip content={`${operator?.name ?? "Оператор"} — ${currentStatus}`} side="right">
           <DropdownMenu.Trigger asChild>
             <button className={s.avatarBtn} type="button">
-              {getInitials(operator?.name ?? "?")}
+              {operator?.avatar_url ? (
+                <img
+                  src={operator.avatar_url}
+                  alt={operator.name ?? ""}
+                  className={s.avatarImg}
+                />
+              ) : (
+                getInitials(operator?.name ?? "?")
+              )}
               <div
                 className={s.avatarDot}
                 style={{ background: getStatusColor(currentStatus) }}

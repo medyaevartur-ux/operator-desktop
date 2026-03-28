@@ -10,6 +10,8 @@ import {
   MessageSquareQuote,
   Image as ImageIcon,
   Loader2,
+  Reply,
+  X as XIcon,  
   Smile,
   Bold,
   Italic,
@@ -70,7 +72,8 @@ export function ChatComposer() {
   const operator = useAuthStore((st) => st.operator);
   const operators = useInboxStore((st) => st.operators);
   const messageCount = useInboxStore((st) => st.messages.length);
-
+  const replyTo = useInboxStore((st) => st.replyTo);
+  const setReplyTo = useInboxStore((st) => st.setReplyTo);
   const [value, setValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState("");
@@ -341,6 +344,22 @@ export function ChatComposer() {
           <span className={s.tabCount}>(всего {messageCount})</span>
         </div>
 
+        {/* ── Reply bar ── */}
+        {replyTo && (
+          <div className={s.replyBar}>
+            <Reply style={{ width: 16, height: 16, color: "var(--accent)", flexShrink: 0 }} />
+            <div className={s.replyBarInfo}>
+              <div className={s.replyBarSender}>
+                {replyTo.sender === "visitor" ? "Клиент" : replyTo.sender === "ai" ? "AI-бот" : "Оператор"}
+              </div>
+              <div className={s.replyBarText}>{replyTo.message}</div>
+            </div>
+            <button type="button" className={s.replyBarClose} onClick={() => setReplyTo(null)}>
+              <XIcon style={{ width: 14, height: 14 }} />
+            </button>
+          </div>
+        )}
+        
         {/* ── Mention dropdown (inline) ── */}
         {showMentions && filteredOperators.length > 0 && (
           <div className={s.mentionContent} onMouseDown={(e) => e.stopPropagation()}>

@@ -45,6 +45,8 @@ export interface ChatSession {
   operator_joined_at: string | null;
   closed_at: string | null;
   rating_comment: string | null;
+  last_message_text: string | null;
+  last_message_sender: string | null;  
 }
 
 export interface ChatMessage {
@@ -68,4 +70,12 @@ export interface ChatMessage {
   is_internal?: boolean;
   updated_at?: string | null;
   reply_to_id?: string | null;
+  reactions?: Array<{
+    id: string;
+    emoji: string;
+    operator_id: string;
+    operator_name: string;
+  }>;  
+  reply_to_message?: string | null;
+  reply_to_sender?: string | null;  
 }

@@ -4,7 +4,7 @@ import { useNotificationStore } from "@/store/notification.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { uploadAvatar, updateOperator } from "@/features/operators/operators.api";
 import { API_BASE } from "@/lib/api";
-import { ArrowLeft, Camera, Save, LogOut, Zap, Plus, Pencil, Trash2, Power, GripVertical, FileText, X } from "lucide-react";
+import { ArrowLeft, Camera, Save, LogOut, Zap, Plus, Pencil, Trash2, Power } from "lucide-react";
 import { Toggle, toast, useConfirm } from "@/components/ui";
 import {
   getAutoResponses,
@@ -14,12 +14,6 @@ import {
   type AutoResponseRule,
 } from "@/features/inbox/inbox.api";
 import s from "./SettingsScreen.module.css";
-import {
-  getPrechatFormConfig,
-  savePrechatFormConfig,
-  type PrechatFormConfig,
-  type PrechatField,
-} from "@/features/settings/settings.api";
 const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
   supervisor: "Супервайзер",
@@ -75,6 +69,10 @@ export function SettingsScreen() {
   const setDndFrom = useNotificationStore((st) => st.setDndFrom);
   const dndTo = useNotificationStore((st) => st.dndTo);
   const setDndTo = useNotificationStore((st) => st.setDndTo);  
+  const closeToTray = useNotificationStore((st) => st.closeToTray);
+  const setCloseToTray = useNotificationStore((st) => st.setCloseToTray);
+  const showMessagePreview = useNotificationStore((st) => st.showMessagePreview);
+  const setShowMessagePreview = useNotificationStore((st) => st.setShowMessagePreview);  
   const { confirm } = useConfirm();
   const isAdmin = operator?.role === "admin" || operator?.role === "supervisor";
   // ═══ Авто-ответы ═══
@@ -84,74 +82,7 @@ export function SettingsScreen() {
   const [newRuleMessage, setNewRuleMessage] = useState("");
   const [newRuleDelay, setNewRuleDelay] = useState(180);
   const [showNewForm, setShowNewForm] = useState(false);
-  // ═══ Pre-chat Form ═══
-  const [prechatConfig, setPrechatConfig] = useState<PrechatFormConfig>({
-    enabled: false,
-    fields: [
-      { name: "name", label: "Имя", type: "text", required: true },
-      { name: "email", label: "Email", type: "email", required: true },
-      { name: "phone", label: "Телефон", type: "tel", required: false },
-    ],
-  });
-  const [prechatLoading, setPrechatLoading] = useState(false);
-  const [prechatSaving, setPrechatSaving] = useState(false);
-  const [prechatSaved, setPrechatSaved] = useState(false);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    setPrechatLoading(true);
-    getPrechatFormConfig()
-      .then(setPrechatConfig)
-      .catch(() => {})
-      .finally(() => setPrechatLoading(false));
-  }, [isAdmin]);
-
-  const handleSavePrechat = async () => {
-    setPrechatSaving(true);
-    setPrechatSaved(false);
-    try {
-      const saved = await savePrechatFormConfig(prechatConfig);
-      setPrechatConfig(saved);
-      setPrechatSaved(true);
-      toast.success("Форма сохранена");
-      setTimeout(() => setPrechatSaved(false), 2000);
-    } catch {
-      toast.error("Ошибка сохранения формы");
-    } finally {
-      setPrechatSaving(false);
-    }
-  };
-
-  const addPrechatField = () => {
-    const id = `field_${Date.now()}`;
-    setPrechatConfig((prev) => ({
-      ...prev,
-      fields: [...prev.fields, { name: id, label: "Новое поле", type: "text", required: false }],
-    }));
-  };
-
-  const removePrechatField = (index: number) => {
-    setPrechatConfig((prev) => ({
-      ...prev,
-      fields: prev.fields.filter((_, i) => i !== index),
-    }));
-  };
-
-  const updatePrechatField = (index: number, patch: Partial<PrechatField>) => {
-    setPrechatConfig((prev) => ({
-      ...prev,
-      fields: prev.fields.map((f, i) => (i === index ? { ...f, ...patch } : f)),
-    }));
-  };
-
-  const movePrechatField = (from: number, to: number) => {
-    setPrechatConfig((prev) => {
-      const fields = [...prev.fields];
-      const [moved] = fields.splice(from, 1);
-      fields.splice(to, 0, moved);
-      return { ...prev, fields };
-    });
-  };
   useEffect(() => {
     if (!isAdmin) return;
     setIsAutoLoading(true);
@@ -442,6 +373,29 @@ export function SettingsScreen() {
           </div>
         </div>
 
+        {/* ═══ Поведение приложения ═══ */}
+        <div className={s.section}>
+          <div className={s.sectionTitle}>🖥️ Приложение</div>
+          <div className={s.sectionCard}>
+            <Toggle
+              label="Сворачивать в трей при закрытии"
+              checked={closeToTray}
+              onChange={setCloseToTray}
+            />
+            <div className={s.dndHint}>
+              Приложение останется в трее и будет получать уведомления
+            </div>
+            <Toggle
+              label="Показывать текст сообщения в уведомлениях"
+              checked={showMessagePreview}
+              onChange={setShowMessagePreview}
+            />
+            <div className={s.dndHint}>
+              Отключите для конфиденциальности — будет показано только имя отправителя
+            </div>
+          </div>
+        </div>
+
         {/* ═══ DND Расписание ═══ */}
         <div className={s.section}>
           <div className={s.sectionTitle}>🌙 Не беспокоить</div>
@@ -479,127 +433,6 @@ export function SettingsScreen() {
           </div>
         </div>
 
-        {/* ═══ Форма перед чатом ═══ */}
-        {isAdmin && (
-          <div className={s.section}>
-            <div className={s.sectionTitle}>
-              <FileText style={{ width: 14, height: 14, display: "inline", verticalAlign: "middle", marginRight: 4 }} />
-              Форма перед чатом
-            </div>
-            <div className={s.sectionCard}>
-              <Toggle
-                label="Показывать форму перед началом чата"
-                checked={prechatConfig.enabled}
-                onChange={(v) => setPrechatConfig((prev) => ({ ...prev, enabled: v }))}
-              />
-
-              {prechatConfig.enabled && (
-                <div className={s.prechatFields}>
-                  {prechatConfig.fields.map((field, i) => (
-                    <div key={field.name} className={s.prechatFieldRow}>
-                      <div className={s.prechatDrag}>
-                        {i > 0 && (
-                          <button
-                            type="button"
-                            className={s.prechatMoveBtn}
-                            onClick={() => movePrechatField(i, i - 1)}
-                            title="Вверх"
-                          >
-                            ↑
-                          </button>
-                        )}
-                        {i < prechatConfig.fields.length - 1 && (
-                          <button
-                            type="button"
-                            className={s.prechatMoveBtn}
-                            onClick={() => movePrechatField(i, i + 1)}
-                            title="Вниз"
-                          >
-                            ↓
-                          </button>
-                        )}
-                        <GripVertical style={{ width: 14, height: 14, color: "var(--text-disabled)" }} />
-                      </div>
-
-                      <div className={s.prechatFieldBody}>
-                        <input
-                          className={s.prechatInput}
-                          value={field.label}
-                          onChange={(e) => updatePrechatField(i, { label: e.target.value })}
-                          placeholder="Название поля"
-                        />
-                        <select
-                          className={s.prechatSelect}
-                          value={field.type}
-                          onChange={(e) => updatePrechatField(i, { type: e.target.value as PrechatField["type"] })}
-                        >
-                          <option value="text">Текст</option>
-                          <option value="email">Email</option>
-                          <option value="tel">Телефон</option>
-                          <option value="select">Выбор</option>
-                        </select>
-                        <Toggle
-                          label="Обязат."
-                          checked={field.required}
-                          onChange={(v) => updatePrechatField(i, { required: v })}
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        className={`${s.autoIconBtn} ${s.autoIconBtnDanger}`}
-                        onClick={() => removePrechatField(i)}
-                        title="Удалить поле"
-                      >
-                        <X style={{ width: 13, height: 13 }} />
-                      </button>
-                    </div>
-                  ))}
-
-                  <button className={s.autoAddBtn} onClick={addPrechatField}>
-                    <Plus style={{ width: 14, height: 14 }} />
-                    Добавить поле
-                  </button>
-
-                  {/* Preview */}
-                  <div className={s.prechatPreview}>
-                    <div className={s.prechatPreviewTitle}>Предпросмотр</div>
-                    <div className={s.prechatPreviewCard}>
-                      {prechatConfig.fields.map((f) => (
-                        <div key={f.name} className={s.prechatPreviewField}>
-                          <label className={s.prechatPreviewLabel}>
-                            {f.label}
-                            {f.required && <span style={{ color: "var(--error)" }}> *</span>}
-                          </label>
-                          <input
-                            className={s.prechatPreviewInput}
-                            type={f.type === "select" ? "text" : f.type}
-                            placeholder={f.label}
-                            disabled
-                          />
-                        </div>
-                      ))}
-                      <button className={s.prechatPreviewBtn} disabled>
-                        Начать чат
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    className={`${s.saveBtn} ${prechatSaved ? s.saveBtnSaved : ""}`}
-                    onClick={() => void handleSavePrechat()}
-                    disabled={prechatSaving}
-                    style={{ marginTop: 12 }}
-                  >
-                    <Save style={{ width: 14, height: 14 }} />
-                    {prechatSaved ? "Сохранено ✓" : prechatSaving ? "Сохранение..." : "Сохранить форму"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        
         {/* ═══ Авто-ответы ═══ */}
         {isAdmin && (
           <div className={s.section}>

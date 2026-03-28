@@ -117,6 +117,11 @@ interface NotificationState {
   playSound: (type?: SoundType) => void;
   previewSound: (type: SoundType) => void;
   showDesktopNotification: (sessionId: string) => void;
+  closeToTray: boolean;
+  showMessagePreview: boolean;
+  setCloseToTray: (v: boolean) => void;
+  setShowMessagePreview: (v: boolean) => void;
+  syncBadge: () => void;  
 }
 
 /* ═══ Store ═══ */
@@ -132,6 +137,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   dndScheduleEnabled: loadBool("notif_dnd_schedule", false),
   dndFrom: localStorage.getItem("notif_dnd_from") || "22:00",
   dndTo: localStorage.getItem("notif_dnd_to") || "08:00",  
+  closeToTray: loadBool("notif_close_tray", true),
+  showMessagePreview: loadBool("notif_msg_preview", true),  
   pending: {},
   totalUnread: 0,
 
@@ -145,6 +152,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   setDndScheduleEnabled: (v) => { saveBool("notif_dnd_schedule", v); set({ dndScheduleEnabled: v }); },
   setDndFrom: (v) => { try { localStorage.setItem("notif_dnd_from", v); } catch {} set({ dndFrom: v }); },
   setDndTo: (v) => { try { localStorage.setItem("notif_dnd_to", v); } catch {} set({ dndTo: v }); },
+  setCloseToTray: (v) => {
+    saveBool("notif_close_tray", v);
+    set({ closeToTray: v });
+    import("@/lib/tauri-bridge").then(({ setCloseToTray }) => setCloseToTray(v)).catch(() => {});
+  },
+  setShowMessagePreview: (v) => { saveBool("notif_msg_preview", v); set({ showMessagePreview: v }); },
+  syncBadge: () => {
+    const total = get().totalUnread;
+    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(total)).catch(() => {});
+  },  
   isDndNow: () => {
     const st = get();
     if (!st.dndScheduleEnabled) return false;
@@ -185,9 +202,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const totalUnread = Object.values(pending).reduce((sum, p) => sum + p.count, 0);
     set({ pending, totalUnread });
 
-    if (totalUnread > 0) {
-      document.title = `(${totalUnread}) Alphabet Chat`;
-    }
+    // Sync badge (Tauri taskbar + document title)
+    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(totalUnread)).catch(() => {
+      if (totalUnread > 0) document.title = `(${totalUnread}) Alphabet Chat`;
+    });
 
     if (get().soundEnabled) {
       get().playSound("new_message");
@@ -202,12 +220,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const pending = { ...get().pending };
     delete pending[sessionId];
     const totalUnread = Object.values(pending).reduce((sum, p) => sum + p.count, 0);
-    document.title = totalUnread > 0 ? `(${totalUnread}) Alphabet Chat` : "Alphabet Chat";
+    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(totalUnread)).catch(() => {
+      document.title = totalUnread > 0 ? `(${totalUnread}) Alphabet Chat` : "Alphabet Chat";
+    });
     set({ pending, totalUnread });
   },
 
   clearAll: () => {
-    document.title = "Alphabet Chat";
+    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(0)).catch(() => {
+      document.title = "Alphabet Chat";
+    });
     set({ pending: {}, totalUnread: 0 });
   },
 
@@ -238,47 +260,16 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const pending = state.pending[sessionId];
     if (!pending) return;
 
-    // Try Tauri native first
-    try {
-      if ((window as any).__TAURI_INTERNALS__) {
-        import("@tauri-apps/plugin-notification").then(({ sendNotification, isPermissionGranted, requestPermission }) => {
-          isPermissionGranted().then((granted) => {
-            const send = () => {
-              const title = pending.count > 1
-                ? `${pending.count} новых от ${pending.visitorName}`
-                : `Сообщение от ${pending.visitorName}`;
-              sendNotification({ title, body: pending.lastMessage.slice(0, 100) });
-            };
-            if (granted) { send(); }
-            else { requestPermission().then((p) => { if (p === "granted") send(); }); }
-          });
-        }).catch(() => {});
-        return;
-      }
-    } catch { /* fallback to browser */ }
-
-    // Browser fallback
-    if (!("Notification" in window)) return;
-    if (Notification.permission === "default") { Notification.requestPermission(); return; }
-    if (Notification.permission !== "granted") return;
-
     const title = pending.count > 1
-      ? `${pending.count} новых сообщений от ${pending.visitorName}`
+      ? `${pending.count} новых от ${pending.visitorName}`
       : `Сообщение от ${pending.visitorName}`;
 
-    const notification = new Notification(title, {
-      body: pending.lastMessage.slice(0, 120),
-      icon: "/icon.png",
-      tag: `chat-${sessionId}`,
-      silent: true,
-    });
+    const body = state.showMessagePreview
+      ? pending.lastMessage.slice(0, 120)
+      : "Новое сообщение в чате";
 
-    notification.onclick = () => {
-      window.focus();
-      window.dispatchEvent(new CustomEvent("open-chat", { detail: { sessionId } }));
-      notification.close();
-    };
-
-    setTimeout(() => notification.close(), 5000);
+    import("@/lib/tauri-bridge").then(({ showNativeNotification }) => {
+      showNativeNotification(title, body, sessionId);
+    }).catch(() => {});
   },
 }));

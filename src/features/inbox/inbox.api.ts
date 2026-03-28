@@ -49,12 +49,14 @@ export async function sendOperatorMessage(params: {
   sessionId: string;
   operatorId: string;
   message: string;
+  replyToId?: string;
 }): Promise<ChatMessage> {
   return api<ChatMessage>(`/api/sessions/${params.sessionId}/messages`, {
     method: "POST",
     body: JSON.stringify({
       operator_id: params.operatorId,
       message: params.message,
+      reply_to_id: params.replyToId || undefined,
     }),
   });
 }
@@ -276,4 +278,48 @@ export async function updateAutoResponse(id: string, data: Partial<{
 
 export async function deleteAutoResponse(id: string): Promise<void> {
   await api(`/api/auto-responses/${id}`, { method: "DELETE" });
+}
+
+// === Proactive Invitations ===
+
+export interface ProactiveInvitation {
+  id: string;
+  visitor_id: string;
+  operator_id: string | null;
+  operator_name?: string;
+  operator_avatar?: string;
+  message: string;
+  status: "sent" | "accepted" | "declined";
+  created_at: string;
+  accepted_at: string | null;
+  declined_at: string | null;
+  auto_generated: boolean;
+}
+
+export async function sendInvitation(params: {
+  visitorId: string;
+  operatorId: string;
+  message?: string;
+}): Promise<{ ok: boolean; invitation?: ProactiveInvitation; error?: string }> {
+  return api(`/api/invitations`, {
+    method: "POST",
+    body: JSON.stringify({
+      visitor_id: params.visitorId,
+      operator_id: params.operatorId,
+      message: params.message,
+    }),
+  });
+}
+
+export async function getInvitations(status?: string): Promise<ProactiveInvitation[]> {
+  const query = status ? `?status=${status}` : "";
+  return api<ProactiveInvitation[]>(`/api/invitations${query}`);
+}
+
+export async function acceptInvitation(id: string) {
+  return api(`/api/invitations/${id}/accept`, { method: "PATCH" });
+}
+
+export async function declineInvitation(id: string) {
+  return api(`/api/invitations/${id}/decline`, { method: "PATCH" });
 }

@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui";
 import { SkeletonCard } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
 import { formatChatTime } from "@/features/inbox/inbox.utils";
+import { markChatSessionRead } from "@/features/inbox/inbox.api";
 import type { InboxFilter } from "@/features/inbox/inbox.utils";
 import type { ChatSession } from "@/types/chat";
 import s from "./ChatSidebar.module.css";
@@ -48,7 +49,7 @@ function SessionCard({
   const displayName = getSessionDisplayName(session.visitor_name, session.visitor_id);
   const unread = session.unread_count ?? 0;
   const lastTime = formatChatTime(session.last_message_at ?? session.created_at);
-  const preview = session.visitor_email || session.current_page || session.visitor_phone || "Новый диалог";
+  const preview = session.last_message_text || session.visitor_email || session.current_page || session.visitor_phone || "Новый диалог";
   const totalVisits = (session as any).total_visitor_sessions ?? 1;
   const priority = (session as any).priority || "normal";
   const isVip = (session as any).is_vip === true;  
@@ -224,6 +225,14 @@ export function ChatSidebar() {
             onClick={() => {
               setActiveSession(session);
               void useInboxStore.getState().loadMessages(session.id);
+              if (session.unread_count && session.unread_count > 0) {
+                void markChatSessionRead(session.id);
+                useInboxStore.setState((state) => ({
+                  sessions: state.sessions.map((s) =>
+                    s.id === session.id ? { ...s, unread_count: 0 } : s
+                  ),
+                }));
+              }
             }}
           />
         ))}

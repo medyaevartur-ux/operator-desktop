@@ -73,7 +73,9 @@ interface InboxState {
   searchInMessages: () => Promise<void>;
   clearMessageSearch: () => void;
   goToSearchResult: (message: ChatMessage) => void;  
-  updateMessageStatuses: (updates: Array<{ id: string; status: "delivered" | "read"; delivered_at?: string; read_at?: string }>) => void;  
+  updateMessageStatuses: (updates: Array<{ id: string; status: "delivered" | "read"; delivered_at?: string; read_at?: string }>) => void; 
+  replyTo: ChatMessage | null;
+  setReplyTo: (msg: ChatMessage | null) => void;   
   appendMessage: (message: ChatMessage) => void;
   prependMessage: (message: ChatMessage) => void;
   upsertSession: (session: ChatSession) => void;
@@ -95,6 +97,8 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   filter: "all",
   searchQuery: "",
   typingPreviews: {},
+  replyTo: null,
+  setReplyTo: (msg) => set({ replyTo: msg }),  
   setTypingPreview: (sessionId, text, isTyping) =>
     set((state) => ({
       typingPreviews: {
@@ -339,11 +343,16 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       await assignOperatorToSession(activeSession.id, operator.id);
     }
 
+    const replyTo = get().replyTo;
+
     const newMessage = await sendOperatorMessage({
       sessionId: activeSession.id,
       operatorId: operator.id,
       message,
+      replyToId: replyTo?.id,
     });
+
+    set({ replyTo: null });
 
     // Добавляем с реальным id — dedupe защитит от дубля через realtime
     get().appendMessage(newMessage);

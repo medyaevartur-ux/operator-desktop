@@ -8,11 +8,14 @@ import {
   Monitor,
   Clock,
   UserX,
+  Send,
 } from "lucide-react";
 import { useVisitorsStore } from "@/store/visitors.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useInboxStore } from "@/store/inbox.store";
 import { getVisitors, getVisitorHistory, startChatWithVisitor } from "@/features/visitors/visitors.api";
+import { sendInvitation, getInvitations, type ProactiveInvitation } from "@/features/inbox/inbox.api";
+import { useAuthStore } from "@/store/auth.store";
 import { useVisitorsRealtime } from "@/features/visitors/use-visitors-realtime";
 import type { SiteVisitor, VisitorPageEvent } from "@/types/visitor";
 import s from "./VisitorsScreen.module.css";
@@ -117,6 +120,45 @@ export function VisitorsScreen() {
 
   /* ── side panel history ── */
   const [history, setHistory] = useState<VisitorPageEvent[]>([]);
+  const operator = useAuthStore((st) => st.operator);
+  const [inviteModalVisitorId, setInviteModalVisitorId] = useState<string | null>(null);
+  const [inviteMessage, setInviteMessage] = useState("Здравствуйте! Могу я вам помочь?");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [invitations, setInvitations] = useState<ProactiveInvitation[]>([]);
+
+  // Загрузка приглашений
+  useEffect(() => {
+    getInvitations().then(setInvitations).catch(() => {});
+    const t = setInterval(() => {
+      getInvitations().then(setInvitations).catch(() => {});
+    }, 15_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleSendInvite = async () => {
+    if (!inviteModalVisitorId || !operator?.id || inviteSending) return;
+    setInviteSending(true);
+    try {
+      const res = await sendInvitation({
+        visitorId: inviteModalVisitorId,
+        operatorId: operator.id,
+        message: inviteMessage.trim() || undefined,
+      });
+      if (res.ok) {
+        setInviteModalVisitorId(null);
+        setInviteMessage("Здравствуйте! Могу я вам помочь?");
+        // Обновляем список приглашений
+        getInvitations().then(setInvitations).catch(() => {});
+      }
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
+  // Статус приглашения для посетителя
+  const getInvitationStatus = (visitorId: string): ProactiveInvitation | null => {
+    return invitations.find((inv) => inv.visitor_id === visitorId && inv.status === "sent") || null;
+  };  
   useEffect(() => {
     if (!selectedVisitorId) {
       setHistory([]);
@@ -229,6 +271,8 @@ export function VisitorsScreen() {
                       )
                     }
                     onStartChat={() => handleStartChat(v.visitor_id)}
+                    onInvite={() => setInviteModalVisitorId(v.visitor_id)}
+                    invitationStatus={getInvitationStatus(v.visitor_id)}
                   />
                 ))}
               </tbody>
@@ -281,6 +325,54 @@ export function VisitorsScreen() {
           </aside>
         )}
       </div>
+
+      {/* ── Invite modal ── */}
+      {inviteModalVisitorId && (
+        <div className={s.modalOverlay} onClick={() => setInviteModalVisitorId(null)}>
+          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={s.modalHeader}>
+              <div className={s.modalTitle}>Пригласить в чат</div>
+              <button
+                type="button"
+                className={s.sidePanelClose}
+                onClick={() => setInviteModalVisitorId(null)}
+              >
+                <X style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+            <div className={s.modalBody}>
+              <div className={s.modalLabel}>Посетитель</div>
+              <div className={s.modalVisitorId}>{inviteModalVisitorId}</div>
+              <div className={s.modalLabel} style={{ marginTop: 12 }}>Сообщение</div>
+              <textarea
+                className={s.modalTextarea}
+                value={inviteMessage}
+                onChange={(e) => setInviteMessage(e.target.value)}
+                rows={3}
+                placeholder="Текст приглашения..."
+              />
+            </div>
+            <div className={s.modalFooter}>
+              <button
+                type="button"
+                className={s.modalCancelBtn}
+                onClick={() => setInviteModalVisitorId(null)}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className={s.modalSendBtn}
+                onClick={handleSendInvite}
+                disabled={inviteSending}
+              >
+                <Send style={{ width: 14, height: 14 }} />
+                {inviteSending ? "Отправка..." : "Отправить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}      
     </div>
   );
 }
@@ -291,9 +383,11 @@ interface VisitorRowProps {
   isSelected: boolean;
   onSelect: () => void;
   onStartChat: () => void;
+  onInvite: () => void;
+  invitationStatus: ProactiveInvitation | null;
 }
 
-function VisitorRow({ visitor, isSelected, onSelect, onStartChat }: VisitorRowProps) {
+function VisitorRow({ visitor, isSelected, onSelect, onStartChat, onInvite, invitationStatus }: VisitorRowProps) {
   return (
     <tr
       className={`${s.row} ${isSelected ? s.rowSelected : ""}`}
@@ -337,18 +431,36 @@ function VisitorRow({ visitor, isSelected, onSelect, onStartChat }: VisitorRowPr
         </span>
       </td>
       <td>
-        {!visitor.has_chat && (
-          <button
-            type="button"
-            className={s.startChatBtn}
-            onClick={(e) => {
-              e.stopPropagation();
-              onStartChat();
-            }}
-          >
-            <MessageSquarePlus style={{ width: 14, height: 14 }} />
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 4 }}>
+          {!visitor.has_chat && (
+            <button
+              type="button"
+              className={s.startChatBtn}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartChat();
+              }}
+            >
+              <MessageSquarePlus style={{ width: 14, height: 14 }} />
+            </button>
+          )}
+          {!visitor.has_chat && !invitationStatus && (
+            <button
+              type="button"
+              className={s.inviteBtn}
+              onClick={(e) => {
+                e.stopPropagation();
+                onInvite();
+              }}
+              title="Пригласить в чат"
+            >
+              <Send style={{ width: 14, height: 14 }} />
+            </button>
+          )}
+          {invitationStatus && (
+            <span className={s.inviteSentBadge}>Отправлено</span>
+          )}
+        </div>
       </td>
     </tr>
   );

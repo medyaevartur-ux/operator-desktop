@@ -478,3 +478,311 @@
   font-size: 13px;
   max-width: 80%;
 }
+
+/* ── Tabs ── */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-1);
+  overflow-x: auto;
+}
+
+.tab {
+  padding: 10px 16px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tabActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Avatar upload ── */
+
+.avatarSection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.avatarPreview {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--surface-3);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.avatarPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatarActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.avatarUploadBtn {
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.avatarUploadBtn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.avatarRemoveBtn {
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.avatarRemoveBtn:hover {
+  color: var(--status-error);
+}
+
+/* ── Prechat field row ── */
+
+.prechatFieldRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  margin-bottom: 8px;
+}
+
+.prechatFieldName {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.prechatFieldType {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.prechatFieldRequired {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.prechatFieldActions {
+  display: flex;
+  gap: 4px;
+}
+
+.prechatFieldBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s;
+}
+
+.prechatFieldBtn:hover {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+
+.prechatFieldBtnDanger:hover {
+  color: var(--status-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.addFieldBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-default);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.addFieldBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ── Schedule row ── */
+
+.scheduleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle, var(--border-default));
+}
+
+.scheduleRow:last-child {
+  border-bottom: none;
+}
+
+.scheduleDay {
+  width: 30px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.scheduleDayOff .scheduleDay {
+  color: var(--text-disabled);
+}
+
+.scheduleTime {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  width: 80px;
+  text-align: center;
+  outline: none;
+}
+
+.scheduleTime:focus {
+  border-color: var(--accent);
+}
+
+.scheduleTime:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scheduleSep {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── Domain list ── */
+
+.domainRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.domainInput {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.domainInput:focus {
+  border-color: var(--accent);
+}
+
+.domainRemoveBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.domainRemoveBtn:hover {
+  color: var(--status-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.sizeRow {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sizeBtn {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.sizeBtn:hover {
+  background: var(--surface-3);
+}
+
+.sizeBtnActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}

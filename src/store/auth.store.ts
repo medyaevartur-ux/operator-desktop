@@ -52,6 +52,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    // Send offline status before clearing token
+    const operator = get().operator;
+    if (operator?.id) {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3010";
+      // Try Tauri native (reliable even on close)
+      import("@/lib/tauri-bridge").then(({ notifyOfflineNative }) => {
+        notifyOfflineNative(API_URL, operator.id);
+      }).catch(() => {});
+      // Also try fetch as fallback
+      navigator.sendBeacon?.(
+        `${API_URL}/api/operators/${operator.id}/online`,
+        JSON.stringify({ is_online: false }),
+      );
+    }
+
     removeToken();
     set({
       user: null,

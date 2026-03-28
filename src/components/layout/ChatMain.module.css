@@ -741,3 +741,58 @@
   letter-spacing: 0.3px;
   margin-right: 4px;
 }
+
+/* ── Reactions row ── */
+
+.reactionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.reactionsLeft {
+  justify-content: flex-start;
+}
+
+.reactionsRight {
+  justify-content: flex-end;
+}
+
+.reactionPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.reactionPill:hover {
+  background: var(--surface-2);
+  border-color: var(--border-default);
+}
+
+.reactionPillActive {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-muted);
+}
+
+.reactionPillActive:hover {
+  background: var(--accent-muted);
+}
+
+.reactionCount {
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  color: var(--text-secondary);
+}

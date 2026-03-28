@@ -150,7 +150,8 @@ export function ChatMain() {
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const replyTo = useInboxStore((st) => st.replyTo);
+  const setReplyTo = useInboxStore((st) => st.setReplyTo);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -399,7 +400,11 @@ export function ChatMain() {
                 return [];
               })();
               const imageUrl = messageIsImage ? (attachments[0]?.url || msg.message) : null;
-              const replyRef = msg.reply_to_id ? messages.find((m) => m.id === msg.reply_to_id) : null;
+              const replyRef = msg.reply_to_id
+                ? (msg.reply_to_message
+                  ? { sender: msg.reply_to_sender || "visitor", message: msg.reply_to_message }
+                  : messages.find((m) => m.id === msg.reply_to_id))
+                : null;
 
               return (
                 <motion.div
@@ -535,6 +540,32 @@ export function ChatMain() {
                           {formatTime(msg.created_at)}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* Reactions display */}
+                  {msg.reactions && msg.reactions.length > 0 && (
+                    <div className={`${s.reactionsRow} ${isOperator ? s.reactionsRight : s.reactionsLeft}`}>
+                      {Object.entries(
+                        msg.reactions.reduce<Record<string, { emoji: string; count: number; operators: string[]; hasOwn: boolean }>>((acc, r) => {
+                          if (!acc[r.emoji]) acc[r.emoji] = { emoji: r.emoji, count: 0, operators: [], hasOwn: false };
+                          acc[r.emoji].count++;
+                          acc[r.emoji].operators.push(r.operator_name || "Оператор");
+                          if (r.operator_id === operator?.id) acc[r.emoji].hasOwn = true;
+                          return acc;
+                        }, {})
+                      ).map(([emoji, data]) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className={`${s.reactionPill} ${data.hasOwn ? s.reactionPillActive : ""}`}
+                          title={data.operators.join(", ")}
+                          onClick={() => void handleReaction(msg.id, emoji)}
+                        >
+                          <span>{emoji}</span>
+                          {data.count > 1 && <span className={s.reactionCount}>{data.count}</span>}
+                        </button>
+                      ))}
                     </div>
                   )}
 
