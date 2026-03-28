@@ -1,0 +1,12 @@
+.shell {
+  display: grid;
+  height: 100vh;
+  grid-template-columns: var(--shell-columns);
+  transition: grid-template-columns var(--duration-normal) var(--ease-spring);
+  overflow: hidden;
+}
+
+.detailsPanel {
+  overflow: hidden;
+  border-left: 1px solid var(--border-default);
+}

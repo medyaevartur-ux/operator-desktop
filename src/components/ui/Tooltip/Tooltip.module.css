@@ -1,0 +1,42 @@
+.content {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-tooltip, #1a1a2e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  user-select: none;
+  pointer-events: none;
+  z-index: 9999;
+  animation: tooltipIn 120ms ease-out;
+  white-space: nowrap;
+}
+
+.content[data-state="closed"] {
+  animation: tooltipOut 80ms ease-in forwards;
+}
+
+.arrow {
+  fill: var(--bg-tooltip, #1a1a2e);
+}
+
+.kbd {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 10px;
+  font-family: monospace;
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes tooltipOut {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.95); }
+}

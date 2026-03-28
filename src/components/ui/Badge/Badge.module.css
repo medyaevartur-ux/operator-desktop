@@ -1,0 +1,99 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  border-radius: var(--radius-full);
+  user-select: none;
+}
+
+/* ── Sizes ── */
+
+.sm {
+  height: 18px;
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  font-size: var(--text-2xs);
+}
+
+.md {
+  height: 22px;
+  min-width: 22px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.lg {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* ── Variants ── */
+
+.default {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+
+.accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.error {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.unread {
+  background: var(--badge-unread);
+  color: white;
+  box-shadow: 0 0 0 2px var(--surface-1);
+  animation: scaleInBounce var(--duration-slow) var(--ease-spring);
+}
+
+/* ── Dot variant ── */
+
+.dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  padding: 0;
+  border-radius: var(--radius-full);
+}
+
+.dotOnline {
+  background: var(--status-online);
+}
+
+.dotAway {
+  background: var(--status-away);
+}
+
+.dotDnd {
+  background: var(--status-dnd);
+}
+
+.dotOffline {
+  background: var(--status-offline);
+}

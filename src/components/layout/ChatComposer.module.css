@@ -1,0 +1,513 @@
+/* ══════════════════════════════════
+   ChatComposer — Фаза 6
+   ══════════════════════════════════ */
+
+.wrapper {
+  position: relative;
+}
+
+/* ── Assign banner ── */
+
+.assignBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: 10px 14px;
+  border-radius: var(--radius-xl);
+  background: var(--warning-soft);
+  border: 1px solid rgba(232, 150, 14, 0.14);
+}
+
+.assignText {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.assignBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(232, 150, 14, 0.16);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--status-away);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.assignBtn:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* ── Form container ── */
+
+.form {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Tab bar ── */
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 16px;
+}
+
+.tab {
+  padding: 12px 0;
+  margin-right: 22px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+}
+
+.tabActive {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+}
+
+.tabSoon {
+  color: var(--text-disabled);
+  cursor: default;
+  position: relative;
+}
+
+.tabSoon::after {
+  content: "скоро";
+  position: absolute;
+  top: 4px;
+  right: -28px;
+  font-size: 9px;
+  font-weight: var(--weight-extrabold);
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+}
+
+.tabCount {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-disabled);
+}
+
+/* ── Popover panels (emoji, quick replies, mentions) ── */
+
+.popoverContent {
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-3);
+  z-index: 50;
+  animation: scaleIn var(--duration-fast) var(--ease-spring);
+}
+
+/* ── Emoji grid ── */
+
+.emojiGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 320px;
+}
+
+.emojiBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background var(--duration-instant) var(--ease-default);
+}
+
+.emojiBtn:hover {
+  background: var(--accent-soft);
+}
+
+/* ── Quick replies ── */
+
+.quickReplies {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 240px;
+  overflow-y: auto;
+  max-width: 400px;
+}
+
+.quickReplyBtn {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.quickReplyBtn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.quickReplyEmpty {
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* ── Mention dropdown ── */
+
+.mentionContent {
+  min-width: 240px;
+  max-height: 260px;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  z-index: 50;
+  animation: scaleIn var(--duration-fast) var(--ease-spring);
+}
+
+.mentionLabel {
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  color: var(--text-disabled);
+  padding: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.mentionItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-instant) var(--ease-default);
+}
+
+.mentionItem:hover {
+  background: var(--surface-2);
+}
+
+.mentionAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-accent);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: var(--weight-extrabold);
+  flex-shrink: 0;
+}
+
+.mentionName {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+}
+
+.mentionRole {
+  font-size: 11px;
+  color: var(--text-disabled);
+}
+
+/* ── Pending files ── */
+
+.filesBar {
+  display: flex;
+  gap: var(--space-2);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  flex-wrap: wrap;
+}
+
+.fileThumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.fileThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.fileRemove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.55);
+  color: white;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fileRemove:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.fileUploading {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
+  color: var(--accent);
+}
+
+/* ── Textarea area ── */
+
+.textareaWrap {
+  padding: 16px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: none;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+}
+
+.textarea::placeholder {
+  color: var(--text-disabled);
+}
+
+.preview {
+  min-height: 80px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  padding: 0 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Error ── */
+
+.error {
+  margin-top: var(--space-2);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.06);
+  color: var(--status-dnd);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+/* ── Bottom toolbar ── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolDivider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-default);
+  margin: 0 4px;
+}
+
+/* ── Ghost ToolBtn ── */
+
+.toolBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.toolBtn:hover {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.toolBtnActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.toolBtnActive:hover {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* ── File count ── */
+
+.fileCount {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Right side ── */
+
+.toolRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ── Char counter ── */
+
+.charCount {
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+}
+
+.charNormal {
+  color: var(--text-disabled);
+}
+
+.charWarn {
+  color: var(--status-away);
+}
+
+.charOver {
+  color: var(--status-dnd);
+}
+
+/* ── Typing indicator ── */
+
+.typing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--accent);
+}
+
+.typingDots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.typingDot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: typingBounce 1.2s infinite;
+}
+
+/* ── Send button ── */
+
+.sendBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 44px;
+  padding: 0 20px;
+  border-radius: var(--radius-xl);
+  border: none;
+  background: var(--gradient-accent);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  cursor: pointer;
+  box-shadow: var(--shadow-glow-sm);
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.sendBtn:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow);
+}
+
+.sendBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

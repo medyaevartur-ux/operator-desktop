@@ -1,0 +1,221 @@
+/* ═══ History List ═══ */
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emptyHistory {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 0;
+  text-align: center;
+}
+
+.historyCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+  width: 100%;
+}
+
+.historyCard:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.historyCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.historyDate {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.historyStatus {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.historyStatusClosed {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.historyStatusOp {
+  background: var(--status-online-soft);
+  color: var(--status-online);
+}
+
+.historyStatusAi {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.historyCardBottom {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.historyMeta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ═══ Preview Modal ═══ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--surface-1);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modalTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.modalMeta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.modalClose {
+  padding: 4px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s;
+  background: none;
+  border: none;
+}
+
+.modalClose:hover {
+  background: var(--surface-hover);
+}
+
+.modalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modalLoading,
+.modalEmpty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 20px;
+}
+
+.previewSystem {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 12px;
+  background: var(--surface-2);
+  border-radius: 20px;
+  align-self: center;
+}
+
+.previewMsg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 80%;
+}
+
+.previewMsgLeft {
+  align-self: flex-start;
+}
+
+.previewMsgRight {
+  align-self: flex-end;
+}
+
+.previewSender {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.previewTime {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.previewBubble {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.previewBubbleOp {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  border-bottom-right-radius: 4px;
+}
+
+.previewBubbleVisitor {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+}
+
+.previewBubbleAi {
+  background: var(--status-info-soft, #e8f4fd);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px;
+}

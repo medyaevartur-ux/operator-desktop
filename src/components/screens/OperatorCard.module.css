@@ -1,0 +1,211 @@
+/* ── OperatorCard ── */
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+  outline: none;
+}
+
+.card:hover {
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.card:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.cardSelected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.cardSelected:hover {
+  background: var(--accent-soft);
+}
+
+.cardInactive {
+  opacity: 0.5;
+}
+
+/* ── Avatar ── */
+
+.avatarWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-xl);
+  background: var(--gradient-accent);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: var(--weight-extrabold);
+  background-size: cover;
+  background-position: center;
+}
+
+.statusDot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  border: 3px solid var(--surface-1);
+}
+
+.cardSelected .statusDot {
+  border-color: var(--accent-soft);
+}
+
+.dotOnline { background: var(--status-online); }
+.dotAway { background: var(--status-away); }
+.dotDnd { background: var(--status-dnd); }
+.dotOffline { background: var(--text-disabled); }
+
+/* ── Info ── */
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+}
+
+.selfBadge {
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.roleBadge {
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.email {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.metaRow {
+  font-size: 11px;
+  color: var(--text-disabled);
+  margin-top: 2px;
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.metaItem {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.metaDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+}
+
+/* ── Stats ── */
+
+.stats {
+  text-align: right;
+  font-size: 11px;
+  line-height: 1.8;
+  flex-shrink: 0;
+}
+
+.statActive {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  color: var(--accent);
+  font-weight: var(--weight-bold);
+}
+
+.statTotal {
+  color: var(--text-muted);
+}
+
+.statRating {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: flex-end;
+  color: var(--status-away);
+}
+
+/* ── Delete ── */
+
+.deleteBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--text-disabled);
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.deleteBtn:hover {
+  background: rgba(239, 68, 68, 0.06);
+  color: var(--status-dnd);
+}
+
+/* ── Checkbox ── */
+
+.checkbox {
+  flex-shrink: 0;
+}
+
+.checkboxSelected {
+  color: var(--accent);
+}
+
+.checkboxUnselected {
+  color: var(--text-disabled);
+}

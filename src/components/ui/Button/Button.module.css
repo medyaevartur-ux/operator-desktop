@@ -1,0 +1,121 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default),
+    opacity var(--duration-fast) var(--ease-default);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Sizes ── */
+
+.sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.md {
+  height: 38px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.lg {
+  height: 46px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+}
+
+/* ── Variants ── */
+
+.primary {
+  background: var(--gradient-accent);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-glow-sm);
+}
+
+.primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.secondary {
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.danger {
+  background: var(--error);
+  color: var(--text-on-accent);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--red-600);
+  transform: translateY(-1px);
+}
+
+.dangerGhost {
+  background: transparent;
+  color: var(--error);
+}
+
+.dangerGhost:hover:not(:disabled) {
+  background: var(--error-soft);
+}
+
+/* ── Full width ── */
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ── Loading ── */
+
+.loading {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}

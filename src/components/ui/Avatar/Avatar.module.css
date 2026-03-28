@@ -1,0 +1,86 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-family: var(--font-sans);
+  font-weight: var(--weight-extrabold);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Sizes ── */
+
+.sm .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+}
+
+.md .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+}
+
+.lg .avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-xl);
+}
+
+.xl .avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-2xl);
+}
+
+/* ── Image ── */
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Status dot ── */
+
+.statusDot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  border: 2.5px solid var(--surface-1);
+}
+
+.sm .statusDot {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+
+.lg .statusDot,
+.xl .statusDot {
+  width: 14px;
+  height: 14px;
+  border-width: 3px;
+}
+
+.statusOnline  { background: var(--status-online); }
+.statusAway    { background: var(--status-away); }
+.statusDnd     { background: var(--status-dnd); }
+.statusOffline { background: var(--status-offline); }

@@ -1,0 +1,92 @@
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 99999;
+  background: var(--surface-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-lg);
+  max-width: 320px;
+}
+
+.title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.btnRow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.updateBtn {
+  flex: 1;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-default);
+}
+
+.updateBtn:hover {
+  opacity: 0.9;
+}
+
+.laterBtn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.laterBtn:hover {
+  background: var(--surface-3);
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  font-size: 11px;
+  color: var(--text-disabled);
+  margin-top: 4px;
+  text-align: right;
+}
+
+.readyText {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  color: var(--status-online);
+  text-align: center;
+}

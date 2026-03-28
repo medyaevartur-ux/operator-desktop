@@ -1,0 +1,288 @@
+/* ═══════════════════════════════════════════════
+   ALPHABET OPERATOR — Design Tokens
+   ═══════════════════════════════════════════════ */
+
+/* ── Primitive: Violet ── */
+:root {
+  --violet-50:  #F5F0FF;
+  --violet-100: #EDE0FF;
+  --violet-200: #D9BFFF;
+  --violet-300: #C39BF7;
+  --violet-400: #A875EF;
+  --violet-500: #7C5CBF;
+  --violet-600: #6447A8;
+  --violet-700: #4D348F;
+  --violet-800: #362473;
+  --violet-900: #22155A;
+}
+
+/* ── Primitive: Blue ── */
+:root {
+  --blue-50:  #EFF6FF;
+  --blue-100: #DBEAFE;
+  --blue-400: #60A5FA;
+  --blue-500: #3B7DD8;
+  --blue-600: #2563EB;
+}
+
+/* ── Primitive: Green ── */
+:root {
+  --green-50:  #F0FDF4;
+  --green-100: #DCFCE7;
+  --green-400: #4ADE80;
+  --green-500: #32C45A;
+  --green-600: #16A34A;
+}
+
+/* ── Primitive: Amber ── */
+:root {
+  --amber-50:  #FFFBEB;
+  --amber-100: #FEF3C7;
+  --amber-400: #FBBF24;
+  --amber-500: #E8960E;
+  --amber-600: #D97706;
+}
+
+/* ── Primitive: Red ── */
+:root {
+  --red-50:  #FFF0F0;
+  --red-100: #FEE2E2;
+  --red-400: #F87171;
+  --red-500: #C0392B;
+  --red-600: #991B1B;
+}
+
+/* ── Primitive: Neutral Warm ── */
+:root {
+  --neutral-0:   #FFFFFF;
+  --neutral-50:  #FAF8F5;
+  --neutral-100: #F4F0EC;
+  --neutral-150: #EDE8E2;
+  --neutral-200: #E4DDD5;
+  --neutral-300: #CEC5BA;
+  --neutral-400: #A89B8C;
+  --neutral-500: #7A6E63;
+  --neutral-600: #544D45;
+  --neutral-700: #3A342E;
+  --neutral-800: #252018;
+  --neutral-900: #1A1510;
+}
+
+/* ═══════════════════════════════════════════════
+   SEMANTIC TOKENS — Light Mode
+   ═══════════════════════════════════════════════ */
+:root {
+  /* Surfaces */
+  --surface-bg:       var(--neutral-100);
+  --surface-bg-deep:  var(--neutral-150);
+  --surface-1:        var(--neutral-0);
+  --surface-2:        var(--neutral-50);
+  --surface-3:        var(--neutral-100);
+
+  /* Text */
+  --text-primary:     var(--neutral-900);
+  --text-secondary:   var(--neutral-600);
+  --text-muted:       var(--neutral-400);
+  --text-disabled:    var(--neutral-300);
+  --text-on-accent:   #FFFFFF;
+
+  /* Borders */
+  --border-default:   rgba(0, 0, 0, 0.08);
+  --border-subtle:    rgba(0, 0, 0, 0.04);
+  --border-strong:    rgba(0, 0, 0, 0.14);
+  --border-focus:     var(--violet-500);
+
+  /* Accent */
+  --accent:           var(--violet-500);
+  --accent-hover:     var(--violet-600);
+  --accent-soft:      var(--violet-50);
+  --accent-muted:     rgba(124, 92, 191, 0.08);
+
+  /* Gradients */
+  --gradient-accent:  linear-gradient(135deg, #7C5CBF 0%, #B07CD8 100%);
+  --gradient-subtle:  linear-gradient(135deg, rgba(124,92,191,0.12) 0%, rgba(176,124,216,0.08) 100%);
+
+  /* Shadows */
+  --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm:      0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-xl:      0 16px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-glow:    0 4px 20px rgba(124, 92, 191, 0.30);
+  --shadow-glow-sm: 0 2px 10px rgba(124, 92, 191, 0.20);
+
+  /* Status */
+  --status-online:  var(--green-500);
+  --status-away:    var(--amber-500);
+  --status-dnd:     var(--red-500);
+  --status-offline: var(--neutral-400);
+
+  /* Semantic */
+  --success:        var(--green-500);
+  --success-soft:   var(--green-50);
+  --warning:        var(--amber-500);
+  --warning-soft:   var(--amber-50);
+  --error:          var(--red-500);
+  --error-soft:     var(--red-50);
+  --info:           var(--blue-500);
+  --info-soft:      var(--blue-50);
+
+  /* Chat bubbles */
+  --bubble-operator-bg:   var(--gradient-accent);
+  --bubble-operator-text: #FFFFFF;
+  --bubble-visitor-bg:    var(--neutral-0);
+  --bubble-visitor-text:  var(--text-primary);
+  --bubble-ai-bg:         var(--violet-50);
+  --bubble-ai-text:       var(--violet-800);
+  --bubble-system-bg:     var(--surface-2);
+  --bubble-system-text:   var(--text-muted);
+
+  /* Badge */
+  --badge-unread:   #FF6B35;
+
+  /* Spacing */
+  --space-0:  0px;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+
+  --text-2xs: 10px;
+  --text-xs:  11px;
+  --text-sm:  13px;
+  --text-base: 14px;
+  --text-md:  15px;
+  --text-lg:  16px;
+  --text-xl:  18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+
+  --weight-normal:    400;
+  --weight-medium:    500;
+  --weight-semibold:  600;
+  --weight-bold:      700;
+  --weight-extrabold: 800;
+
+  --leading-none:    1;
+  --leading-tight:   1.25;
+  --leading-snug:    1.375;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.625;
+
+  /* Transitions */
+  --duration-instant: 80ms;
+  --duration-fast:    150ms;
+  --duration-normal:  250ms;
+  --duration-slow:    400ms;
+  --duration-slower:  600ms;
+
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:      cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:     cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out:  cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── LEGACY COMPAT (старые токены → новые, удалить в фазе 11) ── */
+  --violet:      var(--violet-500);
+  --violet-soft: var(--violet-50);
+  --gradient:    var(--gradient-accent);
+  --violet-glow: var(--shadow-glow);
+  --blue:        var(--blue-500);
+  --green:       var(--green-500);
+  --amber:       var(--amber-500);
+  --red:         var(--red-500);
+  --bg:          var(--surface-bg);
+  --bg-deep:     var(--surface-bg-deep);
+  --card:        var(--surface-1);
+  --surface:     var(--surface-2);
+  --border:      var(--border-default);
+  --border-light:var(--border-subtle);
+  --text:        var(--text-primary);
+  --text-2:      var(--text-secondary);
+  --text-3:      var(--text-muted);
+  --text-4:      var(--text-disabled);
+  --red-soft:    var(--red-50);
+  --amber-soft:  var(--amber-50);
+  --green-soft:  var(--green-50);
+  --blue-soft:   var(--blue-50);
+  --violet-mid:  var(--violet-400);
+  --surface-2:   var(--neutral-50);
+  --orange-badge:var(--badge-unread);
+}
+
+/* ═══════════════════════════════════════════════
+   SEMANTIC TOKENS — Dark Mode
+   ═══════════════════════════════════════════════ */
+:root[data-theme="dark"] {
+  --surface-bg:       #18151F;
+  --surface-bg-deep:  #120F18;
+  --surface-1:        #211D2D;
+  --surface-2:        #2A2538;
+  --surface-3:        #322D42;
+
+  --text-primary:     #F0EDF8;
+  --text-secondary:   #B8B0CC;
+  --text-muted:       #7A7090;
+  --text-disabled:    #4A4560;
+  --text-on-accent:   #FFFFFF;
+
+  --border-default:   rgba(255, 255, 255, 0.08);
+  --border-subtle:    rgba(255, 255, 255, 0.04);
+  --border-strong:    rgba(255, 255, 255, 0.14);
+  --border-focus:     var(--violet-400);
+
+  --accent:           var(--violet-400);
+  --accent-hover:     var(--violet-300);
+  --accent-soft:      rgba(124, 92, 191, 0.15);
+  --accent-muted:     rgba(124, 92, 191, 0.10);
+
+  --gradient-accent:  linear-gradient(135deg, #7C5CBF 0%, #9D6FD8 100%);
+
+  --shadow-sm:  0 2px 6px rgba(0, 0, 0, 0.30);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.40);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.50);
+  --shadow-xl:  0 16px 40px rgba(0, 0, 0, 0.60);
+
+  --bubble-visitor-bg:    var(--surface-2);
+  --bubble-visitor-text:  var(--text-primary);
+  --bubble-ai-bg:         rgba(124, 92, 191, 0.12);
+  --bubble-ai-text:       var(--violet-300);
+  --bubble-system-bg:     var(--surface-3);
+
+  /* Legacy compat dark overrides */
+  --card:        var(--surface-1);
+  --surface:     var(--surface-2);
+  --bg:          var(--surface-bg);
+  --bg-deep:     var(--surface-bg-deep);
+  --text:        var(--text-primary);
+  --text-2:      var(--text-secondary);
+  --text-3:      var(--text-muted);
+  --text-4:      var(--text-disabled);
+  --border:      var(--border-default);
+  --border-light:var(--border-subtle);
+  --red-soft:    rgba(192, 57, 43, 0.15);
+  --amber-soft:  rgba(232, 150, 14, 0.12);
+  --green-soft:  rgba(50, 196, 90, 0.12);
+  --blue-soft:   rgba(59, 125, 216, 0.12);
+  --violet-soft: var(--accent-soft);
+}
