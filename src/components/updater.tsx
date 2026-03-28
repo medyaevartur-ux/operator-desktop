@@ -53,8 +53,9 @@ export function AppUpdater() {
       });
 
       await relaunch();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Update failed:", e);
+      alert("Update error: " + (e?.message || JSON.stringify(e)));
       setStatus("available");
     }
   };
