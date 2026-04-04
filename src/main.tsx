@@ -8,6 +8,7 @@ import "./styles/tokens.css";
 import "./styles/reset.css";
 import "./styles/animations.css";
 import "./styles/global.css";
+import "@/lib/logger";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

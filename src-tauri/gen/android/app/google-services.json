@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "177317580870",
+    "project_id": "zhivaya-skazka-operator",
+    "storage_bucket": "zhivaya-skazka-operator.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:177317580870:android:7a666c81eeab52f0193a47",
+        "android_client_info": {
+          "package_name": "ru.zhivaya_skazka.operator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBc_6tGJJOcRhndP9L10zVEL9q0fwU8fgg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

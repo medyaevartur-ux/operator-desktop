@@ -8,7 +8,8 @@ import {
   BellOff,
   ListOrdered,
   Eye,
-  Palette,  
+  Palette,
+  ScrollText,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useInboxStore } from "@/store/inbox.store";
@@ -17,6 +18,8 @@ import { useNavigationStore } from "@/store/navigation.store";
 import { useNotificationStore } from "@/store/notification.store";
 import { useVisitorsStore } from "@/store/visitors.store";
 import { Tooltip } from "@/components/ui";
+import { useSocketStore, reconnectSocket } from "@/lib/socket";
+import { Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { getInitials } from "@/utils/avatar";
 import s from "./InboxRail.module.css";
 
@@ -26,7 +29,8 @@ const ALL_NAV_ITEMS = [
   { icon: Eye, label: "Посетители", screen: "visitors" as const, roles: ["admin", "supervisor"] },
   { icon: Users, label: "Операторы", screen: "operators" as const, roles: ["admin"] },
   { icon: Settings, label: "Настройки", screen: "settings" as const, roles: ["admin", "supervisor"] },
-  { icon: Palette, label: "Виджет", screen: "widget_settings" as const, roles: ["admin"] },  
+  { icon: Palette, label: "Виджет", screen: "widget_settings" as const, roles: ["admin"] },
+  { icon: ScrollText, label: "Логи", screen: "logs" as const, roles: ["admin", "supervisor", "operator"] },
 ];
 
 const STATUS_OPTIONS: Array<{
@@ -63,6 +67,7 @@ export function InboxRail() {
   const setSoundEnabled = useNotificationStore((st) => st.setSoundEnabled);
   const desktopEnabled = useNotificationStore((st) => st.desktopEnabled);
   const setDesktopEnabled = useNotificationStore((st) => st.setDesktopEnabled);
+  const socketStatus = useSocketStore((st) => st.status);  
 
   return (
     <aside className={s.rail}>
@@ -170,6 +175,41 @@ export function InboxRail() {
         </Tooltip>
       </div>
 
+      {/* ── Socket status ── */}
+      <Tooltip
+        content={
+          socketStatus === "connected"
+            ? "Соединение активно"
+            : socketStatus === "connecting"
+            ? "Подключение..."
+            : "Нет соединения — нажмите для переподключения"
+        }
+        side="right"
+      >
+        <button
+          type="button"
+          className={`${s.notifBtn} ${
+            socketStatus === "connected"
+              ? s.socketConnected
+              : socketStatus === "connecting"
+              ? s.socketConnecting
+              : s.socketDisconnected
+          }`}
+          onClick={() => {
+            if (socketStatus !== "connected") {
+              reconnectSocket();
+            }
+          }}
+          style={{ cursor: socketStatus === "connected" ? "default" : "pointer" }}
+        >
+          {socketStatus === "connected" && <Wifi style={{ width: 16, height: 16 }} />}
+          {socketStatus === "connecting" && <RefreshCw style={{ width: 16, height: 16 }} className={s.spinning} />}
+          {(socketStatus === "disconnected" || socketStatus === "error") && (
+            <WifiOff style={{ width: 16, height: 16 }} />
+          )}
+        </button>
+      </Tooltip>
+      
       {/* ── Quick status toggle ── */}
       <Tooltip content={currentStatus === "online" ? "Стать Away" : "Стать Online"} side="right">
         <button

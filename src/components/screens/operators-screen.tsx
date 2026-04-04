@@ -56,7 +56,7 @@ export function OperatorsScreen() {
   const load = async () => {
     setLoading(true);
     const data = await getOperators();
-    setOperators(data);
+    setOperators(data.filter((op) => op.is_active !== false));
     setLoading(false);
   };
 

@@ -49,6 +49,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       token: data.token,
       isLoading: false,
     });
+
+    // Регистрируем FCM токен для push-уведомлений (Android)
+    import("@/lib/fcm").then(({ registerFcmToken }) => {
+      registerFcmToken(data.operator.id);
+    }).catch(() => {});    
   },
 
   logout: () => {
@@ -66,7 +71,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         JSON.stringify({ is_online: false }),
       );
     }
-
+    // Удаляем FCM токен
+    import("@/lib/fcm").then(({ unregisterFcmToken }) => {
+      unregisterFcmToken();
+    }).catch(() => {});
     removeToken();
     set({
       user: null,
@@ -97,7 +105,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         token,
         isLoading: false,
       });
+      // Регистрируем FCM токен для push-уведомлений (Android)
+      import("@/lib/fcm").then(({ registerFcmToken }) => {
+        registerFcmToken(data.operator.id);
+      }).catch(() => {});      
     } catch {
+
       removeToken();
       set({ user: null, operator: null, token: null, isLoading: false });
     }

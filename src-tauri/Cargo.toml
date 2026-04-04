@@ -1,7 +1,7 @@
 [package]
 name = "operator-desktop"
 version = "2.0.0"
-description = "Р–РёРІР°СЏ РЎРєР°Р·РєР° вЂ” Р”РµСЃРєС‚РѕРї РѕРїРµСЂР°С‚РѕСЂР° С‡Р°С‚Р°"
+description = "Живая Сказка — Десктоп оператора чата"
 authors = ["Zhivaya Skazka"]
 edition = "2021"
 
@@ -15,9 +15,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
-tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
 reqwest = { version = "0.12", features = ["json", "blocking"] }
+tauri-plugin-updater = "2"

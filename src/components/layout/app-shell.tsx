@@ -10,6 +10,9 @@ import { SettingsScreen } from "@/components/screens/settings-screen";
 import { QueueScreen } from "@/components/screens/queue-screen";
 import { VisitorsScreen } from "@/components/screens/visitors-screen";
 import { WidgetSettingsScreen } from "@/components/screens/widget-settings-screen";
+import LogsPage from "@/pages/LogsPage";
+import { MobileAppShell } from "@/components/layout/mobile-app-shell";
+import { isMobile } from "@/lib/platform";
 import { AnimatePresence, motion } from "framer-motion";
 import s from "./AppShell.module.css";
 
@@ -33,7 +36,17 @@ const detailsTransition = {
   duration: 0.3,
   ease: [0.16, 1, 0.3, 1] as const,
 };
+
 export function AppShell() {
+  // На мобиле — мобильная версия
+  if (isMobile()) {
+    return <MobileAppShell />;
+  }
+
+  return <DesktopAppShell />;
+}
+
+function DesktopAppShell() {
   useInbox();
   useInboxRealtime();
 
@@ -103,7 +116,7 @@ export function AppShell() {
             >
               <VisitorsScreen />
             </motion.div>
-          )}  
+          )}
           {screen === "widget_settings" && (
             <motion.div
               key="widget_settings"
@@ -116,7 +129,20 @@ export function AppShell() {
             >
               <WidgetSettingsScreen />
             </motion.div>
-          )}                            
+          )}
+          {screen === "logs" && (
+            <motion.div
+              key="logs"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition}
+              style={{ overflow: "auto", height: "100%" }}
+            >
+              <LogsPage />
+            </motion.div>
+          )}          
         </AnimatePresence>
       </div>
     );
