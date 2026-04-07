@@ -151,6 +151,19 @@ export function useInboxRealtime() {
     socket.on("reaction_updated", handleReactionUpdated);
     socket.on("operator_status_changed", handleOperatorStatus);
     socket.on("typing_content", handleTypingContent);
+    socket.on("operator_requested", (data: { session_id: string; visitor_name: string; message: string }) => {
+      const operator = useAuthStore.getState().operator;
+      if (operator?.status === "dnd") return;
+
+      void loadSessions();
+
+      useNotificationStore.getState().playSound("operator_request");
+      useNotificationStore.getState().addNotification(
+        data.session_id,
+        data.visitor_name || "Посетитель",
+        data.message || "Запросил оператора"
+      );
+    });    
 
     return () => {
       socket.off("new_message", handleNewMessage);
@@ -161,7 +174,8 @@ export function useInboxRealtime() {
       socket.off("message_deleted", handleMessageDeleted);
       socket.off("reaction_updated", handleReactionUpdated);
       socket.off("operator_status_changed", handleOperatorStatus);
-      socket.off("typing_content", handleTypingContent);      
+      socket.off("typing_content", handleTypingContent);     
+      socket.off("operator_requested");       
     };
   }, [appendMessage, loadSessions, loadMessages, updateMessageStatuses]);
 

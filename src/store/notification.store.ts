@@ -41,6 +41,13 @@ const SYNTH_SOUNDS = {
     playTone(660, 0.15, vol * 0.3, "sine", 0);
     playTone(440, 0.25, vol * 0.3, "sine", 0.12);
   },
+  operator_request: (vol: number) => {
+    playTone(587, 0.15, vol * 0.5, "sine", 0);
+    playTone(784, 0.15, vol * 0.5, "sine", 0.15);
+    playTone(988, 0.15, vol * 0.5, "sine", 0.30);
+    playTone(784, 0.15, vol * 0.5, "sine", 0.45);
+    playTone(988, 0.25, vol * 0.5, "sine", 0.60);
+  },
 };
 
 type SoundType = keyof typeof SYNTH_SOUNDS;
