@@ -1,6 +1,14 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
 .shell {
   display: grid;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   grid-template-columns: var(--shell-columns);
   transition: grid-template-columns var(--duration-normal) var(--ease-spring);
   overflow: hidden;

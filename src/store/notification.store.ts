@@ -211,7 +211,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
     // Sync badge (Tauri taskbar + document title)
     import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(totalUnread)).catch(() => {
-      if (totalUnread > 0) document.title = `(${totalUnread}) Alphabet Chat`;
+      if (totalUnread > 0) document.title = `(${totalUnread}) Живая Сказка`;
     });
 
     if (get().soundEnabled) {
@@ -228,14 +228,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     delete pending[sessionId];
     const totalUnread = Object.values(pending).reduce((sum, p) => sum + p.count, 0);
     import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(totalUnread)).catch(() => {
-      document.title = totalUnread > 0 ? `(${totalUnread}) Alphabet Chat` : "Alphabet Chat";
+      document.title = totalUnread > 0 ? `(${totalUnread}) Живая Сказка` : "Живая Сказка — Оператор";
     });
     set({ pending, totalUnread });
   },
 
   clearAll: () => {
     import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(0)).catch(() => {
-      document.title = "Alphabet Chat";
+      document.title = "Живая Сказка — Оператор";
     });
     set({ pending: {}, totalUnread: 0 });
   },

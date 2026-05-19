@@ -19,6 +19,7 @@ import { sendInvitation, getInvitations, type ProactiveInvitation } from "@/feat
 import { useAuthStore } from "@/store/auth.store";
 import { useVisitorsRealtime } from "@/features/visitors/use-visitors-realtime";
 import type { SiteVisitor, VisitorPageEvent } from "@/types/visitor";
+import { VisitorsStats } from "./visitors-stats";
 import s from "./VisitorsScreen.module.css";
 
 /* ── helpers ── */
@@ -247,6 +248,9 @@ export function VisitorsScreen() {
           </div>
         </div>
       </div>
+
+      {/* ── KPI + funnel + heatmap ── */}
+      <VisitorsStats visitors={visitors} onlineCount={onlineCount} />
 
       {/* ── Toolbar ── */}
       <div className={s.toolbar}>

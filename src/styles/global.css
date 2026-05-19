@@ -72,3 +72,59 @@
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* ═══════════════════════════════════════════════
+   Эргономика — единые правила для всего UI
+   ═══════════════════════════════════════════════ */
+
+/* Видимое фокус-кольцо только при клавиатурной навигации (не при клике мышью) */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Кнопки нигде не должны «скакать» — отключаем transform на hover,
+   глобально оставляем только изменение фона/цвета/тени. */
+button {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+/* Активное состояние — лёгкое нажатие, без сдвига layout (масштаб не двигает соседей) */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+button {
+  transition-property: background, color, border-color, box-shadow, transform, opacity;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-default);
+}
+
+/* Disabled-состояния — всегда визуально отличимы и не реагируют на клики */
+button:disabled, [aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Скрываем спиннеры number-инпутов */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Тонкий ритм спейсинга: устраняем «двойной» отступ на пустых textarea */
+textarea { font-family: inherit; }
+
+/* Поддержка prefers-reduced-motion: для пользователей с настройкой «уменьшить движение» */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

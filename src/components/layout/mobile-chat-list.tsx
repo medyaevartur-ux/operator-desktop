@@ -38,7 +38,7 @@ function MobileSessionCard({
   const preview = session.last_message_text || session.visitor_email || "Новый диалог";
 
   return (
-    <button type="button" onClick={onClick} className={s.card}>
+    <button type="button" onClick={onClick} className={s.card} data-unread={unread > 0 ? "1" : "0"}>
       <Avatar
         name={displayName}
         size="md"

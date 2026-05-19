@@ -56,16 +56,68 @@
 }
 
 .preview {
-  width: 400px;
+  width: 480px;
   border-left: 1px solid var(--border-default);
   background: var(--surface-bg);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 32px;
+  padding: 24px;
   position: relative;
   overflow: hidden;
+}
+
+.previewTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+.previewSizeSwitcher {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-1);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.previewSizeBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background var(--duration-fast);
+}
+.previewSizeBtn:hover { background: var(--surface-2); }
+.previewSizeBtnActive {
+  background: var(--accent);
+  color: white;
+}
+.previewSizeBtnActive:hover { background: var(--accent); }
+
+.previewSite[data-size="mobile"] {
+  max-width: 280px;
+  margin: 0 auto;
+}
+.previewSite[data-size="tablet"] {
+  max-width: 360px;
+  margin: 0 auto;
+}
+.previewSite[data-size="desktop"] {
+  max-width: 100%;
 }
 
 /* ── Sections ── */
@@ -400,21 +452,11 @@
 
 /* ── Widget Preview Mock ── */
 
-.previewTitle {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-disabled);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .previewSite {
   width: 100%;
-  height: 100%;
+  flex: 1;
   background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  transition: max-width var(--duration-normal) var(--ease-spring);
   border-radius: var(--radius-lg);
   position: relative;
   overflow: hidden;
@@ -450,7 +492,7 @@
 
 .previewChat {
   position: absolute;
-  width: 320px;
+  width: var(--zw-win-w, 320px);
   border-radius: 16px;
   background: white;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
@@ -474,9 +516,10 @@
 
 .previewBubble {
   padding: 8px 12px;
-  border-radius: 12px 12px 12px 4px;
+  border-radius: var(--zw-bubble-r, 12px) var(--zw-bubble-r, 12px) var(--zw-bubble-r, 12px) 4px;
   font-size: 13px;
   max-width: 80%;
+  font-family: inherit;
 }
 
 /* ── Tabs ── */

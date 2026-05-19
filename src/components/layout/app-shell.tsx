@@ -10,8 +10,11 @@ import { SettingsScreen } from "@/components/screens/settings-screen";
 import { QueueScreen } from "@/components/screens/queue-screen";
 import { VisitorsScreen } from "@/components/screens/visitors-screen";
 import { WidgetSettingsScreen } from "@/components/screens/widget-settings-screen";
+import { TemplatesScreen } from "@/components/screens/templates-screen";
 import LogsPage from "@/pages/LogsPage";
 import { MobileAppShell } from "@/components/layout/mobile-app-shell";
+import { TopBar } from "@/components/layout/top-bar";
+import { ErrorBoundary } from "@/app/error-boundary";
 import { isMobile } from "@/lib/platform";
 import { AnimatePresence, motion } from "framer-motion";
 import s from "./AppShell.module.css";
@@ -59,10 +62,12 @@ function DesktopAppShell() {
 
   if (screen !== "inbox") {
     return (
-      <div
-        className={s.shell}
-        style={{ "--shell-columns": "68px minmax(0,1fr)" } as React.CSSProperties}
-      >
+      <div className={s.root}>
+        <TopBar />
+        <div
+          className={s.shell}
+          style={{ "--shell-columns": "68px minmax(0,1fr)" } as React.CSSProperties}
+        >
         <InboxRail />
         <AnimatePresence mode="wait">
           {screen === "operators" && (
@@ -130,6 +135,19 @@ function DesktopAppShell() {
               <WidgetSettingsScreen />
             </motion.div>
           )}
+          {screen === "templates" && (
+            <motion.div
+              key="templates"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition}
+              style={{ overflow: "auto", height: "100%" }}
+            >
+              <ErrorBoundary><TemplatesScreen /></ErrorBoundary>
+            </motion.div>
+          )}
           {screen === "logs" && (
             <motion.div
               key="logs"
@@ -142,35 +160,39 @@ function DesktopAppShell() {
             >
               <LogsPage />
             </motion.div>
-          )}          
+          )}
         </AnimatePresence>
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className={s.shell}
-      style={{ "--shell-columns": columns } as React.CSSProperties}
-    >
-      <InboxRail />
-      <ChatSidebar />
-      <ChatMain />
-      <AnimatePresence>
-        {isDetailsOpen && (
-          <motion.div
-            key="details"
-            className={s.detailsPanel}
-            variants={detailsVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={detailsTransition}
-          >
-            <ChatDetails />
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className={s.root}>
+      <TopBar />
+      <div
+        className={s.shell}
+        style={{ "--shell-columns": columns } as React.CSSProperties}
+      >
+        <InboxRail />
+        <ErrorBoundary><ChatSidebar /></ErrorBoundary>
+        <ErrorBoundary><ChatMain /></ErrorBoundary>
+        <AnimatePresence>
+          {isDetailsOpen && (
+            <motion.div
+              key="details"
+              className={s.detailsPanel}
+              variants={detailsVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={detailsTransition}
+            >
+              <ErrorBoundary><ChatDetails /></ErrorBoundary>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

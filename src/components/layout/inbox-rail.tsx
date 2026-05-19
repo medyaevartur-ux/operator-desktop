@@ -10,6 +10,7 @@ import {
   Eye,
   Palette,
   ScrollText,
+  Sparkles,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useInboxStore } from "@/store/inbox.store";
@@ -27,6 +28,7 @@ const ALL_NAV_ITEMS = [
   { icon: MessageSquareText, label: "Чаты", screen: "inbox" as const, roles: ["admin", "supervisor", "operator"] },
   { icon: ListOrdered, label: "Очередь", screen: "queue" as const, roles: ["admin", "supervisor", "operator"] },
   { icon: Eye, label: "Посетители", screen: "visitors" as const, roles: ["admin", "supervisor"] },
+  { icon: Sparkles, label: "Шаблоны", screen: "templates" as const, roles: ["admin", "supervisor", "operator"] },
   { icon: Users, label: "Операторы", screen: "operators" as const, roles: ["admin"] },
   { icon: Settings, label: "Настройки", screen: "settings" as const, roles: ["admin", "supervisor"] },
   { icon: Palette, label: "Виджет", screen: "widget_settings" as const, roles: ["admin"] },

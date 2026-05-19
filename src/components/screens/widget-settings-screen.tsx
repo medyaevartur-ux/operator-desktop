@@ -67,6 +67,7 @@ function getPreviewBg(cfg: WidgetConfig) {
 export function WidgetSettingsScreen() {
   const setScreen = useNavigationStore((st) => st.setScreen);
   const [tab, setTab] = useState<Tab>("appearance");
+  const [previewSize, setPreviewSize] = useState<"mobile" | "tablet" | "desktop">("desktop");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -78,6 +79,10 @@ export function WidgetSettingsScreen() {
     greeting: "Привет! 👋\nЧем могу помочь?", header_title: "Онлайн-чат",
     avatar_url: null, show_operator_name: true, show_operator_avatar: true,
     button_icon: "chat", button_text: "", button_size: "medium", button_radius: "round",
+    font_size_base: 14, window_width: "normal", edge_margin: 24, bubble_radius: "round", shadow_intensity: "medium", show_powered_by: true,
+    remember_open_state: true, greet_once: false, auto_minimize_after: 0, hide_unread_badge: false, disable_sound_for_visitor: false,
+    mobile_launcher_type: "inherit", mobile_window_mode: "bottom_sheet", mobile_invitation_enabled: true, mobile_invitation_text: "Нужна помощь? Нажмите!", mobile_invitation_delay: 5, mobile_hide_unread_badge: false,
+    display_pages: "", display_pages_mode: "all",
     auto_open_delay: 0, hide_on_mobile: false, custom_css: "",
     gradient_type: "solid", gradient_from: "#8b5cf6", gradient_to: "#ec4899", gradient_angle: 135,
     theme: "light", custom_bg: "#ffffff", custom_text: "#1f2937", custom_bubble_bg: "#f3f4f6", custom_border: "#e5e7eb",
@@ -448,10 +453,10 @@ export function WidgetSettingsScreen() {
                 <div className={s.sectionTitle}>Шрифт</div>
                 <div className={s.sectionCard}>
                   <div className={s.sizeRow} style={{ flexWrap: "wrap" }}>
-                    {(["system", "inter", "roboto", "montserrat", "custom"] as const).map((f) => (
+                    {(["onest", "system", "inter", "roboto", "montserrat", "custom"] as const).map((f) => (
                       <button key={f} type="button" className={`${s.sizeBtn} ${config.font_family === f ? s.sizeBtnActive : ""}`} onClick={() => upd({ font_family: f })}
                         style={{ fontFamily: f === "system" ? "inherit" : f === "custom" ? "inherit" : f, minWidth: 80 }}>
-                        {f === "system" ? "Системный" : f === "custom" ? "Свой" : f.charAt(0).toUpperCase() + f.slice(1)}
+                        {f === "system" ? "Системный" : f === "custom" ? "Свой" : f === "onest" ? "Onest ✦" : f.charAt(0).toUpperCase() + f.slice(1)}
                       </button>
                     ))}
                   </div>
@@ -508,6 +513,57 @@ export function WidgetSettingsScreen() {
                 <div className={s.sectionTitle}>Приветствие</div>
                 <div className={s.sectionCard}>
                   <textarea className={s.fieldTextarea} value={config.greeting} onChange={(e) => upd({ greeting: e.target.value })} rows={3} />
+                </div>
+              </div>
+
+              {/* Размер и форма */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>Размер и форма</div>
+                <div className={s.sectionCard}>
+                  <div className={s.fieldLabel}>Ширина окна виджета</div>
+                  <div className={s.sizeRow}>
+                    {(["narrow", "normal", "wide"] as const).map((w) => (
+                      <button key={w} type="button" className={`${s.sizeBtn} ${config.window_width === w ? s.sizeBtnActive : ""}`} onClick={() => upd({ window_width: w })}>
+                        {w === "narrow" ? "Узкое 340" : w === "wide" ? "Широкое 420" : "Обычное 380"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={s.fieldLabel} style={{ marginTop: 12 }}>Отступ от края экрана</div>
+                  <div className={s.sizeRow}>
+                    {[16, 24, 32, 40].map((m) => (
+                      <button key={m} type="button" className={`${s.sizeBtn} ${config.edge_margin === m ? s.sizeBtnActive : ""}`} onClick={() => upd({ edge_margin: m })}>
+                        {m}px
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={s.fieldLabel} style={{ marginTop: 12 }}>Скругление сообщений</div>
+                  <div className={s.sizeRow}>
+                    {(["soft", "round", "sharp"] as const).map((r) => (
+                      <button key={r} type="button" className={`${s.sizeBtn} ${config.bubble_radius === r ? s.sizeBtnActive : ""}`} onClick={() => upd({ bubble_radius: r })}>
+                        {r === "soft" ? "Мягкое 12" : r === "round" ? "Круглое 18" : "Острое 6"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={s.fieldLabel} style={{ marginTop: 12 }}>Сила тени</div>
+                  <div className={s.sizeRow}>
+                    {(["subtle", "medium", "strong"] as const).map((sh) => (
+                      <button key={sh} type="button" className={`${s.sizeBtn} ${config.shadow_intensity === sh ? s.sizeBtnActive : ""}`} onClick={() => upd({ shadow_intensity: sh })}>
+                        {sh === "subtle" ? "Тонкая" : sh === "medium" ? "Средняя" : "Сильная"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={s.fieldLabel} style={{ marginTop: 12 }}>Размер шрифта</div>
+                  <div className={s.sizeRow}>
+                    {[13, 14, 15, 16].map((fs) => (
+                      <button key={fs} type="button" className={`${s.sizeBtn} ${config.font_size_base === fs ? s.sizeBtnActive : ""}`} onClick={() => upd({ font_size_base: fs })}>
+                        {fs}px
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -578,6 +634,164 @@ export function WidgetSettingsScreen() {
                 </div>
               </div>
 
+              {/* Мобильные настройки */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>📱 Мобильные настройки (отдельно от десктопа)</div>
+                <div className={s.sectionCard}>
+                  <div className={s.fieldLabel}>Тип кнопки на мобильном</div>
+                  <div className={s.sizeRow} style={{ flexWrap: "wrap" }}>
+                    {(["inherit", "icon_only", "icon_text", "text_only", "card"] as const).map((lt) => (
+                      <button key={lt} type="button" className={`${s.sizeBtn} ${config.mobile_launcher_type === lt ? s.sizeBtnActive : ""}`} onClick={() => upd({ mobile_launcher_type: lt })}>
+                        {lt === "inherit" ? "Как на десктопе" : lt === "icon_only" ? "Иконка" : lt === "icon_text" ? "Иконка+текст" : lt === "text_only" ? "Текст" : "Карточка"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={s.fieldLabel} style={{ marginTop: 12 }}>Режим открытия окна на мобильном</div>
+                  <div className={s.sizeRow}>
+                    {(["fullscreen", "bottom_sheet", "popup"] as const).map((wm) => (
+                      <button key={wm} type="button" className={`${s.sizeBtn} ${config.mobile_window_mode === wm ? s.sizeBtnActive : ""}`} onClick={() => upd({ mobile_window_mode: wm })}>
+                        {wm === "fullscreen" ? "Во весь экран" : wm === "bottom_sheet" ? "Шторка снизу" : "Поп-ап"}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+                    «Шторка снизу» — не закрывает весь экран, можно тапнуть мимо и вернуться на сайт.
+                  </div>
+
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-default)" }}>
+                    <Toggle
+                      label="✨ Показывать приглашение поверх кнопки на мобильном"
+                      checked={config.mobile_invitation_enabled !== false}
+                      onChange={(v) => upd({ mobile_invitation_enabled: v })}
+                    />
+                    {config.mobile_invitation_enabled !== false && (
+                      <>
+                        <div className={s.field} style={{ marginTop: 8 }}>
+                          <div className={s.fieldLabel}>Текст приглашения</div>
+                          <input
+                            className={s.fieldInput}
+                            value={config.mobile_invitation_text ?? ""}
+                            onChange={(e) => upd({ mobile_invitation_text: e.target.value })}
+                            placeholder="Нужна помощь? Нажмите!"
+                            maxLength={60}
+                          />
+                        </div>
+                        <div className={s.field}>
+                          <div className={s.fieldLabel}>Через сколько секунд показать</div>
+                          <div className={s.numberRow}>
+                            <input
+                              type="number"
+                              className={s.numberInput}
+                              value={config.mobile_invitation_delay ?? 5}
+                              onChange={(e) => upd({ mobile_invitation_delay: Math.max(0, +e.target.value) })}
+                              min={0}
+                              max={120}
+                            />
+                            <span className={s.numberUnit}>сек</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <Toggle
+                      label="Скрыть счётчик непрочитанных на мобильной кнопке"
+                      checked={config.mobile_hide_unread_badge === true}
+                      onChange={(v) => upd({ mobile_hide_unread_badge: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Видимость виджета по страницам */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>📍 Где показывать виджет</div>
+                <div className={s.sectionCard}>
+                  <div className={s.sizeRow}>
+                    <button
+                      type="button"
+                      className={`${s.sizeBtn} ${(config.display_pages_mode ?? "all") === "all" ? s.sizeBtnActive : ""}`}
+                      onClick={() => upd({ display_pages_mode: "all" })}
+                    >
+                      Везде
+                    </button>
+                    <button
+                      type="button"
+                      className={`${s.sizeBtn} ${config.display_pages_mode === "include" ? s.sizeBtnActive : ""}`}
+                      onClick={() => upd({ display_pages_mode: "include" })}
+                    >
+                      Только на этих
+                    </button>
+                    <button
+                      type="button"
+                      className={`${s.sizeBtn} ${config.display_pages_mode === "exclude" ? s.sizeBtnActive : ""}`}
+                      onClick={() => upd({ display_pages_mode: "exclude" })}
+                    >
+                      Везде, кроме этих
+                    </button>
+                  </div>
+                  {config.display_pages_mode && config.display_pages_mode !== "all" && (
+                    <div className={s.field} style={{ marginTop: 10 }}>
+                      <div className={s.fieldLabel}>
+                        {config.display_pages_mode === "exclude" ? "Страницы, где НЕ показывать" : "Страницы, где показывать"}
+                      </div>
+                      <input
+                        className={s.fieldInput}
+                        value={config.display_pages ?? ""}
+                        onChange={(e) => upd({ display_pages: e.target.value })}
+                        placeholder={config.display_pages_mode === "exclude" ? "/admin, /thank-you, /privacy" : "/, /shop, /catalog"}
+                      />
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                        Список через запятую. Сравниваем как подстроки URL.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Удобство клиента */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>🪄 Удобство для клиента</div>
+                <div className={s.sectionCard}>
+                  <Toggle
+                    label="Запоминать состояние «открыто/закрыто» между визитами"
+                    checked={config.remember_open_state !== false}
+                    onChange={(v) => upd({ remember_open_state: v })}
+                  />
+                  <Toggle
+                    label="Показывать приветствие только один раз"
+                    checked={config.greet_once === true}
+                    onChange={(v) => upd({ greet_once: v })}
+                  />
+                  <Toggle
+                    label="Скрыть счётчик непрочитанных на кнопке"
+                    checked={config.hide_unread_badge === true}
+                    onChange={(v) => upd({ hide_unread_badge: v })}
+                  />
+                  <Toggle
+                    label="Принудительно отключить звук у клиента"
+                    checked={config.disable_sound_for_visitor === true}
+                    onChange={(v) => upd({ disable_sound_for_visitor: v })}
+                  />
+                  <div className={s.field} style={{ marginTop: 10 }}>
+                    <div className={s.fieldLabel}>Свернуть после бездействия (0 = выкл)</div>
+                    <div className={s.numberRow}>
+                      <input
+                        type="number"
+                        className={s.numberInput}
+                        value={config.auto_minimize_after ?? 0}
+                        onChange={(e) => upd({ auto_minimize_after: Math.max(0, +e.target.value) })}
+                        min={0}
+                        max={1800}
+                      />
+                      <span className={s.numberUnit}>сек</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* 2.1 Triggers */}
               <div className={s.section}>
                 <div className={s.sectionTitle}>🎯 Умные триггеры</div>
@@ -620,11 +834,11 @@ export function WidgetSettingsScreen() {
                     )}
                   </div>
 
-                  {/* Page URL contains */}
+                  {/* Page URL contains — для автооткрытия */}
                   <div style={{ padding: "10px 0" }}>
-                    <div className={s.fieldLabel}>📄 Показывать только на страницах (через запятую)</div>
+                    <div className={s.fieldLabel}>📄 Автооткрытие только на страницах (через запятую)</div>
                     <input className={s.fieldInput} value={config.triggers.page_url_contains} onChange={(e) => updTrigger({ page_url_contains: e.target.value })} placeholder="/pricing, /checkout, /help" style={{ marginTop: 6 }} />
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Пусто = на всех страницах</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Это только условие для автооткрытия по триггерам выше. Чтобы скрыть виджет вообще — см. «Видимость» ниже.</div>
                   </div>
                 </div>
               </div>
@@ -1130,9 +1344,42 @@ export function WidgetSettingsScreen() {
 
         {/* ═══ Right: Live Preview ═══ */}
         <div className={s.preview}>
-          <div className={s.previewTitle}>Предпросмотр</div>
+          <div className={s.previewTitle}>
+            Предпросмотр
+            <div className={s.previewSizeSwitcher}>
+              {(["mobile", "tablet", "desktop"] as const).map((sz) => (
+                <button
+                  key={sz}
+                  type="button"
+                  className={`${s.previewSizeBtn} ${previewSize === sz ? s.previewSizeBtnActive : ""}`}
+                  onClick={() => setPreviewSize(sz)}
+                  title={sz === "mobile" ? "Мобильный (375×667)" : sz === "tablet" ? "Планшет (768×1024)" : "Десктоп"}
+                >
+                  {sz === "mobile" ? "📱" : sz === "tablet" ? "📋" : "🖥️"}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <div className={s.previewSite}>
+          <div
+            className={s.previewSite}
+            data-size={previewSize}
+            style={{
+              fontFamily:
+                config.font_family === "onest" ? '"Onest", "Inter", sans-serif' :
+                config.font_family === "inter" ? '"Inter", sans-serif' :
+                config.font_family === "roboto" ? '"Roboto", sans-serif' :
+                config.font_family === "montserrat" ? '"Montserrat", sans-serif' :
+                "inherit",
+              fontSize: `${config.font_size_base ?? 14}px`,
+              ["--zw-edge" as never]: `${config.edge_margin ?? 24}px`,
+              ["--zw-bubble-r" as never]:
+                config.bubble_radius === "soft" ? "12px" :
+                config.bubble_radius === "sharp" ? "6px" : "18px",
+              ["--zw-win-w" as never]:
+                config.window_width === "narrow" ? "300px" :
+                config.window_width === "wide" ? "360px" : "330px",
+            }}>
             <div className={s.previewSiteBar}>
               <div className={s.previewDot} style={{ background: "#ef4444" }} />
               <div className={s.previewDot} style={{ background: "#eab308" }} />
@@ -1140,7 +1387,7 @@ export function WidgetSettingsScreen() {
             </div>
 
             {/* Chat window */}
-            <div className={s.previewChat} style={{ [posRight ? "right" : "left"]: 16, bottom: 80 }}>
+            <div className={s.previewChat} style={{ [posRight ? "right" : "left"]: (config.edge_margin ?? 24) - 8, bottom: 80 }}>
               <div className={s.previewChatHeader} style={{ background: getPreviewBg(config) }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
@@ -1202,8 +1449,12 @@ export function WidgetSettingsScreen() {
             {/* FAB button */}
             <div className={s.previewButton} style={{
               background: getPreviewBg(config),
-              [posRight ? "right" : "left"]: 16,
-              bottom: 16,
+              [posRight ? "right" : "left"]: (config.edge_margin ?? 24) - 8,
+              bottom: (config.edge_margin ?? 24) - 8,
+              boxShadow:
+                config.shadow_intensity === "subtle" ? "0 2px 8px rgba(0,0,0,0.12)" :
+                config.shadow_intensity === "strong" ? "0 12px 32px rgba(0,0,0,0.30)" :
+                "0 4px 16px rgba(0,0,0,0.20)",
               width: config.button_size === "small" ? 48 : config.button_size === "large" ? 64 : 56,
               height: config.button_size === "small" ? 48 : config.button_size === "large" ? 64 : 56,
               borderRadius: config.button_radius === "round" ? "50%" : config.button_radius === "rounded" ? 16  : 8,

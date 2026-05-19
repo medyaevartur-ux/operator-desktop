@@ -49,7 +49,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--surface-0);
+  background: var(--surface-bg);
   position: relative;
 }
 
@@ -61,9 +61,13 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: 14px 20px;
-  background: var(--surface-1);
-  border-bottom: 1px solid var(--border-default);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .headerLeft {
@@ -474,27 +478,49 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  transition: transform var(--duration-fast) var(--ease-default);
+}
+
+/* Browser-level virtualization: пропускаем рендер невидимых сообщений.
+   Работает без перестройки JSX, поддерживается WebView2/Chromium. */
+.msgRow {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 
 .bubbleOperator {
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 18px 18px 4px 18px;
   background: var(--gradient-accent);
   color: white;
-  box-shadow: var(--shadow-glow-sm);
+  box-shadow:
+    var(--shadow-glow-sm),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
+/* hover-lift убран: bubble больше не «прыгает» */
 
 .bubbleVisitor {
-  border-radius: 16px 16px 16px 4px;
+  border-radius: 18px 18px 18px 4px;
   background: var(--surface-1);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-xs);
 }
 
 .bubbleAi {
-  border-radius: 16px 16px 16px 4px;
+  border-radius: 18px 18px 18px 4px;
   background: var(--accent-soft);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
+  position: relative;
+}
+.bubbleAi::before {
+  content: "✦";
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 10px;
+  opacity: 0.4;
+  color: var(--accent);
 }
 
 .bubbleEdited {

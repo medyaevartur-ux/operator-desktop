@@ -64,8 +64,31 @@ export interface WidgetConfig {
   launcher_show_avatar: boolean;
   launcher_pulse: boolean;
   // 1.5 Font
-  font_family: "system" | "inter" | "roboto" | "montserrat" | "custom";
+  font_family: "system" | "onest" | "inter" | "roboto" | "montserrat" | "custom";
   custom_font_url: string;
+  font_size_base: number;          // 13/14/15 px
+  // 1.6 Window sizing
+  window_width: "narrow" | "normal" | "wide";        // 340 / 380 / 420
+  edge_margin: number;             // 16/24/32/40
+  bubble_radius: "soft" | "round" | "sharp";         // 12 / 18 / 6 px
+  shadow_intensity: "subtle" | "medium" | "strong"; // тень FAB и окна
+  show_powered_by: boolean;        // «✨ Живая Сказка» в подвале
+  // 2.4 Поведение клиента
+  remember_open_state: boolean;    // запоминать «открыто/свёрнуто» между визитами
+  greet_once: boolean;             // показать greeting только один раз на визитёра
+  auto_minimize_after: number;     // секунд бездействия → свернуть (0 = выкл)
+  hide_unread_badge: boolean;      // спрятать красный счётчик непрочитанных на FAB
+  disable_sound_for_visitor: boolean; // принудительно отключить звук у клиента
+  // 2.5 Мобильные настройки (overrides, применяются при viewport <= 480)
+  mobile_launcher_type: "inherit" | "icon_only" | "icon_text" | "text_only" | "card";
+  mobile_window_mode: "fullscreen" | "bottom_sheet" | "popup"; // как открывается окно на мобильном
+  mobile_invitation_enabled: boolean;     // показывать всплывающую подсказку поверх FAB
+  mobile_invitation_text: string;         // «Нужна помощь? Нажмите!»
+  mobile_invitation_delay: number;        // секунд до показа (0 = сразу)
+  mobile_hide_unread_badge: boolean;      // отдельно для мобильных
+  // 2.6 Видимость виджета по страницам
+  display_pages: string;                   // список через запятую (подстроки URL)
+  display_pages_mode: "all" | "include" | "exclude"; // all = везде, include = только на этих, exclude = везде кроме этих
   // 2.1 Triggers
   triggers: {
     exit_intent: boolean;
@@ -160,8 +183,27 @@ const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
   launcher_subtext: "Обычно отвечаем за 2 мин",
   launcher_show_avatar: true,
   launcher_pulse: true,
-  font_family: "system",
+  font_family: "onest",
   custom_font_url: "",
+  font_size_base: 14,
+  window_width: "normal",
+  edge_margin: 24,
+  bubble_radius: "round",
+  shadow_intensity: "medium",
+  show_powered_by: true,
+  remember_open_state: true,
+  greet_once: false,
+  auto_minimize_after: 0,
+  hide_unread_badge: false,
+  disable_sound_for_visitor: false,
+  mobile_launcher_type: "inherit",
+  mobile_window_mode: "bottom_sheet",
+  mobile_invitation_enabled: true,
+  mobile_invitation_text: "Нужна помощь? Нажмите!",
+  mobile_invitation_delay: 5,
+  mobile_hide_unread_badge: false,
+  display_pages: "",
+  display_pages_mode: "all",
   triggers: {
     exit_intent: false,
     scroll_percent: null,

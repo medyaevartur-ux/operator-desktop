@@ -42,7 +42,7 @@ export async function setBadgeCount(count: number): Promise<void> {
     await inv("set_badge_count", { count });
   } else {
     // Browser fallback: update document title
-    document.title = count > 0 ? `(${count}) Alphabet Chat` : "Alphabet Chat";
+    document.title = count > 0 ? `(${count}) Живая Сказка` : "Живая Сказка — Оператор";
   }
 }
 

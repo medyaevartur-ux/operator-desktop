@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PropsWithChildren, useState } from "react";
 import { TooltipProvider } from "@/components/ui/Tooltip/Tooltip";
+import { ErrorBoundary } from "@/app/error-boundary";
 
 export function AppProvider({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -16,10 +17,12 @@ export function AppProvider({ children }: PropsWithChildren) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        {children}
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          {children}
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

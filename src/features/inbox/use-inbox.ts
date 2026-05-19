@@ -29,49 +29,45 @@ export function useInbox() {
   useInboxHotkeys();
 
   // ═══ Online/Offline status + Heartbeat + Tauri close ═══
+  // Подписываемся на operator.id — при смене юзера всё переподнимается.
+  const operatorId = useAuthStore((s) => s.operator?.id);
+
   useEffect(() => {
-    const operator = useAuthStore.getState().operator;
-    if (!operator?.id) return;
+    if (!operatorId) return;
 
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3010";
 
-    // Set online
-    void api(`/api/operators/${operator.id}/status`, {
+    void api(`/api/operators/${operatorId}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status: "online" }),
     });
 
-    // Sync close-to-tray setting on mount
     import("@/lib/tauri-bridge").then(({ setCloseToTray }) => {
       const closeToTray = useNotificationStore.getState().closeToTray;
       setCloseToTray(closeToTray);
     }).catch(() => {});
 
-    // Sync badge on mount
     useNotificationStore.getState().syncBadge();
 
-    // Browser: beforeunload → offline
     const handleBeforeUnload = () => {
       navigator.sendBeacon?.(
-        `${API_URL}/api/operators/${operator.id}/online`,
+        `${API_URL}/api/operators/${operatorId}/online`,
         JSON.stringify({ is_online: false }),
       );
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Tauri: app-closing event → offline via Rust (more reliable)
     let unlistenClose: (() => void) | null = null;
     import("@/lib/tauri-bridge").then(({ onAppClosing, notifyOfflineNative }) => {
       onAppClosing(() => {
-        notifyOfflineNative(API_URL, operator.id);
+        notifyOfflineNative(API_URL, operatorId);
       }).then((unlisten) => {
         unlistenClose = unlisten;
       });
     }).catch(() => {});
 
-    // Heartbeat every 30s
     const heartbeat = setInterval(() => {
-      void api(`/api/operators/${operator.id}/heartbeat`, { method: "PATCH" });
+      void api(`/api/operators/${operatorId}/heartbeat`, { method: "PATCH" });
     }, 30000);
 
     return () => {
@@ -79,5 +75,5 @@ export function useInbox() {
       clearInterval(heartbeat);
       if (unlistenClose) unlistenClose();
     };
-  }, []);
+  }, [operatorId]);
 }

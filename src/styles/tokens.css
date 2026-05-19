@@ -286,3 +286,118 @@
   --blue-soft:   rgba(59, 125, 216, 0.12);
   --violet-soft: var(--accent-soft);
 }
+
+/* ═══════════════════════════════════════════════
+   SEMANTIC TOKENS — Fairytale (сказочная тёплая)
+   Палитра лендинга «Живая Сказка»: золото, пергамент, чернила.
+   ═══════════════════════════════════════════════ */
+:root[data-theme="fairytale"] {
+  --surface-bg:       #fef3c7;
+  --surface-bg-deep:  #fde68a;
+  --surface-1:        #fffbeb;
+  --surface-2:        #fef3c7;
+  --surface-3:        #fde68a;
+
+  --text-primary:     #1c1917;
+  --text-secondary:   #57534e;
+  --text-muted:       #92400e;
+  --text-disabled:    #d6d3d1;
+  --text-on-accent:   #fffbeb;
+
+  --border-default:   rgba(146, 64, 14, 0.18);
+  --border-subtle:    rgba(146, 64, 14, 0.10);
+  --border-strong:    rgba(146, 64, 14, 0.30);
+  --border-focus:     var(--amber-600);
+
+  --accent:           var(--amber-600);
+  --accent-hover:     #b45309;
+  --accent-soft:      var(--amber-50);
+  --accent-muted:     rgba(217, 119, 6, 0.10);
+
+  --gradient-accent:  linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
+  --gradient-subtle:  linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+
+  --shadow-xs:      0 1px 2px rgba(146, 64, 14, 0.08);
+  --shadow-sm:      0 2px 6px rgba(146, 64, 14, 0.10), 0 1px 2px rgba(146, 64, 14, 0.06);
+  --shadow-md:      0 4px 12px rgba(146, 64, 14, 0.12), 0 2px 4px rgba(146, 64, 14, 0.06);
+  --shadow-lg:      0 8px 24px rgba(146, 64, 14, 0.14), 0 2px 8px rgba(146, 64, 14, 0.08);
+  --shadow-xl:      0 24px 64px -16px rgba(217, 119, 6, 0.25);
+  --shadow-glow:    0 4px 24px rgba(251, 191, 36, 0.45);
+  --shadow-glow-sm: 0 2px 12px rgba(251, 191, 36, 0.30);
+
+  --bubble-operator-bg:   var(--gradient-accent);
+  --bubble-operator-text: #fffbeb;
+  --bubble-visitor-bg:    #fffbeb;
+  --bubble-visitor-text:  var(--text-primary);
+  --bubble-ai-bg:         rgba(217, 119, 6, 0.10);
+  --bubble-ai-text:       #92400e;
+  --bubble-system-bg:     rgba(146, 64, 14, 0.06);
+  --bubble-system-text:   var(--text-muted);
+
+  /* Legacy compat */
+  --card:        var(--surface-1);
+  --surface:     var(--surface-2);
+  --bg:          var(--surface-bg);
+  --bg-deep:     var(--surface-bg-deep);
+  --text:        var(--text-primary);
+  --text-2:      var(--text-secondary);
+  --text-3:      var(--text-muted);
+  --text-4:      var(--text-disabled);
+  --border:      var(--border-default);
+  --border-light:var(--border-subtle);
+  --violet:      var(--amber-600);
+  --violet-soft: var(--amber-50);
+  --violet-glow: var(--shadow-glow);
+  --gradient:    var(--gradient-accent);
+}
+
+/* ═══════════════════════════════════════════════
+   BRAND TOKENS (нейтральны к темам)
+   Используются виджетом и сказочной стилистикой.
+   ═══════════════════════════════════════════════ */
+:root {
+  --brand-amber:        #d97706;
+  --brand-amber-soft:   #fbbf24;
+  --brand-amber-glow:   #fde68a;
+  --brand-cream:        #fef3c7;
+  --brand-cream-soft:   #fffbeb;
+  --brand-ink:          #1c1917;
+  --brand-parchment:    linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+  --brand-edge-glow:    0 24px 64px -16px rgba(217, 119, 6, 0.25);
+
+  /* Live-кастомизация (управляется theme.store) */
+  --accent-hue: 32;
+}
+
+/* ═══════════════════════════════════════════════
+   DENSITY (comfortable | compact)
+   ═══════════════════════════════════════════════ */
+:root[data-density="compact"] {
+  --space-2:  6px;
+  --space-3:  10px;
+  --space-4:  14px;
+  --space-5:  18px;
+  --space-6:  20px;
+  --space-8:  28px;
+  --text-base: 13px;
+  --text-md:  14px;
+  --text-lg:  15px;
+}
+
+/* ═══════════════════════════════════════════════
+   GLASS / TOPBAR / TITLEBAR — общие поверхности
+   ═══════════════════════════════════════════════ */
+:root {
+  --glass-bg:        rgba(255, 255, 255, 0.62);
+  --glass-border:    rgba(255, 255, 255, 0.55);
+  --glass-blur:      blur(24px) saturate(140%);
+  --topbar-height:   44px;
+}
+:root[data-theme="dark"] {
+  --glass-bg:        rgba(33, 29, 45, 0.62);
+  --glass-border:    rgba(255, 255, 255, 0.06);
+}
+:root[data-theme="fairytale"] {
+  --glass-bg:        rgba(255, 251, 235, 0.72);
+  --glass-border:    rgba(217, 119, 6, 0.22);
+}

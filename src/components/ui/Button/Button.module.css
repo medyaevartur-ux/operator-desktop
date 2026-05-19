@@ -59,7 +59,7 @@
 
 .primary:hover:not(:disabled) {
   box-shadow: var(--shadow-glow);
-  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .secondary {
@@ -91,7 +91,6 @@
 
 .danger:hover:not(:disabled) {
   background: var(--red-600);
-  transform: translateY(-1px);
 }
 
 .dangerGhost {

@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
+import { useDraftsStore } from "@/store/drafts.store";
+import { useTemplatesStore } from "@/store/templates.store";
 import { Tooltip } from "@/components/ui";
 import { FileThumb } from "./FileThumb";
 import s from "./ChatComposer.module.css";
@@ -74,7 +76,13 @@ export function ChatComposer() {
   const messageCount = useInboxStore((st) => st.messages.length);
   const replyTo = useInboxStore((st) => st.replyTo);
   const setReplyTo = useInboxStore((st) => st.setReplyTo);
-  const [value, setValue] = useState("");
+  const setDraft = useDraftsStore((st) => st.setDraft);
+  const getDraft = useDraftsStore((st) => st.getDraft);
+  const clearDraft = useDraftsStore((st) => st.clearDraft);
+  const templates = useTemplatesStore((st) => st.templates);
+  const resolveTemplateBody = useTemplatesStore((st) => st.resolveBody);
+  const incrementTemplateUses = useTemplatesStore((st) => st.incrementUses);
+  const [value, setValue] = useState(() => getDraft(activeSession?.id ?? ""));
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -88,6 +96,21 @@ export function ChatComposer() {
 
   const { isVisitorTyping, sendTyping } = useTypingIndicator();
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // При смене активного чата — подтянуть его черновик в поле
+  const activeSessionId = activeSession?.id ?? "";
+  useEffect(() => {
+    setValue(getDraft(activeSessionId));
+    setErrorText("");
+    setIsPreviewMode(false);
+  }, [activeSessionId, getDraft]);
+
+  // Автосохранение черновика (debounce 400 мс)
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const t = setTimeout(() => setDraft(activeSessionId, value), 400);
+    return () => clearTimeout(t);
+  }, [value, activeSessionId, setDraft]);
 
   const isAssigned =
     !!activeSession?.operator_id &&
@@ -266,10 +289,27 @@ export function ChatComposer() {
         setIsUploading(false);
       }
       if (trimmed) {
+        // Slash-команды: если пользователь напечатал «/команда» — заменяем на шаблон
+        let finalText = trimmed;
+        if (trimmed.startsWith("/")) {
+          const tokenEnd = trimmed.search(/\s|$/);
+          const token = trimmed.slice(0, tokenEnd);
+          const rest = trimmed.slice(tokenEnd).trim();
+          const tpl = templates.find((t) => t.shortcut === token);
+          if (tpl) {
+            const resolved = resolveTemplateBody(tpl.body, {
+              name: activeSession?.visitor_name ?? undefined,
+              operator: operator?.name ?? undefined,
+            });
+            incrementTemplateUses(tpl.id);
+            finalText = rest ? `${resolved}\n\n${rest}` : resolved;
+          }
+        }
         setIsSending(true);
-        await sendMessage(trimmed);
+        await sendMessage(finalText);
         setValue("");
         setIsPreviewMode(false);
+        if (activeSession?.id) clearDraft(activeSession.id);
       }
     } catch (error) {
       console.error("send error:", error);
@@ -510,7 +550,7 @@ export function ChatComposer() {
                 </button>
               </Tooltip>
 
-              {/* Quick Replies Popover */}
+              {/* Шаблоны ответов */}
               <Popover.Root>
                 <Tooltip content="Шаблоны ответов" side="top">
                   <Popover.Trigger asChild>
@@ -522,20 +562,31 @@ export function ChatComposer() {
                 <Popover.Portal>
                   <Popover.Content side="top" sideOffset={8} className={s.popoverContent}>
                     <div className={s.quickReplies}>
-                      {filteredReplies.length === 0 && (
-                        <div className={s.quickReplyEmpty}>Шаблоны не найдены</div>
+                      {templates.length === 0 && (
+                        <div className={s.quickReplyEmpty}>Создайте шаблон в разделе «Шаблоны»</div>
                       )}
-                      {filteredReplies.map((reply) => (
-                        <Popover.Close asChild key={reply}>
-                          <button
-                            type="button"
-                            className={s.quickReplyBtn}
-                            onClick={() => setValue(reply)}
-                          >
-                            {reply}
-                          </button>
-                        </Popover.Close>
-                      ))}
+                      {[...templates].sort((a, b) => b.uses - a.uses).map((tpl) => {
+                        const resolved = resolveTemplateBody(tpl.body, {
+                          name: activeSession?.visitor_name ?? undefined,
+                          operator: operator?.name ?? undefined,
+                        });
+                        return (
+                          <Popover.Close asChild key={tpl.id}>
+                            <button
+                              type="button"
+                              className={s.quickReplyBtn}
+                              onClick={() => { setValue(resolved); incrementTemplateUses(tpl.id); }}
+                              title={tpl.shortcut || tpl.title}
+                            >
+                              <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                                {tpl.title}
+                                {tpl.shortcut && <span style={{ marginLeft: 6, fontFamily: "monospace", fontSize: 11, color: "var(--accent)" }}>{tpl.shortcut}</span>}
+                              </div>
+                              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{resolved.slice(0, 80)}{resolved.length > 80 ? "…" : ""}</div>
+                            </button>
+                          </Popover.Close>
+                        );
+                      })}
                     </div>
                   </Popover.Content>
                 </Popover.Portal>

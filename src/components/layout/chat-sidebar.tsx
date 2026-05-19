@@ -1,6 +1,7 @@
-import { Search, MessageSquareText, Inbox } from "lucide-react";
+import { Search, Inbox, Flame, Clock, User, Bot, CheckCircle2 } from "lucide-react";
 import { useMemo } from "react";
 import { useInboxStore } from "@/store/inbox.store";
+import { useAuthStore } from "@/store/auth.store";
 import { Avatar } from "@/components/ui";
 import { SkeletonCard } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
@@ -9,6 +10,8 @@ import { markChatSessionRead } from "@/features/inbox/inbox.api";
 import type { InboxFilter } from "@/features/inbox/inbox.utils";
 import type { ChatSession } from "@/types/chat";
 import s from "./ChatSidebar.module.css";
+
+const URGENT_THRESHOLD_MS = 60 * 1000; // > 60 сек без ответа = срочно
 
 /* ── Filters ── */
 
@@ -138,13 +141,18 @@ export function ChatSidebar() {
     searchQuery,
     setSearchQuery,
   } = useInboxStore();
+  const myOperatorId = useAuthStore((st) => st.operator?.id);
 
   const filteredSessions = useMemo(() => {
     let next = sessions;
 
-    if (filter !== "all" && filter !== "closed") {
-      next = next.filter((ses) => ses.status === filter);
+    if (filter === "with_operator") {
+      // «Мои» — только сессии, привязанные к текущему оператору
+      next = next.filter((ses) => ses.operator_id === myOperatorId);
+    } else if (filter === "ai") {
+      next = next.filter((ses) => ses.status === "ai");
     }
+    // filter "all" и "closed" — без фильтрации (закрытые показываются вместе со всеми)
 
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
@@ -166,7 +174,34 @@ export function ChatSidebar() {
     }
 
     return next;
-  }, [filter, searchQuery, sessions]);
+  }, [filter, searchQuery, sessions, myOperatorId]);
+
+  // Группировка по сегментам — только когда выбран фильтр "Входящие".
+  // В остальных режимах показываем плоский список.
+  const segments = useMemo(() => {
+    if (filter !== "all" || searchQuery.trim()) return null;
+    const now = Date.now();
+    const urgent: ChatSession[] = [];
+    const waiting: ChatSession[] = [];
+    const mine: ChatSession[] = [];
+    const ai: ChatSession[] = [];
+    const closed: ChatSession[] = [];
+
+    for (const ses of filteredSessions) {
+      if (ses.status === "closed") { closed.push(ses); continue; }
+      const lastTs = ses.last_message_at ? new Date(ses.last_message_at).getTime() : 0;
+      const unread = ses.unread_count ?? 0;
+      const isUrgent = unread > 0 && lastTs > 0 && (now - lastTs) > URGENT_THRESHOLD_MS && !ses.operator_id;
+
+      if (isUrgent) { urgent.push(ses); continue; }
+      if (ses.operator_id === myOperatorId && myOperatorId) { mine.push(ses); continue; }
+      if (ses.status === "with_operator") { mine.push(ses); continue; }
+      if (ses.status === "ai") { ai.push(ses); continue; }
+      waiting.push(ses);
+    }
+
+    return { urgent, waiting, mine, ai, closed };
+  }, [filteredSessions, filter, searchQuery, myOperatorId]);
 
   return (
     <aside className={s.sidebar}>
@@ -216,27 +251,70 @@ export function ChatSidebar() {
           <EmptyState hasSearch={!!searchQuery.trim()} />
         )}
 
-        {/* Session list */}
-        {filteredSessions.map((session) => (
+        {/* Сегментированный список (только в фильтре "Все") */}
+        {!isSessionsLoading && segments && filteredSessions.length > 0 && (
+          <>
+            <Segment icon={Flame} label="Срочные" cssClass={s.sectionUrgent} items={segments.urgent} activeId={activeSession?.id} onPick={pickSession} />
+            <Segment icon={Clock} label="Ждут оператора" cssClass={s.sectionWaiting} items={segments.waiting} activeId={activeSession?.id} onPick={pickSession} />
+            <Segment icon={User} label="Мои" cssClass={s.sectionMine} items={segments.mine} activeId={activeSession?.id} onPick={pickSession} />
+            <Segment icon={Bot} label="У бота" cssClass={s.sectionAi} items={segments.ai} activeId={activeSession?.id} onPick={pickSession} />
+            <Segment icon={CheckCircle2} label="Закрытые" cssClass="" items={segments.closed} activeId={activeSession?.id} onPick={pickSession} />
+          </>
+        )}
+
+        {/* Плоский список (поиск или конкретный фильтр) */}
+        {!isSessionsLoading && !segments && filteredSessions.map((session) => (
           <SessionCard
             key={session.id}
             session={session}
             isActive={activeSession?.id === session.id}
-            onClick={() => {
-              setActiveSession(session);
-              void useInboxStore.getState().loadMessages(session.id);
-              if (session.unread_count && session.unread_count > 0) {
-                void markChatSessionRead(session.id);
-                useInboxStore.setState((state) => ({
-                  sessions: state.sessions.map((s) =>
-                    s.id === session.id ? { ...s, unread_count: 0 } : s
-                  ),
-                }));
-              }
-            }}
+            onClick={() => pickSession(session)}
           />
         ))}
       </div>
     </aside>
+  );
+
+  function pickSession(session: ChatSession) {
+    setActiveSession(session);
+    void useInboxStore.getState().loadMessages(session.id);
+    if (session.unread_count && session.unread_count > 0) {
+      void markChatSessionRead(session.id);
+      useInboxStore.setState((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === session.id ? { ...s, unread_count: 0 } : s
+        ),
+      }));
+    }
+  }
+}
+
+function Segment({
+  icon: Icon, label, cssClass, items, activeId, onPick,
+}: {
+  icon: typeof Flame;
+  label: string;
+  cssClass: string;
+  items: ChatSession[];
+  activeId: string | undefined;
+  onPick: (s: ChatSession) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      <div className={`${s.section} ${cssClass}`}>
+        <Icon className={s.sectionIcon} />
+        {label}
+        <span className={s.sectionCount}>{items.length}</span>
+      </div>
+      {items.map((session) => (
+        <SessionCard
+          key={session.id}
+          session={session}
+          isActive={activeId === session.id}
+          onClick={() => onPick(session)}
+        />
+      ))}
+    </>
   );
 }

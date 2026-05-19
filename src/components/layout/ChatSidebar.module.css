@@ -13,6 +13,9 @@
 .header {
   padding: var(--space-5) var(--space-4) 0;
   flex-shrink: 0;
+  background: linear-gradient(180deg, var(--surface-1) 0%, var(--surface-1) 85%, transparent 100%);
+  position: relative;
+  z-index: 2;
 }
 
 .title {
@@ -124,6 +127,43 @@
   padding: var(--space-2) var(--space-2) var(--space-3);
 }
 
+.section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+  z-index: 1;
+}
+
+.sectionIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sectionCount {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-disabled);
+  background: var(--surface-2);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+}
+
+.sectionUrgent { color: var(--error); }
+.sectionWaiting { color: var(--warning); }
+.sectionMine { color: var(--accent); }
+.sectionAi { color: var(--info); }
+
 /* ── Session card ── */
 
 .card {
@@ -145,7 +185,6 @@
 
 .card:hover {
   background: var(--surface-2);
-  transform: translateX(2px);
 }
 
 .cardActive {
@@ -155,7 +194,6 @@
 
 .cardActive:hover {
   background: var(--gradient-accent);
-  transform: translateX(2px);
   box-shadow: var(--shadow-glow);
 }
 

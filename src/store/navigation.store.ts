@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type Screen = "inbox" | "operators" | "settings" | "dashboard" | "queue" | "visitors" | "widget_settings" | "logs";
+type Screen = "inbox" | "operators" | "settings" | "dashboard" | "queue" | "visitors" | "widget_settings" | "templates" | "logs";
 
 type MobileView = "chat-list" | "chat-conversation" | "logs";
 

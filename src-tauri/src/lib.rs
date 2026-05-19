@@ -1,8 +1,12 @@
 #[cfg(desktop)]
 use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WindowEvent,
 };
+
+#[cfg(desktop)]
+mod tray_icon;
 
 #[cfg(not(desktop))]
 use tauri::Manager;
@@ -15,9 +19,9 @@ fn set_badge_count(app: tauri::AppHandle, count: u32) {
     {
         if let Some(tray) = app.tray_by_id("main-tray") {
             let tooltip = if count > 0 {
-                format!("Alphabet Chat — {} непрочитанных", count)
+                format!("Живая Сказка — {} непрочитанных", count)
             } else {
-                "Alphabet Chat".to_string()
+                "Живая Сказка".to_string()
             };
             let _ = tray.set_tooltip(Some(&tooltip));
 
@@ -27,13 +31,18 @@ fn set_badge_count(app: tauri::AppHandle, count: u32) {
             } else {
                 let _ = tray.set_title(None::<&str>);
             }
+
+            // Перерисовываем иконку — красный индикатор появляется при count > 0.
+            if let Some(icon) = tray_icon::icon_for_count(count) {
+                let _ = tray.set_icon(Some(icon));
+            }
         }
 
         if let Some(window) = app.get_webview_window("main") {
             if count > 0 {
-                let _ = window.set_title(&format!("({}) Alphabet Chat", count));
+                let _ = window.set_title(&format!("({}) Живая Сказка", count));
             } else {
-                let _ = window.set_title("Alphabet Chat");
+                let _ = window.set_title("Живая Сказка");
             }
         }
     }
@@ -126,10 +135,45 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let app = _app;
+
+                // ─── Tray context menu (ПКМ) ───
+                let mi_open = MenuItem::with_id(app, "tray-open", "Открыть Живая Сказка", true, None::<&str>)?;
+                let mi_hide = MenuItem::with_id(app, "tray-hide", "Свернуть в трей", true, None::<&str>)?;
+                let sep = PredefinedMenuItem::separator(app)?;
+                let mi_quit = MenuItem::with_id(app, "tray-quit", "Закрыть полностью", true, None::<&str>)?;
+                let tray_menu = Menu::with_items(app, &[&mi_open, &mi_hide, &sep, &mi_quit])?;
+
                 let _tray = TrayIconBuilder::new()
                     .icon(app.default_window_icon().unwrap().clone())
-                    .tooltip("Alphabet Chat")
+                    .tooltip("Живая Сказка — Оператор")
                     .icon_as_template(false)
+                    .menu(&tray_menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "tray-open" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "tray-hide" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.hide();
+                            }
+                        }
+                        "tray-quit" => {
+                            // Принудительный выход — обходим close-to-tray.
+                            app.state::<AppSettings>()
+                                .close_to_tray
+                                .store(false, std::sync::atomic::Ordering::Relaxed);
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.emit("app-closing", ());
+                            }
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
                     .on_tray_icon_event(|tray_icon: &tauri::tray::TrayIcon, event| {
                         if let TrayIconEvent::Click {
                             button: MouseButton::Left,
