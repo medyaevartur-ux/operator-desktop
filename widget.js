@@ -13,6 +13,8 @@
   // ═══ SOUND ═══
   function playSound() {
     if (localStorage.getItem(SOUND_KEY) === "0") return;
+    // принудительное отключение со стороны оператора
+    if (typeof state !== "undefined" && state.config && state.config.disable_sound_for_visitor === true) return;
     try {
       const c = new (window.AudioContext || window.webkitAudioContext)();
       const o = c.createOscillator();
@@ -27,9 +29,14 @@
     } catch(e) { console.warn("[ZS] Sound error:", e); }
   }
 
+  // ВАЖНО: isSoundOn вызывается во время инициализации state — нельзя обращаться к state здесь.
   function isSoundOn() {
-    if (state.config && state.config.disable_sound_for_visitor === true) return false;
     return localStorage.getItem(SOUND_KEY) !== "0";
+  }
+  // Учитывает принудительное отключение со стороны оператора (вызывается уже когда config загружен).
+  function isSoundAllowed() {
+    if (typeof state !== "undefined" && state.config && state.config.disable_sound_for_visitor === true) return false;
+    return isSoundOn();
   }
   function toggleSound() {
     const on = isSoundOn();
@@ -54,6 +61,20 @@
     const d = document.createElement("div");
     d.textContent = s;
     return d.innerHTML;
+  }
+
+  function parseMarkdown(text) {
+    if (!text) return "";
+    let s = esc(text);
+    // Parse bold: **text**
+    s = s.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    // Parse italic: *text*
+    s = s.replace(/\*(.*?)\*/g, "<em>$1</em>");
+    // Parse inline code: `text`
+    s = s.replace(/`(.*?)`/g, "<code>$1</code>");
+    // Parse simple line breaks: \n -> <br>
+    s = s.replace(/\n/g, "<br>");
+    return s;
   }
 
   function fmtTime(s) {
@@ -198,6 +219,7 @@
     autoMsgShown: {}, autoMsgTimers: [],
     // offline form
     offlineFormSent: false,
+    showOfflineLeadForm: false,
     // identity
     identityUser: null,
     // refs for incremental updates
@@ -280,6 +302,8 @@
 
     return `
 :host {
+  all: initial;
+  isolation: isolate;
   --accent: ${c};
   --accent-50: ${c}50;
   --accent-60: ${c}60;
@@ -576,7 +600,7 @@ ${safeCss}`;
   function render() {
     const cfg = state.config || {};
 
-    // Save scroll state before destroying DOM
+    // Save scroll state before destroying DOM contents
     const prevMsgs = shadow.getElementById("zw-msgs");
     let wasAtBottom = true;
     let prevScrollTop = 0;
@@ -587,22 +611,45 @@ ${safeCss}`;
       wasAtBottom = (prevScrollHeight - prevScrollTop - prevMsgs.clientHeight) < 40;
     }
 
-    shadow.innerHTML = "";
+    // 1. Reuse or create Style tag
+    let style = shadow.querySelector("style");
+    if (!style) {
+      style = document.createElement("style");
+      shadow.appendChild(style);
+    }
+    const cssText = getCSS(cfg);
+    if (style.textContent !== cssText) {
+      style.textContent = cssText;
+    }
 
-    const style = document.createElement("style");
-    style.textContent = getCSS(cfg);
-    shadow.appendChild(style);
-
+    // Clean up existing lightbox if any before rendering a new one
+    const existingLb = shadow.querySelector(".zw-lb");
+    if (existingLb) shadow.removeChild(existingLb);
     if (state.lightboxUrl) renderLightbox();
 
-    const root = document.createElement("div");
-    root.className = "zw";
-    root.setAttribute("role", "region");
+    // 2. Reuse or create Root container
+    let root = shadow.querySelector(".zw");
+    if (!root) {
+      root = document.createElement("div");
+      root.className = "zw";
+      root.setAttribute("role", "region");
+      shadow.appendChild(root);
+    }
     root.setAttribute("aria-label", cfg.header_title || "Онлайн-чат");
     state.refs.root = root;
 
-    // Greeting (only for icon_only launcher)
-    // Мобильные оверрайды launcher_type
+    // 3. Remove temporary elements from root so we can rebuild them, but KEEP 'win' and 'fab'
+    const existingWin = shadow.querySelector(".zw-win");
+    const existingFab = shadow.querySelector(".zw-fab");
+    
+    // Clear other children like greeting, launcher card, mob-invite, invitation
+    Array.from(root.children).forEach(child => {
+      if (child !== existingWin && child !== existingFab) {
+        root.removeChild(child);
+      }
+    });
+
+    // 4. Greeting (only for icon_only launcher)
     const isMobileViewport = window.innerWidth <= 480;
     const mobileLT = cfg.mobile_launcher_type;
     const lt = (isMobileViewport && mobileLT && mobileLT !== "inherit")
@@ -626,7 +673,7 @@ ${safeCss}`;
       root.appendChild(g);
     }
 
-    // Launcher card
+    // 5. Launcher card
     if (!state.open && lt === "card") {
       const lc = document.createElement("div");
       lc.className = "zw-launcher-card";
@@ -664,13 +711,18 @@ ${safeCss}`;
       root.appendChild(lc);
     }
 
-    // Window
-    const win = document.createElement("div");
+    // 6. Reuse or create Window
+    let win = existingWin;
+    if (!win) {
+      win = document.createElement("div");
+      win.setAttribute("role", "dialog");
+      win.setAttribute("aria-modal", "true");
+      state.refs.win = win;
+    }
+    // Update win
     win.className = "zw-win" + (state.open ? " open" : "");
-    win.setAttribute("role", "dialog");
-    win.setAttribute("aria-modal", "true");
     win.setAttribute("aria-label", cfg.header_title || "Онлайн-чат");
-    state.refs.win = win;
+    win.innerHTML = ""; // rebuild inner contents safely
 
     win.appendChild(mkHeader(cfg));
 
@@ -720,13 +772,22 @@ ${safeCss}`;
       win.appendChild(mkRating(cfg));
     }
 
-    root.appendChild(win);
+    // Append win if not already in root
+    if (!root.contains(win)) {
+      root.appendChild(win);
+    }
 
-    // FAB
-    const icon = IC[cfg.button_icon] || IC.chat;
-    const fab = document.createElement("button");
+    // 7. Reuse or create FAB
+    let fab = existingFab;
+    if (!fab) {
+      fab = document.createElement("button");
+      state.refs.fab = fab;
+    }
+    // Rebuild fab contents
+    fab.innerHTML = "";
     fab.setAttribute("aria-label", state.open ? "Закрыть чат" : "Открыть чат");
 
+    const icon = IC[cfg.button_icon] || IC.chat;
     if (!state.open && (lt === "icon_text" || lt === "text_only")) {
       fab.className = "zw-fab zw-fab-text";
       if (lt !== "text_only") fab.innerHTML = icon;
@@ -752,6 +813,8 @@ ${safeCss}`;
       badge.setAttribute("aria-label", state.unread + " непрочитанных");
       fab.appendChild(badge);
       state.refs.badge = badge;
+    } else {
+      state.refs.badge = null;
     }
 
     fab.onclick = () => {
@@ -763,14 +826,18 @@ ${safeCss}`;
       } else { openChat(); }
       scheduleRender();
     };
-    state.refs.fab = fab;
 
-    // Invitation popup
+    // Append fab if not already in root
+    if (!root.contains(fab)) {
+      root.appendChild(fab);
+    }
+
+    // 8. Invitation popup
     if (state.pendingInvitation && !state.open) {
       root.appendChild(mkInvitation(state.pendingInvitation));
     }
 
-    // Мобильное мини-приглашение поверх FAB
+    // 9. Мобильное мини-приглашение поверх FAB
     if (isMobileViewport && !state.open && cfg.mobile_invitation_enabled !== false && !state.mobileInviteDismissed && state.mobileInviteShown) {
       const inv = document.createElement("div");
       inv.className = "zw-mob-invite";
@@ -794,9 +861,6 @@ ${safeCss}`;
       };
       root.appendChild(inv);
     }
-
-    root.appendChild(fab);
-    shadow.appendChild(root);
 
     // Restore scroll
     if (state.open && state.prechatDone) {
@@ -1216,15 +1280,32 @@ ${safeCss}`;
         bbl.appendChild(imgW);
       }
 
-      if (showTxt) {
+      const isDeleted = msg.is_deleted || msg.message_type === "deleted" || !!msg.deleted_at;
+
+      if (isDeleted) {
+        const txt = document.createElement("div");
+        txt.className = "zw-txt zw-txt-deleted";
+        txt.innerHTML = "<i>🚫 Сообщение удалено</i>";
+        txt.style.cssText = "opacity:0.5;font-style:italic;";
+        bbl.appendChild(txt);
+      } else if (showTxt) {
         const txt = document.createElement("div");
         txt.className = "zw-txt";
-        txt.textContent = msg.message;
+        txt.innerHTML = parseMarkdown(msg.message);
         bbl.appendChild(txt);
       }
 
       const meta = document.createElement("div");
       meta.className = "zw-meta";
+
+      if (msg.updated_at && new Date(msg.updated_at).getTime() - new Date(msg.created_at).getTime() > 5000) {
+        const edited = document.createElement("span");
+        edited.className = "zw-edited";
+        edited.textContent = "(ред.) ";
+        edited.style.cssText = "font-size:10px;opacity:0.6;margin-right:4px;";
+        meta.appendChild(edited);
+      }
+
       const time = document.createElement("span");
       time.className = "zw-time";
       time.textContent = fmtTime(msg.created_at);
@@ -1262,6 +1343,103 @@ ${safeCss}`;
       row.appendChild(wrap);
       c.appendChild(row);
     });
+
+    // Offline Lead Form (Task 30)
+    if (state.showOfflineLeadForm && !state.offlineFormSent) {
+      const formRow = document.createElement("div");
+      formRow.className = "zw-row o";
+
+      const formWrap = document.createElement("div");
+      formWrap.className = "zw-wrap";
+      formWrap.style.cssText = "max-width: 90%; margin-top: 8px;";
+
+      const botAva = document.createElement("div");
+      botAva.className = "zw-ava ai";
+      botAva.textContent = "🤖";
+      formWrap.appendChild(botAva);
+
+      const formBbl = document.createElement("div");
+      formBbl.className = "zw-bbl";
+      formBbl.style.cssText = "background:var(--bg);border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,0.08);border-bottom-left-radius:6px;width:100%;";
+
+      const formHeader = document.createElement("div");
+      formHeader.className = "zw-sender sai";
+      formHeader.textContent = "Форма обратной связи";
+      formBbl.appendChild(formHeader);
+
+      const formContainer = document.createElement("div");
+      formContainer.style.cssText = "padding: 12px 14px;";
+
+      const inputStyle = "width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;margin-bottom:8px;outline:none;font-family:inherit;background:var(--input-bg);color:var(--text);";
+
+      const nameInp = document.createElement("input");
+      nameInp.placeholder = "Ваше имя";
+      nameInp.style.cssText = inputStyle;
+      if (state.visitorName) nameInp.value = state.visitorName;
+      formContainer.appendChild(nameInp);
+
+      const contactInp = document.createElement("input");
+      contactInp.placeholder = "Email или Телефон";
+      contactInp.style.cssText = inputStyle;
+      formContainer.appendChild(contactInp);
+
+      const submitBtn = document.createElement("button");
+      submitBtn.style.cssText = "width:100%;padding:10px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s;";
+      submitBtn.textContent = "Отправить контакты";
+
+      submitBtn.onclick = async () => {
+        const nameVal = nameInp.value.trim();
+        const contactVal = contactInp.value.trim();
+        if (!nameVal || !contactVal) {
+          submitBtn.textContent = "Заполните все поля!";
+          submitBtn.style.background = "#ef4444";
+          setTimeout(() => {
+            submitBtn.textContent = "Отправить контакты";
+            submitBtn.style.background = "var(--accent)";
+          }, 2000);
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Отправка...";
+
+        const isEmail = contactVal.includes("@");
+        const data = {
+          visitor_id: state.visitorId,
+          name: nameVal,
+          message: "Контактные данные оставлены через компактную форму оффлайна.",
+          page_url: location.href,
+          ...(isEmail ? { email: contactVal } : { phone: contactVal })
+        };
+
+        const result = await api("POST", "/api/widget/offline-leads", data);
+        if (result) {
+          state.offlineFormSent = true;
+
+          const successMsg = {
+            id: "sys_" + Date.now(),
+            session_id: state.session.id,
+            sender: "system",
+            message: "✅ Контакты успешно отправлены. Мы свяжемся с вами в ближайшее время!",
+            status: "sent",
+            created_at: new Date().toISOString()
+          };
+          state.messages.push(successMsg);
+          state.showOfflineLeadForm = false;
+          scheduleRender();
+          setTimeout(scrollBottom, 50);
+        } else {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Ошибка. Попробовать снова";
+        }
+      };
+
+      formContainer.appendChild(submitBtn);
+      formBbl.appendChild(formContainer);
+      formWrap.appendChild(formBbl);
+      formRow.appendChild(formWrap);
+      c.appendChild(formRow);
+    }
 
     // Typing indicator
     const typ = document.createElement("div");
@@ -1693,6 +1871,35 @@ ${safeCss}`;
 
     if (state.socket) {
       state.socket.emit("typing_content", { sessionId: state.session.id, text: "", isTyping: false });
+    }
+
+    // Offline AI Auto-response & Lead form capture (Task 30)
+    const hasOnlineOperator = state.teamOperators && state.teamOperators.some(op => op.status === "online");
+    const isOfflineMode = state.isOffline || !hasOnlineOperator;
+
+    if (isOfflineMode && !state.showOfflineLeadForm && !state.offlineFormSent) {
+      setTimeout(async () => {
+        const botMsgText = "Я сейчас оффлайн, но подключусь в ближайшее время. Оставьте ваши контакты, и я сразу свяжусь с вами!";
+        
+        const botMsg = {
+          id: "bot_" + Date.now(),
+          session_id: state.session.id,
+          sender: "ai",
+          message: botMsgText,
+          status: "sent",
+          created_at: new Date().toISOString()
+        };
+        state.messages.push(botMsg);
+        
+        await api("POST", "/api/widget/sessions/" + state.session.id + "/messages", {
+          sender: "ai",
+          message: botMsgText
+        });
+        
+        state.showOfflineLeadForm = true;
+        scheduleRender();
+        setTimeout(scrollBottom, 50);
+      }, 1500);
     }
   }
 
@@ -2351,7 +2558,37 @@ ${safeCss}`;
 
   // ═══ INIT ═══
   async function init() {
-    const data = await api("GET", "/api/widget/settings");
+    // Listen for postMessage updates for live preview
+    window.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "ZS_PREVIEW_UPDATE") {
+        const payload = event.data.payload || {};
+        if (payload.widget_config) {
+          state.config = payload.widget_config;
+          loadFont(state.config);
+        }
+        if (payload.prechat_form) {
+          state.prechat = payload.prechat_form;
+        }
+        if (payload.business_hours !== undefined) {
+          state.businessHours = payload.business_hours;
+          state.isOffline = checkOffline();
+        }
+        if (event.data.forceOpen) {
+          state.open = true;
+          if (payload.prechat_form?.enabled && !event.data.skipPrechatPreview) {
+            state.prechatDone = false;
+          }
+        }
+        scheduleRender();
+      }
+    });
+
+    let data;
+    if (window.__zsPreviewConfig) {
+      data = window.__zsPreviewConfig;
+    } else {
+      data = await api("GET", "/api/widget/settings");
+    }
     if (!data) return;
 
     const rawConfig = data.widget_config || {};

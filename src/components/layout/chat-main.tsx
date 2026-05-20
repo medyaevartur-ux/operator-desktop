@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useAuthStore } from "@/store/auth.store";
@@ -12,6 +12,7 @@ import { useConfirm } from "@/components/ui";
 import { getSessionDisplayName, getAvatarGradient } from "@/utils/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ChatMessage } from "@/types/chat";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Search,
   X,
@@ -26,6 +27,9 @@ import {
   Trash2,
   Check,
   Info,
+  Flag,
+  Eye,
+  Clock,
 } from "lucide-react";
 import s from "./ChatMain.module.css";
 
@@ -74,6 +78,27 @@ function canEditOrDelete(msg: ChatMessage, operatorId: string | undefined): bool
   if (msg.sender !== "operator" || msg.operator_id !== operatorId) return false;
   if (msg.is_deleted) return false;
   return Date.now() - new Date(msg.created_at).getTime() < 5 * 60 * 1000;
+}
+
+function parseMarkdown(text: string): string {
+  if (!text) return "";
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  // Multi-line code
+  html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.15);padding:6px;border-radius:6px;font-family:monospace;font-size:12.5px;margin:4px 0;white-space:pre-wrap;word-break:break-all">$1</pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.15);padding:2px 4px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>');
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  // Italic
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  // Mentions
+  html = html.replace(/@(\S+)/g, '<span style="font-weight:700;background:rgba(139,92,246,0.18);padding:0 4px;border-radius:4px">@$1</span>');
+  // Newlines
+  html = html.replace(/\n/g, "<br>");
+  return html;
 }
 
 function statusLabel(status: string) {
@@ -136,10 +161,13 @@ export function ChatMain() {
   const assignActiveSession = useInboxStore((st) => st.assignActiveSession);
   const closeActiveSession = useInboxStore((st) => st.closeActiveSession);
   const loadMessages = useInboxStore((st) => st.loadMessages);
+  const changeActiveSessionPriority = useInboxStore((st) => st.changeActiveSessionPriority);
 
   const operator = useAuthStore((st) => st.operator);
   const isDetailsOpen = useNavigationStore((st) => st.isDetailsOpen);
   const toggleDetails = useNavigationStore((st) => st.toggleDetails);
+  const isVisitorsOpen = useNavigationStore((st) => st.isVisitorsOpen);
+  const toggleVisitors = useNavigationStore((st) => st.toggleVisitors);
 
   const { confirm } = useConfirm();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -150,8 +178,35 @@ export function ChatMain() {
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [isDragOver, setIsDragOver] = useState(false);
   const replyTo = useInboxStore((st) => st.replyTo);
   const setReplyTo = useInboxStore((st) => st.setReplyTo);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const event = new CustomEvent("zs-add-files-to-composer", {
+        detail: Array.from(e.dataTransfer.files)
+      });
+      window.dispatchEvent(event);
+    }
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -230,8 +285,23 @@ export function ChatMain() {
   const displayName = getSessionDisplayName(activeSession.visitor_name, activeSession.visitor_id);
 
   return (
-    <main className={s.main}>
+    <main
+      className={s.main}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+
+      {isDragOver && (
+        <div className={s.dragOverlay}>
+          <div className={s.dragOverlayInner}>
+            <ArrowDown style={{ width: 48, height: 48, marginBottom: 16 }} className={s.bounceIcon} />
+            <div style={{ fontSize: 20, fontWeight: 800 }}>Перетащите файлы сюда</div>
+            <div style={{ fontSize: 14, opacity: 0.7 }}>Изображения прикрепятся к сообщению</div>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <header className={s.header}>
@@ -240,7 +310,59 @@ export function ChatMain() {
           <div className={s.headerInfo}>
             <div className={s.headerName}>
               {activeSession.is_vip && <span className={s.headerVip}>VIP</span>}
-              {displayName}
+              <Tooltip
+                delayDuration={100}
+                side="bottom"
+                content={
+                  <div className={s.quickInfoTooltip}>
+                    <div className={s.quickInfoTitle}>О посетителе</div>
+                    <div className={s.quickInfoGrid}>
+                      {activeSession.visitor_email && (
+                        <>
+                          <div className={s.quickInfoLabel}>Email:</div>
+                          <div className={s.quickInfoValue}>{activeSession.visitor_email}</div>
+                        </>
+                      )}
+                      {activeSession.visitor_phone && (
+                        <>
+                          <div className={s.quickInfoLabel}>Телефон:</div>
+                          <div className={s.quickInfoValue}>{activeSession.visitor_phone}</div>
+                        </>
+                      )}
+                      {(activeSession.country || activeSession.city) && (
+                        <>
+                          <div className={s.quickInfoLabel}>Локация:</div>
+                          <div className={s.quickInfoValue}>
+                            {[activeSession.country, activeSession.city].filter(Boolean).join(", ")}
+                          </div>
+                        </>
+                      )}
+                      {activeSession.ip_address && (
+                        <>
+                          <div className={s.quickInfoLabel}>IP-адрес:</div>
+                          <div className={s.quickInfoValue}>{activeSession.ip_address}</div>
+                        </>
+                      )}
+                      {activeSession.user_agent && (
+                        <>
+                          <div className={s.quickInfoLabel}>Браузер:</div>
+                          <div className={s.quickInfoValue} title={activeSession.user_agent}>
+                            {activeSession.user_agent.includes("Chrome") ? "Chrome" : activeSession.user_agent.includes("Firefox") ? "Firefox" : activeSession.user_agent.includes("Safari") ? "Safari" : "Другой"}
+                          </div>
+                        </>
+                      )}
+                      {activeSession.visit_count !== undefined && (
+                        <>
+                          <div className={s.quickInfoLabel}>Визитов:</div>
+                          <div className={s.quickInfoValue}>{activeSession.visit_count}</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                }
+              >
+                <span className={s.hoverName}>{displayName}</span>
+              </Tooltip>
             </div>
             <div className={s.headerStatus}>{statusLabel(activeSession.status)}</div>
             {activeSession.current_page && (
@@ -252,6 +374,39 @@ export function ChatMain() {
         </div>
 
         <div className={s.headerActions}>
+          <DropdownMenu.Root>
+            <Tooltip content="Приоритет чата" side="bottom">
+              <DropdownMenu.Trigger asChild>
+                <button type="button" className={s.ghostBtn}>
+                  <Flag
+                    style={{
+                      width: 16,
+                      height: 16,
+                      fill: activeSession.priority === "urgent" ? "#ef4444" : activeSession.priority === "high" ? "#f59e0b" : activeSession.priority === "low" ? "var(--text-disabled)" : "transparent",
+                      color: activeSession.priority === "urgent" ? "#ef4444" : activeSession.priority === "high" ? "#f59e0b" : activeSession.priority === "low" ? "var(--text-disabled)" : "#10b981"
+                    }}
+                  />
+                </button>
+              </DropdownMenu.Trigger>
+            </Tooltip>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content className={s.dropdownContent} side="bottom" align="end" sideOffset={6}>
+                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("urgent")}>
+                  <span style={{ color: "#ef4444", marginRight: 8 }}>🔴</span> Срочный
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("high")}>
+                  <span style={{ color: "#f59e0b", marginRight: 8 }}>🟡</span> Высокий
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("normal")}>
+                  <span style={{ color: "#10b981", marginRight: 8 }}>🟢</span> Обычный
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("low")}>
+                  <span style={{ color: "var(--text-disabled)", marginRight: 8 }}>⚪</span> Низкий
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+
           <Tooltip content="Забрать" side="bottom">
             <button type="button" className={s.ghostBtn} onClick={() => void assignActiveSession()}>
               <UserCheck style={{ width: 16, height: 16 }} />
@@ -293,6 +448,12 @@ export function ChatMain() {
               </button>
             )}
           </div>
+
+          <Tooltip content={isVisitorsOpen ? "Скрыть посетителей" : "Показать посетителей"} side="bottom">
+            <button type="button" className={`${s.ghostBtn} ${isVisitorsOpen ? s.activeBtn : ""}`} onClick={toggleVisitors}>
+              <Eye style={{ width: 16, height: 16 }} />
+            </button>
+          </Tooltip>
 
           <Tooltip content={isDetailsOpen ? "Скрыть панель" : "Показать панель"} side="bottom">
             <button type="button" className={s.ghostBtn} onClick={toggleDetails}>
@@ -381,11 +542,12 @@ export function ChatMain() {
 
               // Deleted message
               if (msg.is_deleted) {
+                const isDeletedByOperator = msg.sender === "operator";
                 return (
                   <div key={msg.id} className={`${s.deletedMsg} ${isOperator ? s.deletedMsgRight : s.deletedMsgLeft}`} style={{ marginBottom: 8 }}>
                     <div className={s.deletedBubble}>
-                      <Trash2 style={{ width: 14, height: 14 }} />
-                      Сообщение удалено
+                      <Trash2 style={{ width: 14, height: 14, opacity: 0.6 }} />
+                      {isDeletedByOperator ? "Сообщение удалено оператором" : "Сообщение удалено клиентом"}
                     </div>
                   </div>
                 );
@@ -400,6 +562,9 @@ export function ChatMain() {
                 return [];
               })();
               const imageUrl = messageIsImage ? (attachments[0]?.url || msg.message) : null;
+              const allImages = attachments.length > 0
+                ? attachments.map((a: { url: string }) => a.url)
+                : imageUrl ? [imageUrl] : [];
               const replyRef = msg.reply_to_id
                 ? (msg.reply_to_message
                   ? { sender: msg.reply_to_sender || "visitor", message: msg.reply_to_message }
@@ -485,25 +650,30 @@ export function ChatMain() {
                     </div>
                   )}
 
-                  {/* Image message */}
-                  {imageUrl ? (
-                    <div className={s.imageMsg} onClick={() => setLightboxSrc(imageUrl)}>
-                      <img src={imageUrl} alt="Фото" className={s.imageMain} loading="lazy" />
-                      {attachments.length > 1 && (
-                        <div className={s.imageThumbs}>
-                          {attachments.slice(1).map((att, ai) => (
+                  {/* Image grid or message */}
+                  {allImages.length > 0 ? (
+                    allImages.length === 1 ? (
+                      <div className={s.imageMsg} onClick={() => setLightboxSrc(allImages[0])}>
+                        <img src={allImages[0]} alt="Фото" className={s.imageMain} loading="lazy" />
+                      </div>
+                    ) : (
+                      <div className={s.imageGridContainer}>
+                        <div className={`${s.imageGrid} ${
+                          allImages.length === 2 ? s.grid2 : allImages.length === 3 ? s.grid3 : s.grid4
+                        }`}>
+                          {allImages.slice(0, 4).map((imgUrl, idx) => (
                             <img
-                              key={ai}
-                              src={att.url}
+                              key={idx}
+                              src={imgUrl}
                               alt=""
-                              className={s.imageThumb}
-                              onClick={(e) => { e.stopPropagation(); setLightboxSrc(att.url); }}
+                              className={s.imageGridImg}
+                              onClick={() => setLightboxSrc(imgUrl)}
                               loading="lazy"
                             />
                           ))}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )
                   ) : isEditing ? (
                     /* Edit mode */
                     <div className={s.editWrap}>
@@ -533,8 +703,15 @@ export function ChatMain() {
                         isOperator ? s.bubbleOperator : isVisitor ? s.bubbleVisitor : s.bubbleAi
                       }`}
                     >
-                      {msg.message}
-                      {msg.is_edited && <span className={s.bubbleEdited}>(ред.)</span>}
+                      <div dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.message) }} />
+                      {msg.is_edited && (
+                        <Tooltip
+                          content={`Изменено${msg.updated_at ? ` в ${formatTime(msg.updated_at)}` : ""}`}
+                          side="top"
+                        >
+                          <span className={s.bubbleEdited} style={{ cursor: "help", textDecoration: "underline dashed", opacity: 0.8 }}>(ред.)</span>
+                        </Tooltip>
+                      )}
                       {!showHeader && (
                         <div className={`${s.bubbleTimeSub} ${isOperator ? s.operator : s.other}`}>
                           {formatTime(msg.created_at)}
@@ -572,7 +749,14 @@ export function ChatMain() {
                   {/* Delivery receipt — only "Доставлено" */}
                   {isOperator && (
                     <div className={s.receipt}>
-                      {msg.status === "read" ? (
+                      {msg.isPending ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-muted)" }}>
+                          <Clock style={{ width: 12, height: 12, color: "var(--color-warning)" }} />
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic" }}>
+                            Ожидает отправки (оффлайн)
+                          </span>
+                        </div>
+                      ) : msg.status === "read" ? (
                         <>
                           <span className={s.receiptChecksRead}>✓✓</span>
                           <span className={s.receiptTextRead}>Прочитано</span>

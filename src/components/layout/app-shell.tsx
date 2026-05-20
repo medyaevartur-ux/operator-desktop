@@ -1,10 +1,12 @@
 import { useNavigationStore } from "@/store/navigation.store";
 import { useInbox } from "@/features/inbox/use-inbox";
 import { useInboxRealtime } from "@/features/inbox/use-inbox-realtime";
+import { useVisitorsRealtime } from "@/features/visitors/use-visitors-realtime";
 import { ChatDetails } from "@/components/layout/chat-details";
 import { ChatMain } from "@/components/layout/chat-main";
 import { ChatSidebar } from "@/components/layout/chat-sidebar";
 import { InboxRail } from "@/components/layout/inbox-rail";
+import { VisitorsPanel } from "@/components/layout/visitors-panel";
 import { OperatorsScreen } from "@/components/screens/operators-screen";
 import { SettingsScreen } from "@/components/screens/settings-screen";
 import { QueueScreen } from "@/components/screens/queue-screen";
@@ -52,13 +54,20 @@ export function AppShell() {
 function DesktopAppShell() {
   useInbox();
   useInboxRealtime();
+  useVisitorsRealtime();
 
   const screen = useNavigationStore((s) => s.screen);
   const isDetailsOpen = useNavigationStore((s) => s.isDetailsOpen);
+  const isVisitorsOpen = useNavigationStore((s) => s.isVisitorsOpen);
 
-  const columns = isDetailsOpen
-    ? "68px 340px minmax(0,1fr) 340px"
-    : "68px 340px minmax(0,1fr)";
+  let columns = "68px 340px minmax(0,1fr)";
+  if (isDetailsOpen && isVisitorsOpen) {
+    columns = "68px 340px minmax(0,1fr) 340px 300px";
+  } else if (isDetailsOpen) {
+    columns = "68px 340px minmax(0,1fr) 340px";
+  } else if (isVisitorsOpen) {
+    columns = "68px 340px minmax(0,1fr) 300px";
+  }
 
   if (screen !== "inbox") {
     return (
@@ -189,6 +198,23 @@ function DesktopAppShell() {
               transition={detailsTransition}
             >
               <ErrorBoundary><ChatDetails /></ErrorBoundary>
+            </motion.div>
+          )}
+          {isVisitorsOpen && (
+            <motion.div
+              key="visitors-panel"
+              className={s.visitorsPanel}
+              variants={{
+                initial: { opacity: 0, x: 300 },
+                animate: { opacity: 1, x: 0 },
+                exit: { opacity: 0, x: 300 },
+              }}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={detailsTransition}
+            >
+              <ErrorBoundary><VisitorsPanel /></ErrorBoundary>
             </motion.div>
           )}
         </AnimatePresence>

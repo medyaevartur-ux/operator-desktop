@@ -164,7 +164,8 @@
 
   /* Typography */
   --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-serif: 'Source Serif 4', 'Tiempos', Georgia, serif;  /* à la Claude.ai */
+  --font-display: 'Source Serif 4', 'Tiempos', Georgia, serif;
   --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
 
   --text-2xs: 10px;

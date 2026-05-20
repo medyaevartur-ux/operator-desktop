@@ -3,6 +3,66 @@ import type { SiteVisitor } from "@/types/visitor";
 
 type VisitorFilter = "all" | "with_chat" | "without_chat";
 
+export function calculateLeadScore(visitor: SiteVisitor): number {
+  let score = 0;
+  // 1. Количество сессий / визитов
+  score += (visitor.session_count || 1) * 10;
+
+  // 2. VIP статус
+  if ((visitor as any).is_vip === true) {
+    score += 40;
+  }
+
+  // 3. Время на сайте (разница между last_seen_at и first_seen_at)
+  if (visitor.first_seen_at && visitor.last_seen_at) {
+    const timeOnSite = (new Date(visitor.last_seen_at).getTime() - new Date(visitor.first_seen_at).getTime()) / 1000;
+    if (timeOnSite > 300) {
+      score += 20;
+    } else {
+      score += 10;
+    }
+  } else {
+    score += 10;
+  }
+
+  // 4. Коммерческие страницы
+  const page = (visitor.current_page || "").toLowerCase();
+  if (
+    page.includes("cart") ||
+    page.includes("price") ||
+    page.includes("checkout") ||
+    page.includes("buy") ||
+    page.includes("pricing") ||
+    page.includes("product") ||
+    page.includes("shop")
+  ) {
+    score += 30;
+  }
+
+  return Math.min(100, Math.max(0, score));
+}
+
+function processAndSortVisitors(list: SiteVisitor[]): SiteVisitor[] {
+  return list
+    .filter((v) => !v.is_blocked)
+    .map((v) => ({
+      ...v,
+      score: calculateLeadScore(v),
+    }))
+    .sort((a, b) => {
+      // Сначала те, кто онлайн, потом по score (по убыванию), потом по дате последнего посещения
+      if (a.is_online !== b.is_online) {
+        return a.is_online ? -1 : 1;
+      }
+      const scoreA = a.score || 0;
+      const scoreB = b.score || 0;
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
+      return new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime();
+    });
+}
+
 interface VisitorsState {
   visitors: SiteVisitor[];
   setVisitors: (v: SiteVisitor[]) => void;
@@ -11,6 +71,7 @@ interface VisitorsState {
   upsertVisitor: (v: SiteVisitor) => void;
   removeVisitor: (visitorId: string) => void;
   updateVisitorPage: (visitorId: string, page: string, title: string) => void;
+  blockVisitorIP: (visitorId: string) => void;
 
   filter: VisitorFilter;
   setFilter: (f: VisitorFilter) => void;
@@ -32,7 +93,10 @@ interface VisitorsState {
 
 export const useVisitorsStore = create<VisitorsState>((set, get) => ({
   visitors: [],
-  setVisitors: (visitors) => set({ visitors, onlineCount: visitors.filter((v) => v.is_online).length }),
+  setVisitors: (visitors) => {
+    const processed = processAndSortVisitors(visitors);
+    set({ visitors: processed, onlineCount: processed.filter((v) => v.is_online).length });
+  },
 
   upsertVisitor: (visitor) => {
     const list = get().visitors;
@@ -40,16 +104,18 @@ export const useVisitorsStore = create<VisitorsState>((set, get) => ({
     let next: SiteVisitor[];
     if (idx >= 0) {
       next = [...list];
-      next[idx] = visitor;
+      next[idx] = { ...next[idx], ...visitor };
     } else {
       next = [visitor, ...list];
     }
-    set({ visitors: next, onlineCount: next.filter((v) => v.is_online).length });
+    const processed = processAndSortVisitors(next);
+    set({ visitors: processed, onlineCount: processed.filter((v) => v.is_online).length });
   },
 
   removeVisitor: (visitorId) => {
     const next = get().visitors.filter((v) => v.visitor_id !== visitorId);
-    set({ visitors: next, onlineCount: next.filter((v) => v.is_online).length });
+    const processed = processAndSortVisitors(next);
+    set({ visitors: processed, onlineCount: processed.filter((v) => v.is_online).length });
   },
 
   updateVisitorPage: (visitorId, page, title) => {
@@ -58,7 +124,20 @@ export const useVisitorsStore = create<VisitorsState>((set, get) => ({
     if (idx < 0) return;
     const next = [...list];
     next[idx] = { ...next[idx], current_page: page, current_page_title: title, last_seen_at: new Date().toISOString() };
-    set({ visitors: next });
+    const processed = processAndSortVisitors(next);
+    set({ visitors: processed });
+  },
+
+  blockVisitorIP: (visitorId) => {
+    const next = get().visitors.map((v) =>
+      v.visitor_id === visitorId ? { ...v, is_blocked: true, is_online: false } : v
+    );
+    const processed = processAndSortVisitors(next);
+    set({
+      visitors: processed,
+      onlineCount: processed.filter((v) => v.is_online).length,
+      selectedVisitorId: get().selectedVisitorId === visitorId ? null : get().selectedVisitorId,
+    });
   },
 
   filter: "all",

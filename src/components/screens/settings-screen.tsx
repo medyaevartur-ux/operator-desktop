@@ -1,7 +1,8 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/auth.store";
 import { useNotificationStore } from "@/store/notification.store";
 import { useNavigationStore } from "@/store/navigation.store";
+import { useThemeStore } from "@/store/theme.store";
 import { uploadAvatar, updateOperator } from "@/features/operators/operators.api";
 import { API_BASE } from "@/lib/api";
 import { ArrowLeft, Camera, Save, LogOut, Zap, Plus, Pencil, Trash2, Power } from "lucide-react";
@@ -73,7 +74,16 @@ export function SettingsScreen() {
   const setCloseToTray = useNotificationStore((st) => st.setCloseToTray);
   const showMessagePreview = useNotificationStore((st) => st.showMessagePreview);
   const setShowMessagePreview = useNotificationStore((st) => st.setShowMessagePreview);  
+  const customSound = useNotificationStore((st) => st.customSound);
+  const customSoundName = useNotificationStore((st) => st.customSoundName);
+  const setCustomSound = useNotificationStore((st) => st.setCustomSound);
   const { confirm } = useConfirm();
+  
+  const density = useThemeStore((st) => st.density);
+  const setDensity = useThemeStore((st) => st.setDensity);
+  const autoTimeTheme = useThemeStore((st) => st.autoTimeTheme);
+  const setAutoTimeTheme = useThemeStore((st) => st.setAutoTimeTheme);
+
   const isAdmin = operator?.role === "admin" || operator?.role === "supervisor";
   // ═══ Авто-ответы ═══
   const [autoRules, setAutoRules] = useState<AutoResponseRule[]>([]);
@@ -368,6 +378,75 @@ export function SettingsScreen() {
                   />
                   <span className={s.volumeValue}>{Math.round(soundVolume * 100)}%</span>
                 </div>
+
+                {/* Кастомный звук (Задача 37) */}
+                <div className={s.customSoundRow} style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                      🎵 Собственный звук уведомлений
+                    </span>
+                    {customSound ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--sys-bg)", border: "1px solid var(--border)", padding: "10px 14px", borderRadius: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {customSoundName || "custom.mp3"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                const audio = new Audio(customSound);
+                                audio.volume = soundVolume;
+                                audio.play();
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: "2px 6px" }}
+                            title="Прослушать"
+                          >
+                            ▶️
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCustomSound(null, null)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--status-dnd)", fontSize: 12, fontWeight: 600 }}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "var(--accent)", color: "#fff", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "opacity 0.15s" }}>
+                          📥 Загрузить mp3
+                          <input
+                            type="file"
+                            accept="audio/mp3,audio/*"
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 2 * 1024 * 1024) {
+                                alert("Файл слишком большой. Максимум 2MB.");
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const base64 = event.target?.result as string;
+                                setCustomSound(base64, file.name);
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                        <span style={{ display: "block", fontSize: 11, color: "var(--text-disabled)", marginTop: 6 }}>
+                          MP3 или WAV до 2MB. Заменит все стандартные сигналы.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -392,6 +471,46 @@ export function SettingsScreen() {
             />
             <div className={s.dndHint}>
               Отключите для конфиденциальности — будет показано только имя отправителя
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ Внешний вид и Оформление ═══ */}
+        <div className={s.section}>
+          <div className={s.sectionTitle}>🎨 Внешний вид</div>
+          <div className={s.sectionCard}>
+            <div className={s.field}>
+              <div className={s.fieldLabel}>Плотность интерфейса</div>
+              <div className={s.densityToggleGroup}>
+                <button
+                  type="button"
+                  className={`${s.densityBtn} ${density === "comfortable" ? s.densityBtnActive : ""}`}
+                  onClick={() => setDensity("comfortable")}
+                >
+                  👐 Просторный
+                </button>
+                <button
+                  type="button"
+                  className={`${s.densityBtn} ${density === "compact" ? s.densityBtnActive : ""}`}
+                  onClick={() => setDensity("compact")}
+                >
+                  ⚡ Компактный
+                </button>
+              </div>
+              <div className={s.dndHint}>
+                Компактный режим сжимает отступы для отображения большего объема данных
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+              <Toggle
+                label="Авто-темная тема по времени суток"
+                checked={autoTimeTheme}
+                onChange={setAutoTimeTheme}
+              />
+              <div className={s.dndHint}>
+                Автоматически включает тёмную тему с 19:00 до 07:00
+              </div>
             </div>
           </div>
         </div>

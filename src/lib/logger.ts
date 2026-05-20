@@ -89,3 +89,46 @@ export function subscribeLogs(fn: () => void): () => void {
 setTimeout(() => {
   logFcmDiag();
 }, 3000);
+
+// === Глобальный логгер критических ошибок на сервер ===
+async function reportCrash(type: "error" | "unhandledrejection", message: string, stack?: string) {
+  try {
+    const crashReport = {
+      type: "crash_report",
+      crashType: type,
+      message,
+      stack: stack || new Error().stack || "",
+      url: typeof window !== "undefined" ? window.location.href : "",
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      time: new Date().toISOString(),
+      recentLogs: logs.slice(-30), // последние 30 логов для детального контекста
+    };
+
+    origLog("[CrashLogger] Обнаружена критическая ошибка! Отправка логов на сервер...", crashReport);
+
+    await fetch("/api/logs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(crashReport),
+    });
+  } catch (err) {
+    origError("[CrashLogger] Не удалось отправить отчет о краше на сервер:", err);
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (event) => {
+    const message = event.message || (event.error && event.error.message) || String(event);
+    const stack = event.error && event.error.stack;
+    void reportCrash("error", message, stack);
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    const message = reason instanceof Error ? reason.message : String(reason);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+    void reportCrash("unhandledrejection", message, stack);
+  });
+}

@@ -2481,7 +2481,7 @@ dependencies = [
 
 [[package]]
 name = "operator-desktop"
-version = "5.0.0"
+version = "5.0.2"
 dependencies = [
  "image",
  "reqwest 0.12.28",

@@ -17,3 +17,13 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     </AppProvider>
   </React.StrictMode>,
 );
+
+// Регистрация Service Worker для оффлайн-поддержки (только в браузере)
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => console.log("[Service Worker] Успешно зарегистрирован:", reg.scope))
+      .catch((err) => console.error("[Service Worker] Ошибка регистрации:", err));
+  });
+}

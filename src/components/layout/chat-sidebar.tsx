@@ -2,6 +2,7 @@ import { Search, Inbox, Flame, Clock, User, Bot, CheckCircle2 } from "lucide-rea
 import { useMemo } from "react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
+import { useVisitorsStore } from "@/store/visitors.store";
 import { Avatar } from "@/components/ui";
 import { SkeletonCard } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
@@ -43,10 +44,12 @@ function getStatusDotClass(status: string): string {
 function SessionCard({
   session,
   isActive,
+  isVisitorOnline,
   onClick,
 }: {
   session: ChatSession;
   isActive: boolean;
+  isVisitorOnline: boolean;
   onClick: () => void;
 }) {
   const displayName = getSessionDisplayName(session.visitor_name, session.visitor_id);
@@ -71,7 +74,7 @@ function SessionCard({
         <Avatar
           name={displayName}
           size="md"
-          status={getSessionStatus(session.status)}
+          status={isVisitorOnline ? "online" : "offline"}
         />
       </div>
 
@@ -142,6 +145,11 @@ export function ChatSidebar() {
     setSearchQuery,
   } = useInboxStore();
   const myOperatorId = useAuthStore((st) => st.operator?.id);
+  const visitors = useVisitorsStore((st) => st.visitors);
+  const onlineVisitorIds = useMemo(
+    () => new Set(visitors.filter((v) => v.is_online).map((v) => v.visitor_id)),
+    [visitors]
+  );
 
   const filteredSessions = useMemo(() => {
     let next = sessions;
@@ -254,11 +262,11 @@ export function ChatSidebar() {
         {/* Сегментированный список (только в фильтре "Все") */}
         {!isSessionsLoading && segments && filteredSessions.length > 0 && (
           <>
-            <Segment icon={Flame} label="Срочные" cssClass={s.sectionUrgent} items={segments.urgent} activeId={activeSession?.id} onPick={pickSession} />
-            <Segment icon={Clock} label="Ждут оператора" cssClass={s.sectionWaiting} items={segments.waiting} activeId={activeSession?.id} onPick={pickSession} />
-            <Segment icon={User} label="Мои" cssClass={s.sectionMine} items={segments.mine} activeId={activeSession?.id} onPick={pickSession} />
-            <Segment icon={Bot} label="У бота" cssClass={s.sectionAi} items={segments.ai} activeId={activeSession?.id} onPick={pickSession} />
-            <Segment icon={CheckCircle2} label="Закрытые" cssClass="" items={segments.closed} activeId={activeSession?.id} onPick={pickSession} />
+            <Segment icon={Flame} label="Срочные" cssClass={s.sectionUrgent} items={segments.urgent} activeId={activeSession?.id} onPick={pickSession} onlineSet={onlineVisitorIds} />
+            <Segment icon={Clock} label="Ждут оператора" cssClass={s.sectionWaiting} items={segments.waiting} activeId={activeSession?.id} onPick={pickSession} onlineSet={onlineVisitorIds} />
+            <Segment icon={User} label="Мои" cssClass={s.sectionMine} items={segments.mine} activeId={activeSession?.id} onPick={pickSession} onlineSet={onlineVisitorIds} />
+            <Segment icon={Bot} label="У бота" cssClass={s.sectionAi} items={segments.ai} activeId={activeSession?.id} onPick={pickSession} onlineSet={onlineVisitorIds} />
+            <Segment icon={CheckCircle2} label="Закрытые" cssClass="" items={segments.closed} activeId={activeSession?.id} onPick={pickSession} onlineSet={onlineVisitorIds} />
           </>
         )}
 
@@ -268,6 +276,7 @@ export function ChatSidebar() {
             key={session.id}
             session={session}
             isActive={activeSession?.id === session.id}
+            isVisitorOnline={onlineVisitorIds.has(session.visitor_id)}
             onClick={() => pickSession(session)}
           />
         ))}
@@ -290,7 +299,7 @@ export function ChatSidebar() {
 }
 
 function Segment({
-  icon: Icon, label, cssClass, items, activeId, onPick,
+  icon: Icon, label, cssClass, items, activeId, onPick, onlineSet,
 }: {
   icon: typeof Flame;
   label: string;
@@ -298,6 +307,7 @@ function Segment({
   items: ChatSession[];
   activeId: string | undefined;
   onPick: (s: ChatSession) => void;
+  onlineSet: Set<string>;
 }) {
   if (items.length === 0) return null;
   return (
@@ -312,6 +322,7 @@ function Segment({
           key={session.id}
           session={session}
           isActive={activeId === session.id}
+          isVisitorOnline={onlineSet.has(session.visitor_id)}
           onClick={() => onPick(session)}
         />
       ))}

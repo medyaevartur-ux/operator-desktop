@@ -97,6 +97,45 @@ export function ChatComposer() {
   const { isVisitorTyping, sendTyping } = useTypingIndicator();
   const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /* ── File handling ── */
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (arr.length === 0) return;
+    setPendingFiles((prev) => [...prev, ...arr].slice(0, 10));
+  }, []);
+
+  const removeFile = useCallback((index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files) addFiles(e.target.files);
+      e.target.value = "";
+    },
+    [addFiles],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const images: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          const file = items[i].getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length > 0) {
+        e.preventDefault();
+        addFiles(images);
+      }
+    },
+    [addFiles],
+  );
+
   // При смене активного чата — подтянуть его черновик в поле
   const activeSessionId = activeSession?.id ?? "";
   useEffect(() => {
@@ -111,6 +150,18 @@ export function ChatComposer() {
     const t = setTimeout(() => setDraft(activeSessionId, value), 400);
     return () => clearTimeout(t);
   }, [value, activeSessionId, setDraft]);
+
+  // Подписка на глобальное событие drag-and-drop файлов
+  useEffect(() => {
+    const handleAddFiles = (e: Event) => {
+      const customEvent = e as CustomEvent<File[]>;
+      if (customEvent.detail) {
+        addFiles(customEvent.detail);
+      }
+    };
+    window.addEventListener("zs-add-files-to-composer", handleAddFiles);
+    return () => window.removeEventListener("zs-add-files-to-composer", handleAddFiles);
+  }, [addFiles]);
 
   const isAssigned =
     !!activeSession?.operator_id &&
@@ -227,44 +278,7 @@ export function ChatComposer() {
     [value],
   );
 
-  /* ── File handling ── */
 
-  const addFiles = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    if (arr.length === 0) return;
-    setPendingFiles((prev) => [...prev, ...arr].slice(0, 10));
-  }, []);
-
-  const removeFile = useCallback((index: number) => {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-  }, []);
-
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) addFiles(e.target.files);
-      e.target.value = "";
-    },
-    [addFiles],
-  );
-
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const images: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith("image/")) {
-          const file = items[i].getAsFile();
-          if (file) images.push(file);
-        }
-      }
-      if (images.length > 0) {
-        e.preventDefault();
-        addFiles(images);
-      }
-    },
-    [addFiles],
-  );
 
   /* ── Submit ── */
 

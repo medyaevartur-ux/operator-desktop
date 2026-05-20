@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Search, Sun, Moon, Sparkles, Palette, Monitor } from "lucide-react";
+import { Search, Sun, Moon, Sparkles, Palette, Monitor, Bell } from "lucide-react";
 import { useThemeStore, type Theme } from "@/store/theme.store";
+import { useNotificationStore } from "@/store/notification.store";
+import { useNavigationStore } from "@/store/navigation.store";
 import { Tooltip } from "@/components/ui";
 import { CommandPalette } from "./command-palette";
 import s from "./TopBar.module.css";
@@ -17,6 +19,20 @@ export function TopBar() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const theme = useThemeStore((st) => st.theme);
   const setTheme = useThemeStore((st) => st.setTheme);
+
+  const setScreen = useNavigationStore((st) => st.setScreen);
+  const totalUnread = useNotificationStore((st) => st.totalUnread);
+  const [prevUnread, setPrevUnread] = useState(totalUnread);
+  const [isSwinging, setIsSwinging] = useState(false);
+
+  useEffect(() => {
+    if (totalUnread > prevUnread) {
+      setIsSwinging(true);
+      const timer = setTimeout(() => setIsSwinging(false), 600);
+      return () => clearTimeout(timer);
+    }
+    setPrevUnread(totalUnread);
+  }, [totalUnread, prevUnread]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -48,6 +64,20 @@ export function TopBar() {
       <div className={s.spacer} />
 
       <div className={s.actions}>
+        <Tooltip content="Уведомления" side="bottom">
+          <button
+            type="button"
+            className={`${s.iconBtn} ${isSwinging ? s.swinging : ""}`}
+            aria-label="Уведомления"
+            onClick={() => setScreen("inbox")}
+          >
+            <Bell style={{ width: 16, height: 16 }} />
+            {totalUnread > 0 && (
+              <span className={s.badge}>{totalUnread}</span>
+            )}
+          </button>
+        </Tooltip>
+
         <DropdownMenu.Root>
           <Tooltip content={`Тема: ${currentTheme.label}`} side="bottom">
             <DropdownMenu.Trigger asChild>
@@ -79,7 +109,7 @@ export function TopBar() {
         </DropdownMenu.Root>
 
         <Tooltip content="Кастомизация UI" side="bottom">
-          <button type="button" className={s.iconBtn} aria-label="Настройки UI">
+          <button type="button" className={s.iconBtn} aria-label="Настройки UI" onClick={() => setScreen("settings")}>
             <Palette style={{ width: 16, height: 16 }} />
           </button>
         </Tooltip>

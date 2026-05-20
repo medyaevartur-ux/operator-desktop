@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { getSocket } from "@/lib/socket";
 import { useVisitorsStore } from "@/store/visitors.store";
+import { useNotificationStore } from "@/store/notification.store";
 import type { SiteVisitor } from "@/types/visitor";
 
 export function useVisitorsRealtime() {
@@ -9,7 +10,15 @@ export function useVisitorsRealtime() {
     if (!socket) return;
 
     const onOnline = (visitor: SiteVisitor) => {
-      useVisitorsStore.getState().upsertVisitor(visitor);
+      const store = useVisitorsStore.getState();
+      const isAlreadyOnline = store.visitors.some(
+        (v) => v.visitor_id === visitor.visitor_id && v.is_online
+      );
+      store.upsertVisitor(visitor);
+
+      if (!isAlreadyOnline && visitor.is_online) {
+        useNotificationStore.getState().playSound("new_visitor");
+      }
     };
 
     const onOffline = (data: { visitor_id: string }) => {

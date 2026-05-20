@@ -14,6 +14,8 @@ export interface SiteVisitor {
   is_online: boolean;
   has_chat: boolean;
   chat_session_id: string | null;
+  score?: number;
+  is_blocked?: boolean;
 }
 
 export interface VisitorPageEvent {

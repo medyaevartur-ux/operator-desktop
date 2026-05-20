@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import Editor from "@monaco-editor/react";
+// @ts-ignore
+import widgetRaw from "../../../widget.js?raw";
 import {
   ArrowLeft, Save, MessageCircle, HelpCircle, Sparkles,
   Copy, Check, AlertTriangle, X, Plus,
@@ -34,9 +37,12 @@ const TABS: { id: Tab; label: string; icon: typeof Palette }[] = [
 ];
 
 const COLOR_PRESETS = [
-  "#8b5cf6", "#6366f1", "#3b82f6", "#0ea5e9",
-  "#14b8a6", "#22c55e", "#eab308", "#f97316",
-  "#ef4444", "#ec4899", "#a855f7", "#1e293b",
+  "#cc5a01", // Терракотовый (Claude)
+  "#d97706", // Тёплое золото (Сказочный)
+  "#8b5cf6", // Индиго
+  "#34d399", // Изумруд
+  "#1f2937", // Монохром (Минимал)
+  "#6366f1", "#3b82f6", "#0ea5e9", "#14b8a6", "#22c55e", "#f97316", "#ef4444"
 ];
 
 const DAY_LABELS: Record<string, string> = {
@@ -73,6 +79,114 @@ export function WidgetSettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const handleExportConfig = () => {
+    const dataStr = JSON.stringify({ widget_config: config, prechat_form: prechat, business_hours: hours }, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `widget_config_${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Конфигурация успешно экспортирована");
+  };
+
+  const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed.widget_config) setConfig(parsed.widget_config);
+        if (parsed.prechat_form) setPrechat(parsed.prechat_form);
+        if (parsed.business_hours) setHours(parsed.business_hours);
+        toast.success("Настройки успешно импортированы!");
+      } catch (err) {
+        toast.error("Неверный формат JSON файла");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const applyPreset = (presetName: string) => {
+    let presetPatch: Partial<WidgetConfig> = {};
+    if (presetName === "fairy") {
+      presetPatch = {
+        gradient_type: "gradient",
+        color: "#d97706",
+        gradient_from: "#d97706",
+        gradient_to: "#fbbf24",
+        gradient_angle: 135,
+        font_family: "onest",
+        button_radius: "round",
+        bubble_radius: "round",
+        theme: "light",
+        launcher_type: "icon_only",
+        launcher_pulse: true,
+        shadow_intensity: "medium"
+      };
+    } else if (presetName === "minimal") {
+      presetPatch = {
+        gradient_type: "solid",
+        color: "#1f2937",
+        font_family: "inter",
+        button_radius: "square",
+        bubble_radius: "sharp",
+        theme: "light",
+        launcher_type: "icon_only",
+        launcher_pulse: false,
+        shadow_intensity: "subtle"
+      };
+    } else if (presetName === "premium") {
+      presetPatch = {
+        gradient_type: "solid",
+        color: "#cc5a01",
+        font_family: "inter",
+        button_radius: "rounded",
+        bubble_radius: "soft",
+        theme: "light",
+        launcher_type: "icon_text",
+        launcher_pulse: true,
+        shadow_intensity: "medium"
+      };
+    } else if (presetName === "dark") {
+      presetPatch = {
+        gradient_type: "gradient",
+        color: "#8b5cf6",
+        gradient_from: "#8b5cf6",
+        gradient_to: "#d946ef",
+        gradient_angle: 135,
+        font_family: "inter",
+        button_radius: "round",
+        bubble_radius: "soft",
+        theme: "dark",
+        launcher_type: "icon_only",
+        launcher_pulse: true,
+        shadow_intensity: "strong"
+      };
+    } else if (presetName === "pop") {
+      presetPatch = {
+        gradient_type: "animated",
+        color: "#ec4899",
+        gradient_from: "#ec4899",
+        gradient_to: "#8b5cf6",
+        font_family: "montserrat",
+        button_radius: "round",
+        bubble_radius: "round",
+        theme: "light",
+        launcher_type: "card",
+        launcher_pulse: true,
+        shadow_intensity: "strong"
+      };
+    }
+    setConfig((p) => ({ ...p, ...presetPatch }));
+    toast.success("Пресет успешно применен!");
+  };
 
   const [config, setConfig] = useState<WidgetConfig>({
     position: "bottom-right", color: "#8b5cf6",
@@ -139,6 +253,56 @@ export function WidgetSettingsScreen() {
       getOfflineLeads().then(setOfflineLeads).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { margin: 0; overflow: hidden; background: #f8fafc; font-family: sans-serif; }
+          </style>
+        </head>
+        <body>
+          <div id="root"></div>
+          <script>
+            window.__zsPreviewConfig = {
+              widget_config: \${JSON.stringify(config)},
+              prechat_form: \${JSON.stringify(prechat)},
+              business_hours: \${JSON.stringify(hours)}
+            };
+            window.fetch = () => Promise.resolve(new Response(JSON.stringify({})));
+          </script>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    const script = doc.createElement("script");
+    script.text = widgetRaw;
+    doc.body.appendChild(script);
+  }, [loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      iframeRef.current.contentWindow.postMessage({
+        type: "ZS_PREVIEW_UPDATE",
+        payload: { widget_config: config, prechat_form: prechat, business_hours: hours },
+        forceOpen: tab !== "appearance",
+        skipPrechatPreview: tab !== "prechat"
+      }, "*");
+    }
+  }, [config, prechat, hours, tab, loading]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -288,6 +452,25 @@ export function WidgetSettingsScreen() {
           {/* ═══ TAB: APPEARANCE ═══ */}
           {tab === "appearance" && (
             <>
+              {/* Пресеты и резервное копирование */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>✨ Пресеты оформления и импорт/экспорт</div>
+                <div className={s.sectionCard}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 8, marginBottom: 12 }}>
+                    <button type="button" className={s.avatarUploadBtn} onClick={() => applyPreset("fairy")} style={{ background: "linear-gradient(135deg, #d97706, #fbbf24)", color: "#fff", border: "none" }}>🔮 Сказочный</button>
+                    <button type="button" className={s.avatarUploadBtn} onClick={() => applyPreset("minimal")} style={{ background: "#1f2937", color: "#fff", border: "none" }}>🔳 Минимал</button>
+                    <button type="button" className={s.avatarUploadBtn} onClick={() => applyPreset("premium")} style={{ background: "#cc5a01", color: "#fff", border: "none" }}>👑 Премиум</button>
+                    <button type="button" className={s.avatarUploadBtn} onClick={() => applyPreset("dark")} style={{ background: "linear-gradient(135deg, #8b5cf6, #d946ef)", color: "#fff", border: "none" }}>🌙 Тёмный</button>
+                    <button type="button" className={s.avatarUploadBtn} onClick={() => applyPreset("pop")} style={{ background: "linear-gradient(90deg, #ec4899, #8b5cf6)", color: "#fff", border: "none" }}>🔥 Pop</button>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 12, borderTop: "1px solid var(--border-default)", paddingTop: 12 }}>
+                    <button type="button" className={s.avatarUploadBtn} style={{ flex: 1 }} onClick={handleExportConfig}>📥 Экспорт JSON</button>
+                    <button type="button" className={s.avatarUploadBtn} style={{ flex: 1 }} onClick={() => importFileRef.current?.click()}>📤 Импорт JSON</button>
+                    <input ref={importFileRef} type="file" accept=".json" hidden onChange={handleImportConfig} />
+                  </div>
+                </div>
+              </div>
+
               {/* Avatar */}
               <div className={s.section}>
                 <div className={s.sectionTitle}>Аватар виджета</div>
@@ -610,7 +793,23 @@ export function WidgetSettingsScreen() {
                     <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0 }} />
                     Неправильный CSS может сломать виджет
                   </div>
-                  <textarea className={s.fieldTextarea} value={config.custom_css} onChange={(e) => upd({ custom_css: e.target.value })} rows={4} style={{ fontFamily: "monospace", fontSize: 12 }} />
+                  <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-default)" }}>
+                    <Editor
+                      height="200px"
+                      language="css"
+                      theme="vs-dark"
+                      value={config.custom_css || ""}
+                      onChange={(val) => upd({ custom_css: val || "" })}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 12,
+                        lineNumbers: "on",
+                        scrollBeyondLastLine: false,
+                        folding: false,
+                        wordWrap: "on"
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </>
@@ -1365,170 +1564,27 @@ export function WidgetSettingsScreen() {
             className={s.previewSite}
             data-size={previewSize}
             style={{
-              fontFamily:
-                config.font_family === "onest" ? '"Onest", "Inter", sans-serif' :
-                config.font_family === "inter" ? '"Inter", sans-serif' :
-                config.font_family === "roboto" ? '"Roboto", sans-serif' :
-                config.font_family === "montserrat" ? '"Montserrat", sans-serif' :
-                "inherit",
-              fontSize: `${config.font_size_base ?? 14}px`,
-              ["--zw-edge" as never]: `${config.edge_margin ?? 24}px`,
-              ["--zw-bubble-r" as never]:
-                config.bubble_radius === "soft" ? "12px" :
-                config.bubble_radius === "sharp" ? "6px" : "18px",
-              ["--zw-win-w" as never]:
-                config.window_width === "narrow" ? "300px" :
-                config.window_width === "wide" ? "360px" : "330px",
-            }}>
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}
+          >
             <div className={s.previewSiteBar}>
               <div className={s.previewDot} style={{ background: "#ef4444" }} />
               <div className={s.previewDot} style={{ background: "#eab308" }} />
               <div className={s.previewDot} style={{ background: "#22c55e" }} />
             </div>
-
-            {/* Chat window */}
-            <div className={s.previewChat} style={{ [posRight ? "right" : "left"]: (config.edge_margin ?? 24) - 8, bottom: 80 }}>
-              <div className={s.previewChatHeader} style={{ background: getPreviewBg(config) }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                    {config.avatar_url ? <img src={`${API_BASE}${config.avatar_url}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <MessageCircle style={{ width: 16, height: 16, color: "#fff" }} />}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{config.team_mode ? (config.team_label || "Команда") : (config.header_title || "Онлайн-чат")}</div>
-                    <div style={{ fontSize: 10, opacity: 0.8, display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
-                      {config.team_mode ? (config.team_online_text || "{n} онлайн").replace("{n}", "3") : "Онлайн"}
-                    </div>
-                    {config.response_time_enabled && config.response_time_label && (
-                      <div style={{ fontSize: 9, opacity: 0.7, marginTop: 1 }}>{config.response_time_label}</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className={s.previewChatBody}>
-                {tab === "prechat" && prechat.enabled ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
-                    <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#1f2937" }}>Привет! 👋</div>
-                    {prechat.fields.slice(0, 3).map((f, i) => (
-                      <div key={i} style={{ width: "100%" }}>
-                        <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 2 }}>{f.label}{f.required && <span style={{ color: "#ef4444" }}> *</span>}</div>
-                        <div style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#f9fafb", fontSize: 11, color: "#9ca3af" }}>
-                          {f.type === "select" ? "Выберите..." : (f.placeholder || f.label)}
-                        </div>
-                      </div>
-                    ))}
-                    {prechat.fields.length > 3 && <div style={{ fontSize: 10, color: "#9ca3af", textAlign: "center" }}>+{prechat.fields.length - 3} ещё...</div>}
-                    <div style={{ padding: "8px 12px", borderRadius: 10, background: config.color, color: "#fff", textAlign: "center", fontSize: 12, fontWeight: 600 }}>Начать чат</div>
-                  </div>
-                ) : (
-                  <>
-                    <div className={s.previewBubble} style={{ background: `${config.color}18`, color: config.color }}>{config.greeting || "Привет!"}</div>
-                    {config.quick_replies_enabled && (config.quick_replies || []).length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                        {(config.quick_replies || []).slice(0, 3).map((r, i) => (
-                          <span key={i} style={{ padding: "3px 8px", borderRadius: 12, border: `1px solid ${config.color}`, color: config.color, fontSize: 10, fontWeight: 600 }}>{r || "..."}</span>
-                        ))}
-                      </div>
-                    )}
-                    {tab === "hours" && hours.enabled && (
-                      <div style={{ padding: "6px 10px", borderRadius: 8, background: "#fef3c7", color: "#92400e", fontSize: 11, fontWeight: 600, textAlign: "center", marginTop: 4 }}>
-                        {hours.offline_message || "Мы сейчас офлайн"}
-                      </div>
-                    )}
-                    {tab === "behavior" && config.triggers.exit_intent && (
-                      <div style={{ padding: "4px 8px", borderRadius: 6, background: "#ede9fe", color: "#7c3aed", fontSize: 10, textAlign: "center", marginTop: 4 }}>
-                        🖱️ Exit intent активен
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* FAB button */}
-            <div className={s.previewButton} style={{
-              background: getPreviewBg(config),
-              [posRight ? "right" : "left"]: (config.edge_margin ?? 24) - 8,
-              bottom: (config.edge_margin ?? 24) - 8,
-              boxShadow:
-                config.shadow_intensity === "subtle" ? "0 2px 8px rgba(0,0,0,0.12)" :
-                config.shadow_intensity === "strong" ? "0 12px 32px rgba(0,0,0,0.30)" :
-                "0 4px 16px rgba(0,0,0,0.20)",
-              width: config.button_size === "small" ? 48 : config.button_size === "large" ? 64 : 56,
-              height: config.button_size === "small" ? 48 : config.button_size === "large" ? 64 : 56,
-              borderRadius: config.button_radius === "round" ? "50%" : config.button_radius === "rounded" ? 16  : 8,
-            }}>
-              {config.button_icon === "chat" && <MessageCircle style={{ width: 24, height: 24 }} />}
-              {config.button_icon === "help" && <HelpCircle style={{ width: 24, height: 24 }} />}
-              {config.button_icon === "custom" && <Sparkles style={{ width: 24, height: 24 }} />}
-            </div>
-
-            {/* Launcher card preview */}
-            {config.launcher_type === "card" && (
-              <div style={{
-                position: "absolute",
-                [posRight ? "right" : "left"]: 80,
-                bottom: 20,
-                background: "#fff",
-                borderRadius: 12,
-                padding: "8px 12px",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.1)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                maxWidth: 180,
-                border: "1px solid #f0f0f0",
-              }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: config.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <MessageCircle style={{ width: 14, height: 14, color: "#fff" }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#1f2937", lineHeight: 1.2 }}>{config.launcher_text || "Нужна помощь?"}</div>
-                  {config.launcher_subtext && <div style={{ fontSize: 9, color: "#6b7280", marginTop: 1 }}>{config.launcher_subtext}</div>}
-                </div>
-              </div>
-            )}
-
-            {/* Icon+text launcher preview */}
-            {config.launcher_type === "icon_text" && (
-              <div style={{
-                position: "absolute",
-                [posRight ? "right" : "left"]: 16,
-                bottom: 16,
-                background: getPreviewBg(config),
-                borderRadius: 28,
-                padding: "0 16px 0 12px",
-                height: config.button_size === "small" ? 48 : config.button_size === "large" ? 64 : 56,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                color: "#fff",
-                boxShadow: `0 4px 16px ${config.color}50`,
-              }}>
-                <MessageCircle style={{ width: 18, height: 18 }} />
-                <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{config.launcher_text || "Помощь"}</span>
-              </div>
-            )}
-
-            {/* Text only launcher preview */}
-            {config.launcher_type === "text_only" && (
-              <div style={{
-                position: "absolute",
-                [posRight ? "right" : "left"]: 16,
-                bottom: 16,
-                background: getPreviewBg(config),
-                borderRadius: 28,
-                padding: "0 20px",
-                height: config.button_size === "small" ? 48 : config.button_size === "large" ? 64 : 56,
-                display: "flex",
-                alignItems: "center",
-                color: "#fff",
-                boxShadow: `0 4px 16px ${config.color}50`,
-              }}>
-                <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{config.launcher_text || "Помощь"}</span>
-              </div>
-            )}
+            <iframe
+              ref={iframeRef}
+              style={{
+                width: "100%",
+                flex: 1,
+                border: "none",
+                background: "#f8fafc"
+              }}
+            />
           </div>
         </div>
       </div>

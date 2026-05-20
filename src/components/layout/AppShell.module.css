@@ -18,3 +18,8 @@
   overflow: hidden;
   border-left: 1px solid var(--border-default);
 }
+
+.visitorsPanel {
+  overflow: hidden;
+  border-left: 1px solid var(--border-default);
+}

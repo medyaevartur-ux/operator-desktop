@@ -78,4 +78,5 @@ export interface ChatMessage {
   }>;  
   reply_to_message?: string | null;
   reply_to_sender?: string | null;  
+  isPending?: boolean;
 }

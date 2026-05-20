@@ -4,6 +4,8 @@ import { useInboxHotkeys } from "@/features/inbox/use-hotkeys";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 import { useNotificationStore } from "@/store/notification.store";
+import { useVisitorsStore } from "@/store/visitors.store";
+import { getVisitors } from "@/features/visitors/visitors.api";
 
 export function useInbox() {
   const activeSessionId = useInboxStore((state) => state.activeSession?.id);
@@ -17,6 +19,16 @@ export function useInbox() {
     void loadSessions();
     void loadOperators();
     void loadTags(null);
+    // Загружаем visitors раз в минуту чтобы знать кто онлайн на сайте
+    const loadVisitors = async () => {
+      try {
+        const v = await getVisitors({});
+        if (Array.isArray(v)) useVisitorsStore.getState().setVisitors(v);
+      } catch { /* ignore */ }
+    };
+    void loadVisitors();
+    const t = setInterval(loadVisitors, 60000);
+    return () => clearInterval(t);
   }, [loadSessions, loadOperators, loadTags]);
 
   useEffect(() => {

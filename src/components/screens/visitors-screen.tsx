@@ -93,6 +93,7 @@ function groupByDay(visitors: SiteVisitor[]): { key: string; label: string; visi
 /* ══ Main ══ */
 export function VisitorsScreen() {
   useVisitorsRealtime();
+  const [activeTab, setActiveTab] = useState<"live" | "stats">("live");
 
   const {
     visitors,
@@ -249,251 +250,276 @@ export function VisitorsScreen() {
         </div>
       </div>
 
-      {/* ── KPI + funnel + heatmap ── */}
-      <VisitorsStats visitors={visitors} onlineCount={onlineCount} />
-
-      {/* ── Toolbar ── */}
-      <div className={s.toolbar}>
-        <div className={s.searchWrap}>
-          <Search className={s.searchIcon} style={{ width: 16, height: 16 }} />
-          <input
-            className={s.searchInput}
-            placeholder="Поиск по visitor_id…"
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-          />
-        </div>
-
-        <div className={s.filterGroup}>
-          {(["all", "with_chat", "without_chat"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              className={`${s.filterBtn} ${filter === f ? s.filterBtnActive : ""}`}
-              onClick={() => setFilter(f)}
-            >
-              {f === "all" ? "Все" : f === "with_chat" ? "С чатом" : "Без чата"}
-            </button>
-          ))}
-        </div>
-
-        {countries.length > 0 && (
-          <select
-            className={s.countrySelect}
-            value={countryFilter}
-            onChange={(e) => setCountryFilter(e.target.value)}
-          >
-            <option value="">Все страны</option>
-            {countries.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        )}
+      {/* ── Tabs ── */}
+      <div className={s.tabsRow}>
+        <button
+          type="button"
+          className={`${s.tabBtn} ${activeTab === "live" ? s.tabBtnActive : ""}`}
+          onClick={() => setActiveTab("live")}
+        >
+          <span className={s.tabIcon}>🟢</span>
+          Мониторинг ({onlineCount})
+        </button>
+        <button
+          type="button"
+          className={`${s.tabBtn} ${activeTab === "stats" ? s.tabBtnActive : ""}`}
+          onClick={() => setActiveTab("stats")}
+        >
+          <span className={s.tabIcon}>📊</span>
+          Аналитика
+        </button>
       </div>
 
-      {/* ── Content ── */}
-      <div className={s.content}>
-        {isLoading && visitors.length === 0 ? (
-          <div className={s.loading}>Загрузка посетителей…</div>
-        ) : visitors.length === 0 ? (
-          <div className={s.empty}>
-            <div className={s.emptyIcon}>
-              <UserX style={{ width: 24, height: 24 }} />
-            </div>
-            <div className={s.emptyText}>Нет посетителей</div>
-          </div>
-        ) : (
-          <div className={s.mainArea}>
-            {/* ── Online section ── */}
-            <div className={s.onlineSection}>
-              <div className={s.sectionHeader}>
-                <span className={s.sectionDot} />
-                <span className={s.sectionTitle}>Сейчас на сайте</span>
-                <span className={s.sectionCount}>{onlineVisitors.length}</span>
-              </div>
-
-              {onlineVisitors.length === 0 ? (
-                <div className={s.noOnline}>
-                  <div className={s.noOnlineIcon}>
-                    <Users style={{ width: 22, height: 22 }} />
-                  </div>
-                  <div className={s.noOnlineText}>Нет онлайн-посетителей</div>
-                  <div className={s.noOnlineSub}>Когда кто-то зайдёт на сайт, он появится здесь</div>
-                </div>
-              ) : (
-                <div className={s.onlineGrid}>
-                  {onlineVisitors.map((v) => (
-                    <OnlineCard
-                      key={v.visitor_id}
-                      visitor={v}
-                      isSelected={v.visitor_id === selectedVisitorId}
-                      onSelect={() =>
-                        setSelectedVisitorId(
-                          v.visitor_id === selectedVisitorId ? null : v.visitor_id
-                        )
-                      }
-                      onStartChat={() => handleStartChat(v.visitor_id)}
-                      onInvite={() => setInviteModalVisitorId(v.visitor_id)}
-                      invitationStatus={getInvitationStatus(v.visitor_id)}
-                    />
-                  ))}
-                </div>
-              )}
+      {activeTab === "stats" ? (
+        <div className={s.mainArea} style={{ overflowY: "auto", flex: 1, padding: "var(--space-4) var(--space-6)" }}>
+          <VisitorsStats visitors={visitors} onlineCount={onlineCount} />
+        </div>
+      ) : (
+        <>
+          {/* ── Toolbar ── */}
+          <div className={s.toolbar}>
+            <div className={s.searchWrap}>
+              <Search className={s.searchIcon} style={{ width: 16, height: 16 }} />
+              <input
+                className={s.searchInput}
+                placeholder="Поиск по visitor_id…"
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+              />
             </div>
 
-            {/* ── History section ── */}
-            {offlineGrouped.length > 0 && (
-              <div className={s.historySection}>
-                <div className={s.sectionHeader}>
-                  <span className={s.sectionTitle}>История посещений</span>
-                </div>
+            <div className={s.filterGroup}>
+              {(["all", "with_chat", "without_chat"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={`${s.filterBtn} ${filter === f ? s.filterBtnActive : ""}`}
+                  onClick={() => setFilter(f)}
+                >
+                  {f === "all" ? "Все" : f === "with_chat" ? "С чатом" : "Без чата"}
+                </button>
+              ))}
+            </div>
 
-                {offlineGrouped.map((group) => (
-                  <div key={group.key}>
-                    <div className={s.dayHeader}>
-                      <span className={s.dayLabel}>{group.label}</span>
-                      <span className={s.dayLine} />
-                      <span className={s.dayCount}>{group.visitors.length}</span>
-                    </div>
-
-                    {group.visitors.map((v) => (
-                      <HistoryRow
-                        key={v.visitor_id}
-                        visitor={v}
-                        isSelected={v.visitor_id === selectedVisitorId}
-                        onSelect={() =>
-                          setSelectedVisitorId(
-                            v.visitor_id === selectedVisitorId ? null : v.visitor_id
-                          )
-                        }
-                      />
-                    ))}
-                  </div>
+            {countries.length > 0 && (
+              <select
+                className={s.countrySelect}
+                value={countryFilter}
+                onChange={(e) => setCountryFilter(e.target.value)}
+              >
+                <option value="">Все страны</option>
+                {countries.map((c) => (
+                  <option key={c} value={c}>{c}</option>
                 ))}
-              </div>
+              </select>
             )}
           </div>
-        )}
 
-        {/* ── Side panel ── */}
-        {selectedVisitor && (
-          <aside className={s.sidePanel}>
-            <div className={s.sidePanelHeader}>
-              <div className={s.sidePanelVisitor}>
-                <div className={s.sidePanelAvatar}>
-                  {selectedVisitor.visitor_id.slice(0, 2).toUpperCase()}
-                  <div
-                    className={s.sidePanelOnlineDot}
-                    style={{
-                      background: selectedVisitor.is_online
-                        ? "var(--status-online)"
-                        : "var(--text-disabled)",
-                    }}
-                  />
+          {/* ── Content ── */}
+          <div className={s.content}>
+            {isLoading && visitors.length === 0 ? (
+              <div className={s.loading}>Загрузка посетителей…</div>
+            ) : visitors.length === 0 ? (
+              <div className={s.empty}>
+                <div className={s.emptyIcon}>
+                  <UserX style={{ width: 24, height: 24 }} />
                 </div>
-                <div>
-                  <div className={s.sidePanelTitle}>
-                    {shortVisitorId(selectedVisitor.visitor_id)}
-                  </div>
-                  <div
-                    className={s.sidePanelStatus}
-                    style={{
-                      color: selectedVisitor.is_online
-                        ? "var(--status-online)"
-                        : "var(--text-disabled)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: selectedVisitor.is_online
-                          ? "var(--status-online)"
-                          : "var(--text-disabled)",
-                      }}
-                    />
-                    {selectedVisitor.is_online ? "Онлайн" : "Офлайн"}
-                  </div>
-                </div>
+                <div className={s.emptyText}>Нет посетителей</div>
               </div>
-              <button
-                type="button"
-                className={s.sidePanelClose}
-                onClick={() => setSelectedVisitorId(null)}
-              >
-                <X style={{ width: 16, height: 16 }} />
-              </button>
-            </div>
+            ) : (
+              <div className={s.mainArea}>
+                {/* ── Online section ── */}
+                <div className={s.onlineSection}>
+                  <div className={s.sectionHeader}>
+                    <span className={s.sectionDot} />
+                    <span className={s.sectionTitle}>Сейчас на сайте</span>
+                    <span className={s.sectionCount}>{onlineVisitors.length}</span>
+                  </div>
 
-            <div className={s.sidePanelBody}>
-              {/* Actions */}
-              {!selectedVisitor.has_chat && selectedVisitor.is_online && (
-                <div className={s.sidePanelActions}>
-                  <button
-                    type="button"
-                    className={`${s.sidePanelActionBtn} ${s.sidePanelActionPrimary}`}
-                    onClick={() => handleStartChat(selectedVisitor.visitor_id)}
-                  >
-                    <MessageSquarePlus style={{ width: 14, height: 14 }} />
-                    Начать чат
-                  </button>
-                  {!getInvitationStatus(selectedVisitor.visitor_id) && (
-                    <button
-                      type="button"
-                      className={`${s.sidePanelActionBtn} ${s.sidePanelActionSecondary}`}
-                      onClick={() => setInviteModalVisitorId(selectedVisitor.visitor_id)}
-                    >
-                      <Send style={{ width: 14, height: 14 }} />
-                      Пригласить
-                    </button>
+                  {onlineVisitors.length === 0 ? (
+                    <div className={s.noOnline}>
+                      <div className={s.noOnlineIcon}>
+                        <Users style={{ width: 22, height: 22 }} />
+                      </div>
+                      <div className={s.noOnlineText}>Нет онлайн-посетителей</div>
+                      <div className={s.noOnlineSub}>Когда кто-то зайдёт на сайт, он появится здесь</div>
+                    </div>
+                  ) : (
+                    <div className={s.onlineGrid}>
+                      {onlineVisitors.map((v) => (
+                        <OnlineCard
+                          key={v.visitor_id}
+                          visitor={v}
+                          isSelected={v.visitor_id === selectedVisitorId}
+                          onSelect={() =>
+                            setSelectedVisitorId(
+                              v.visitor_id === selectedVisitorId ? null : v.visitor_id
+                            )
+                          }
+                          onStartChat={() => handleStartChat(v.visitor_id)}
+                          onInvite={() => setInviteModalVisitorId(v.visitor_id)}
+                          invitationStatus={getInvitationStatus(v.visitor_id)}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
-              )}
 
-              {/* Info */}
-              <div className={s.infoGroup}>
-                <div className={s.infoGroupTitle}>Информация</div>
-                <InfoRow label="Visitor ID" value={selectedVisitor.visitor_id} />
-                <InfoRow label="Визитов" value={String(selectedVisitor.session_count)} />
-                <InfoRow label="На сайте" value={duration(selectedVisitor.first_seen_at, selectedVisitor.last_seen_at)} />
-                <InfoRow label="Первый визит" value={new Date(selectedVisitor.first_seen_at).toLocaleString()} />
-                <InfoRow label="Последняя активность" value={timeAgo(selectedVisitor.last_seen_at)} />
+                {/* ── History section ── */}
+                {offlineGrouped.length > 0 && (
+                  <div className={s.historySection}>
+                    <div className={s.sectionHeader}>
+                      <span className={s.sectionTitle}>История посещений</span>
+                    </div>
+
+                    {offlineGrouped.map((group) => (
+                      <div key={group.key}>
+                        <div className={s.dayHeader}>
+                          <span className={s.dayLabel}>{group.label}</span>
+                          <span className={s.dayLine} />
+                          <span className={s.dayCount}>{group.visitors.length}</span>
+                        </div>
+
+                        {group.visitors.map((v) => (
+                          <HistoryRow
+                            key={v.visitor_id}
+                            visitor={v}
+                            isSelected={v.visitor_id === selectedVisitorId}
+                            onSelect={() =>
+                              setSelectedVisitorId(
+                                v.visitor_id === selectedVisitorId ? null : v.visitor_id
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
 
-              <div className={s.infoGroup}>
-                <div className={s.infoGroupTitle}>Устройство</div>
-                <InfoRow label="Браузер" value={selectedVisitor.browser ?? "—"} />
-                <InfoRow label="ОС" value={selectedVisitor.os ?? "—"} />
-                <InfoRow label="Referrer" value={selectedVisitor.referrer || "Прямой заход"} />
-              </div>
-
-              <div className={s.infoGroup}>
-                <div className={s.infoGroupTitle}>Локация</div>
-                <InfoRow label="Город" value={selectedVisitor.city ?? "—"} />
-                <InfoRow label="Страна" value={selectedVisitor.country ?? "—"} />
-              </div>
-
-              {/* Page history */}
-              <div className={s.historyTitle}>История страниц</div>
-              {history.length === 0 ? (
-                <div style={{ fontSize: "var(--text-xs)", color: "var(--text-disabled)" }}>
-                  Нет данных
-                </div>
-              ) : (
-                history.map((h, i) => (
-                  <div key={i} className={s.historyItem}>
-                    <div className={s.historyPage}>{h.title || h.page}</div>
-                    <div className={s.historyTime}>
-                      {new Date(h.visited_at).toLocaleTimeString()}
+            {/* ── Side panel ── */}
+            {selectedVisitor && (
+              <aside className={s.sidePanel}>
+                <div className={s.sidePanelHeader}>
+                  <div className={s.sidePanelVisitor}>
+                    <div className={s.sidePanelAvatar}>
+                      {selectedVisitor.visitor_id.slice(0, 2).toUpperCase()}
+                      <div
+                        className={s.sidePanelOnlineDot}
+                        style={{
+                          background: selectedVisitor.is_online
+                            ? "var(--status-online)"
+                            : "var(--text-disabled)",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div className={s.sidePanelTitle}>
+                        {shortVisitorId(selectedVisitor.visitor_id)}
+                      </div>
+                      <div
+                        className={s.sidePanelStatus}
+                        style={{
+                          color: selectedVisitor.is_online
+                            ? "var(--status-online)"
+                            : "var(--text-disabled)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: selectedVisitor.is_online
+                              ? "var(--status-online)"
+                              : "var(--text-disabled)",
+                          }}
+                        />
+                        {selectedVisitor.is_online ? "Онлайн" : "Офлайн"}
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </aside>
-        )}
-      </div>
+                  <button
+                    type="button"
+                    className={s.sidePanelClose}
+                    onClick={() => setSelectedVisitorId(null)}
+                  >
+                    <X style={{ width: 16, height: 16 }} />
+                  </button>
+                </div>
+
+                <div className={s.sidePanelBody}>
+                  {/* Actions */}
+                  {!selectedVisitor.has_chat && selectedVisitor.is_online && (
+                    <div className={s.sidePanelActions}>
+                      <button
+                        type="button"
+                        className={`${s.sidePanelActionBtn} ${s.sidePanelActionPrimary}`}
+                        onClick={() => handleStartChat(selectedVisitor.visitor_id)}
+                      >
+                        <MessageSquarePlus style={{ width: 14, height: 14 }} />
+                        Начать чат
+                      </button>
+                      {!getInvitationStatus(selectedVisitor.visitor_id) && (
+                        <button
+                          type="button"
+                          className={`${s.sidePanelActionBtn} ${s.sidePanelActionSecondary}`}
+                          onClick={() => setInviteModalVisitorId(selectedVisitor.visitor_id)}
+                        >
+                          <Send style={{ width: 14, height: 14 }} />
+                          Пригласить
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Info */}
+                  <div className={s.infoGroup}>
+                    <div className={s.infoGroupTitle}>Информация</div>
+                    <InfoRow label="Visitor ID" value={selectedVisitor.visitor_id} />
+                    <InfoRow label="Визитов" value={String(selectedVisitor.session_count)} />
+                    <InfoRow label="На сайте" value={duration(selectedVisitor.first_seen_at, selectedVisitor.last_seen_at)} />
+                    <InfoRow label="Первый визит" value={new Date(selectedVisitor.first_seen_at).toLocaleString()} />
+                    <InfoRow label="Последняя активность" value={timeAgo(selectedVisitor.last_seen_at)} />
+                  </div>
+
+                  <div className={s.infoGroup}>
+                    <div className={s.infoGroupTitle}>Устройство</div>
+                    <InfoRow label="Браузер" value={selectedVisitor.browser ?? "—"} />
+                    <InfoRow label="ОС" value={selectedVisitor.os ?? "—"} />
+                    <InfoRow label="Referrer" value={selectedVisitor.referrer || "Прямой заход"} />
+                  </div>
+
+                  <div className={s.infoGroup}>
+                    <div className={s.infoGroupTitle}>Локация</div>
+                    <InfoRow label="Город" value={selectedVisitor.city ?? "—"} />
+                    <InfoRow label="Страна" value={selectedVisitor.country ?? "—"} />
+                  </div>
+
+                  {/* Page history */}
+                  <div className={s.historyTitle}>История страниц</div>
+                  {history.length === 0 ? (
+                    <div style={{ fontSize: "var(--text-xs)", color: "var(--text-disabled)" }}>
+                      Нет данных
+                    </div>
+                  ) : (
+                    history.map((h, i) => (
+                      <div key={i} className={s.historyItem}>
+                        <div className={s.historyPage}>{h.title || h.page}</div>
+                        <div className={s.historyTime}>
+                          {new Date(h.visited_at).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </aside>
+            )}
+          </div>
+        </>
+      )}
 
       {/* ── Invite modal ── */}
       {inviteModalVisitorId && (

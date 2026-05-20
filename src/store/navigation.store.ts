@@ -10,6 +10,9 @@ interface NavigationState {
   isDetailsOpen: boolean;
   toggleDetails: () => void;
   setDetailsOpen: (open: boolean) => void;
+  isVisitorsOpen: boolean;
+  toggleVisitors: () => void;
+  setVisitorsOpen: (open: boolean) => void;
   mobileView: MobileView;
   setMobileView: (view: MobileView) => void;
   pendingSessionId: string | null;
@@ -22,6 +25,9 @@ export const useNavigationStore = create<NavigationState>((set) => ({
   isDetailsOpen: true,
   toggleDetails: () => set((s) => ({ isDetailsOpen: !s.isDetailsOpen })),
   setDetailsOpen: (open) => set({ isDetailsOpen: open }),
+  isVisitorsOpen: false,
+  toggleVisitors: () => set((s) => ({ isVisitorsOpen: !s.isVisitorsOpen })),
+  setVisitorsOpen: (open) => set({ isVisitorsOpen: open }),
   mobileView: "chat-list",
   setMobileView: (view) => set({ mobileView: view }),
   pendingSessionId: null,

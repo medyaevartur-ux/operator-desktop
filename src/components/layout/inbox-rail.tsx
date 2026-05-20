@@ -22,6 +22,7 @@ import { Tooltip } from "@/components/ui";
 import { useSocketStore, reconnectSocket } from "@/lib/socket";
 import { Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { getInitials } from "@/utils/avatar";
+import { env } from "@/lib/env";
 import s from "./InboxRail.module.css";
 
 const ALL_NAV_ITEMS = [
@@ -80,7 +81,7 @@ export function InboxRail() {
             <button className={s.avatarBtn} type="button">
               {operator?.avatar_url ? (
                 <img
-                  src={operator.avatar_url}
+                  src={operator.avatar_url.startsWith("http") ? operator.avatar_url : `${env.apiUrl}${operator.avatar_url}`}
                   alt={operator.name ?? ""}
                   className={s.avatarImg}
                 />

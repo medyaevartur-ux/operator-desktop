@@ -930,3 +930,51 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ══ Tabs ══ */
+.tabsRow {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-1);
+  flex-shrink: 0;
+}
+
+.tabBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  position: relative;
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.tabBtn:hover {
+  color: var(--text-secondary);
+}
+
+.tabBtnActive {
+  color: var(--accent);
+}
+
+.tabBtnActive::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+}
+
+.tabIcon {
+  font-size: 14px;
+}

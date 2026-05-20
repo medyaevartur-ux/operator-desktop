@@ -41,6 +41,10 @@ const SYNTH_SOUNDS = {
     playTone(660, 0.15, vol * 0.3, "sine", 0);
     playTone(440, 0.25, vol * 0.3, "sine", 0.12);
   },
+  new_visitor: (vol: number) => {
+    playTone(523.25, 0.08, vol * 0.25, "sine", 0);
+    playTone(659.25, 0.12, vol * 0.25, "sine", 0.06);
+  },
   operator_request: (vol: number) => {
     playTone(587, 0.15, vol * 0.5, "sine", 0);
     playTone(784, 0.15, vol * 0.5, "sine", 0.15);
@@ -129,6 +133,9 @@ interface NotificationState {
   setCloseToTray: (v: boolean) => void;
   setShowMessagePreview: (v: boolean) => void;
   syncBadge: () => void;  
+  customSound: string | null;
+  customSoundName: string | null;
+  setCustomSound: (base64: string | null, name: string | null) => void;
 }
 
 /* ═══ Store ═══ */
@@ -146,6 +153,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   dndTo: localStorage.getItem("notif_dnd_to") || "08:00",  
   closeToTray: loadBool("notif_close_tray", true),
   showMessagePreview: loadBool("notif_msg_preview", true),  
+  customSound: localStorage.getItem("notif_custom_sound") || null,
+  customSoundName: localStorage.getItem("notif_custom_sound_name") || null,
   pending: {},
   totalUnread: 0,
 
@@ -165,6 +174,20 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     import("@/lib/tauri-bridge").then(({ setCloseToTray }) => setCloseToTray(v)).catch(() => {});
   },
   setShowMessagePreview: (v) => { saveBool("notif_msg_preview", v); set({ showMessagePreview: v }); },
+  setCustomSound: (base64, name) => {
+    try {
+      if (base64) {
+        localStorage.setItem("notif_custom_sound", base64);
+        localStorage.setItem("notif_custom_sound_name", name || "custom.mp3");
+      } else {
+        localStorage.removeItem("notif_custom_sound");
+        localStorage.removeItem("notif_custom_sound_name");
+      }
+    } catch (e) {
+      console.error("Failed to save custom sound", e);
+    }
+    set({ customSound: base64, customSoundName: name });
+  },
   syncBadge: () => {
     const total = get().totalUnread;
     import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(total)).catch(() => {});
@@ -250,12 +273,34 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     if (type === "mention" && !st.soundMention) return;
     if (type === "chat_closed" && !st.soundChatClosed) return;
 
+    if (st.customSound) {
+      try {
+        const audio = new Audio(st.customSound);
+        audio.volume = st.soundVolume;
+        audio.play();
+        return;
+      } catch (e) {
+        console.error("Custom sound play failed, falling back to synth", e);
+      }
+    }
+
     try {
       SYNTH_SOUNDS[type](st.soundVolume);
     } catch { /* ignore */ }
   },
 
   previewSound: (type) => {
+    const st = get();
+    if (st.customSound) {
+      try {
+        const audio = new Audio(st.customSound);
+        audio.volume = st.soundVolume;
+        audio.play();
+        return;
+      } catch (e) {
+        console.error("Custom sound play failed, falling back to synth", e);
+      }
+    }
     try {
       const vol = get().soundVolume;
       SYNTH_SOUNDS[type](vol);

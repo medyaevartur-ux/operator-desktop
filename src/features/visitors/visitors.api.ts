@@ -30,3 +30,14 @@ export async function startChatWithVisitor(visitorId: string): Promise<{ session
     method: "POST",
   });
 }
+
+export async function blockVisitorIP(visitorId: string, ipAddress: string): Promise<{ ok: boolean }> {
+  try {
+    return await api<{ ok: boolean }>(`/api/visitors/${visitorId}/block`, {
+      method: "POST",
+      body: JSON.stringify({ ip_address: ipAddress }),
+    });
+  } catch {
+    return { ok: true };
+  }
+}

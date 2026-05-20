@@ -24,9 +24,11 @@ import {
   sendOperatorMessage,
   transferOperatorToSession,
   updateClientNote,
+  setSessionPriority,
 } from "@/features/inbox/inbox.api";
 import { getOperators } from "@/features/operators/operators.api";
 import { useAuthStore } from "@/store/auth.store";
+import { offlineQueue } from "@/lib/offline-queue";
 
 interface InboxState {
   sessions: ChatSession[];
@@ -57,6 +59,7 @@ interface InboxState {
   transferActiveSession: (operatorId: string) => Promise<void>;
   closeActiveSession: () => Promise<void>;
   changeActiveSessionStatus: (status: string) => Promise<void>;  
+  changeActiveSessionPriority: (priority: "urgent" | "high" | "normal" | "low") => Promise<void>;
   markActiveSessionRead: () => Promise<void>;
   markActiveSessionUnread: () => Promise<void>;
   sendMessage: (message: string) => Promise<void>;
@@ -194,9 +197,53 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     try {
       set({ isMessagesLoading: true });
       const messages = await getChatMessages(targetSessionId);
-      set({ messages });
+      
+      const offlineMsgs = await offlineQueue.getAll();
+      const filteredOffline = offlineMsgs
+        .filter((m) => m.sessionId === targetSessionId)
+        .map((m) => ({
+          id: m.tempId,
+          session_id: m.sessionId,
+          sender: "operator" as const,
+          operator_id: m.operatorId,
+          message: m.message,
+          reply_to_id: m.replyToId || null,
+          is_read: true,
+          status: "sent" as const,
+          isPending: true,
+          created_at: m.created_at,
+        }));
+
+      const combined = [...messages];
+      for (const offMsg of filteredOffline) {
+        if (!combined.some((m) => m.id === offMsg.id)) {
+          combined.push(offMsg);
+        }
+      }
+
+      set({ messages: combined });
     } catch (error) {
       console.error("loadMessages error:", error);
+      try {
+        const offlineMsgs = await offlineQueue.getAll();
+        const filteredOffline = offlineMsgs
+          .filter((m) => m.sessionId === targetSessionId)
+          .map((m) => ({
+            id: m.tempId,
+            session_id: m.sessionId,
+            sender: "operator" as const,
+            operator_id: m.operatorId,
+            message: m.message,
+            reply_to_id: m.replyToId || null,
+            is_read: true,
+            status: "sent" as const,
+            isPending: true,
+            created_at: m.created_at,
+          }));
+        set({ messages: filteredOffline });
+      } catch (dbErr) {
+        console.error("Failed to read offline messages from DB:", dbErr);
+      }
     } finally {
       set({ isMessagesLoading: false });
     }
@@ -309,6 +356,18 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     await get().loadSessions();
   },
 
+  changeActiveSessionPriority: async (priority) => {
+    const activeSession = get().activeSession;
+    const operator = useAuthStore.getState().operator;
+
+    if (!activeSession?.id) {
+      return;
+    }
+
+    await setSessionPriority(activeSession.id, priority, activeSession.is_vip, operator?.id || undefined);
+    await get().loadSessions();
+  },
+
   markActiveSessionRead: async () => {
     const activeSession = get().activeSession;
 
@@ -339,24 +398,81 @@ export const useInboxStore = create<InboxState>((set, get) => ({
       throw new Error("Нет активного чата или оператора");
     }
 
-    if (!activeSession.operator_id || activeSession.operator_id !== operator.id) {
-      await assignOperatorToSession(activeSession.id, operator.id);
-    }
-
     const replyTo = get().replyTo;
-
-    const newMessage = await sendOperatorMessage({
-      sessionId: activeSession.id,
-      operatorId: operator.id,
-      message,
-      replyToId: replyTo?.id,
-    });
-
     set({ replyTo: null });
 
-    // Добавляем с реальным id — dedupe защитит от дубля через realtime
-    get().appendMessage(newMessage);
-    await get().loadSessions();
+    // Проверяем онлайн статус
+    if (!navigator.onLine) {
+      const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
+      const pendingMessage: ChatMessage = {
+        id: tempId,
+        session_id: activeSession.id,
+        sender: "operator",
+        operator_id: operator.id,
+        message,
+        reply_to_id: replyTo?.id || null,
+        is_read: true,
+        status: "sent",
+        isPending: true,
+        created_at: new Date().toISOString(),
+      };
+
+      await offlineQueue.enqueue({
+        tempId,
+        sessionId: activeSession.id,
+        operatorId: operator.id,
+        message,
+        replyToId: replyTo?.id,
+        created_at: pendingMessage.created_at,
+      });
+
+      get().appendMessage(pendingMessage);
+      return;
+    }
+
+    try {
+      if (!activeSession.operator_id || activeSession.operator_id !== operator.id) {
+        await assignOperatorToSession(activeSession.id, operator.id);
+      }
+
+      const newMessage = await sendOperatorMessage({
+        sessionId: activeSession.id,
+        operatorId: operator.id,
+        message,
+        replyToId: replyTo?.id,
+      });
+
+      // Добавляем с реальным id — dedupe защитит от дубля через realtime
+      get().appendMessage(newMessage);
+      await get().loadSessions();
+    } catch (err) {
+      console.warn("[InboxStore] Ошибка отправки сообщения, переходим в оффлайн-режим:", err);
+      
+      const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substring(2, 11);
+      const pendingMessage: ChatMessage = {
+        id: tempId,
+        session_id: activeSession.id,
+        sender: "operator",
+        operator_id: operator.id,
+        message,
+        reply_to_id: replyTo?.id || null,
+        is_read: true,
+        status: "sent",
+        isPending: true,
+        created_at: new Date().toISOString(),
+      };
+
+      await offlineQueue.enqueue({
+        tempId,
+        sessionId: activeSession.id,
+        operatorId: operator.id,
+        message,
+        replyToId: replyTo?.id,
+        created_at: pendingMessage.created_at,
+      });
+
+      get().appendMessage(pendingMessage);
+    }
   },
 
   createNote: async (noteText) => {
