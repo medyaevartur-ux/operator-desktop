@@ -347,9 +347,9 @@
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  color: var(--accent, #8b5cf6);
-  background: var(--accent-soft, #f3f0ff);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-muted);
   padding: 0 5px;
   border-radius: 8px;
   margin-right: 4px;
@@ -357,17 +357,24 @@
   flex-shrink: 0;
 }
 
-/* ═══ Priority border-left ═══ */
+/* На активной карточке бейджи читаемы поверх акцентного градиента */
+.cardActive .repeatBadge {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ═══ Priority border-left (через токены — корректно во всех темах) ═══ */
 .cardUrgent {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--error);
 }
 
 .cardHigh {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--warning);
 }
 
 .cardLow {
-  border-left: 3px solid var(--text-disabled, #999);
+  border-left: 3px solid var(--text-disabled);
 }
 
 /* ═══ VIP Badge ═══ */
@@ -378,11 +385,43 @@
   font-size: 9px;
   font-weight: 800;
   color: #fff;
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, var(--warning), var(--error));
   padding: 0 5px;
   border-radius: 4px;
   margin-right: 4px;
   line-height: 15px;
   letter-spacing: 0.5px;
   flex-shrink: 0;
+}
+
+/* ═══ SLA: чат без ответа оператора ═══ */
+.slaBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  padding: 0 5px;
+  border-radius: 6px;
+  margin-right: 4px;
+  line-height: 16px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.slaWarn { background: var(--warning); }
+
+.slaOverdue {
+  background: var(--error);
+  animation: slaPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes slaPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.cardSlaOverdue {
+  border-left: 3px solid var(--error);
 }

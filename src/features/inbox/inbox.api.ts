@@ -223,7 +223,7 @@ export async function getVisitorSummary(visitorId: string): Promise<VisitorSumma
 
 // === Priority ===
 
-export async function setSessionPriority(sessionId: string, priority: string, isVip?: boolean, operatorId?: string) {
+export async function setSessionPriority(sessionId: string, priority?: string, isVip?: boolean, operatorId?: string) {
   return api(`/api/sessions/${sessionId}/priority`, {
     method: "PATCH",
     body: JSON.stringify({ priority, is_vip: isVip, operator_id: operatorId }),

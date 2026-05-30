@@ -121,6 +121,15 @@ interface NotificationState {
   setDndFrom: (v: string) => void;
   setDndTo: (v: string) => void;
   isDndNow: () => boolean;
+
+  // SLA: эскалация чатов без ответа оператора
+  slaEnabled: boolean;
+  slaWarnMinutes: number;
+  slaOverdueMinutes: number;
+  setSlaEnabled: (v: boolean) => void;
+  setSlaWarnMinutes: (v: number) => void;
+  setSlaOverdueMinutes: (v: number) => void;
+
   addNotification: (sessionId: string, visitorName: string, message: string) => void;
   clearNotifications: (sessionId: string) => void;
   clearAll: () => void;
@@ -152,7 +161,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   dndFrom: localStorage.getItem("notif_dnd_from") || "22:00",
   dndTo: localStorage.getItem("notif_dnd_to") || "08:00",  
   closeToTray: loadBool("notif_close_tray", true),
-  showMessagePreview: loadBool("notif_msg_preview", true),  
+  showMessagePreview: loadBool("notif_msg_preview", true),
+  slaEnabled: loadBool("notif_sla", true),
+  slaWarnMinutes: loadNumber("notif_sla_warn", 2),
+  slaOverdueMinutes: loadNumber("notif_sla_overdue", 5),
   customSound: localStorage.getItem("notif_custom_sound") || null,
   customSoundName: localStorage.getItem("notif_custom_sound_name") || null,
   pending: {},
@@ -174,6 +186,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     import("@/lib/tauri-bridge").then(({ setCloseToTray }) => setCloseToTray(v)).catch(() => {});
   },
   setShowMessagePreview: (v) => { saveBool("notif_msg_preview", v); set({ showMessagePreview: v }); },
+  setSlaEnabled: (v) => { saveBool("notif_sla", v); set({ slaEnabled: v }); },
+  setSlaWarnMinutes: (v) => { saveNumber("notif_sla_warn", v); set({ slaWarnMinutes: v }); },
+  setSlaOverdueMinutes: (v) => { saveNumber("notif_sla_overdue", v); set({ slaOverdueMinutes: v }); },
   setCustomSound: (base64, name) => {
     try {
       if (base64) {

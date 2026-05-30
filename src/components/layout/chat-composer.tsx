@@ -4,7 +4,6 @@ import { uploadMessageImage } from "@/features/inbox/inbox.api";
 import * as Popover from "@radix-ui/react-popover";
 import {
   Paperclip,
-  Languages,
   SendHorizonal,
   UserCheck,
   MessageSquareQuote,
@@ -385,17 +384,12 @@ export function ChatComposer() {
       )}
 
       <form onSubmit={handleSubmit} className={s.form}>
-        {/* ── Tabs: only "Чат" active, rest "скоро" ── */}
+        {/* ── Канал чата (Email/SMS не используются) ── */}
         <div className={s.tabBar}>
           <button type="button" className={`${s.tab} ${s.tabActive}`}>
             Чат
           </button>
-          {["Email", "SMS", "Комментарии"].map((tab) => (
-            <button key={tab} type="button" className={`${s.tab} ${s.tabSoon}`} disabled>
-              {tab}
-            </button>
-          ))}
-          <span className={s.tabCount}>(всего {messageCount})</span>
+          <span className={s.tabCount}>всего сообщений: {messageCount}</span>
         </div>
 
         {/* ── Reply bar ── */}
@@ -545,13 +539,6 @@ export function ChatComposer() {
               </Tooltip>
 
               <div className={s.toolDivider} />
-
-              {/* Translate */}
-              <Tooltip content="Перевод" side="top">
-                <button type="button" className={s.toolBtn}>
-                  <Languages style={{ width: 18, height: 18 }} />
-                </button>
-              </Tooltip>
 
               {/* Attach */}
               <Tooltip content="Прикрепить файл" side="top">

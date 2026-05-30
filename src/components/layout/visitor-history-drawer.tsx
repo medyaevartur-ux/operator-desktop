@@ -199,16 +199,28 @@ export function VisitorHistoryDrawer({ visitorId, onClose }: VisitorHistoryDrawe
     }
   };
 
+  // Срок «знакомства» с посетителем: от первого до последнего визита.
+  // Это НЕ длительность одной сессии, поэтому корректно сворачиваем в дни/часы.
   const timeOnSite = (() => {
     if (visitor.first_seen_at && visitor.last_seen_at) {
       const diffMs = new Date(visitor.last_seen_at).getTime() - new Date(visitor.first_seen_at).getTime();
       const secs = Math.max(0, Math.floor(diffMs / 1000));
       if (secs < 60) return `${secs} сек`;
       const mins = Math.floor(secs / 60);
-      return `${mins} мин ${secs % 60} сек`;
+      if (mins < 60) return `${mins} мин`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}ч ${mins % 60}м`;
+      const days = Math.floor(hours / 24);
+      return `${days} д ${hours % 24}ч`;
     }
     return "Неизвестно";
   })();
+
+  const trafficSource = visitor.utm_source
+    ? (visitor.utm_medium ? `${visitor.utm_source} · ${visitor.utm_medium}` : visitor.utm_source)
+    : (visitor.referrer && visitor.referrer.trim()
+        ? (() => { try { return new URL(visitor.referrer).hostname.replace(/^www\./, ""); } catch { return visitor.referrer; } })()
+        : "Прямой переход");
 
   const isCommercialPage = (page: string) => {
     const p = page.toLowerCase();
@@ -275,7 +287,7 @@ export function VisitorHistoryDrawer({ visitorId, onClose }: VisitorHistoryDrawe
                   </span>
                 </div>
                 <div className={s.statCard}>
-                  <span className={s.statLabel}>Время на сайте</span>
+                  <span className={s.statLabel}>Знаком</span>
                   <span className={s.statValue}>
                     <Clock style={{ width: 16, height: 16 }} />
                     {timeOnSite}
@@ -314,9 +326,9 @@ export function VisitorHistoryDrawer({ visitorId, onClose }: VisitorHistoryDrawe
                   <span className={s.infoValue}>{visitor.session_count || 1}</span>
                 </div>
                 <div className={s.infoRow}>
-                  <span className={s.infoLabel}>Реферер</span>
+                  <span className={s.infoLabel}>Источник</span>
                   <span className={s.infoValue} title={visitor.referrer || "Прямой переход"}>
-                    {visitor.referrer || "Прямой переход"}
+                    {trafficSource}
                   </span>
                 </div>
               </div>

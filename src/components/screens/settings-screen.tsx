@@ -73,7 +73,13 @@ export function SettingsScreen() {
   const closeToTray = useNotificationStore((st) => st.closeToTray);
   const setCloseToTray = useNotificationStore((st) => st.setCloseToTray);
   const showMessagePreview = useNotificationStore((st) => st.showMessagePreview);
-  const setShowMessagePreview = useNotificationStore((st) => st.setShowMessagePreview);  
+  const setShowMessagePreview = useNotificationStore((st) => st.setShowMessagePreview);
+  const slaEnabled = useNotificationStore((st) => st.slaEnabled);
+  const setSlaEnabled = useNotificationStore((st) => st.setSlaEnabled);
+  const slaWarnMinutes = useNotificationStore((st) => st.slaWarnMinutes);
+  const setSlaWarnMinutes = useNotificationStore((st) => st.setSlaWarnMinutes);
+  const slaOverdueMinutes = useNotificationStore((st) => st.slaOverdueMinutes);
+  const setSlaOverdueMinutes = useNotificationStore((st) => st.setSlaOverdueMinutes);
   const customSound = useNotificationStore((st) => st.customSound);
   const customSoundName = useNotificationStore((st) => st.customSoundName);
   const setCustomSound = useNotificationStore((st) => st.setCustomSound);
@@ -336,6 +342,45 @@ export function SettingsScreen() {
               checked={desktopEnabled}
               onChange={setDesktopEnabled}
             />
+
+            {/* ═══ SLA: чаты без ответа ═══ */}
+            <div className={s.soundSection}>
+              <Toggle
+                label="⏱ Контроль ответа (SLA)"
+                checked={slaEnabled}
+                onChange={setSlaEnabled}
+              />
+              {slaEnabled && (
+                <>
+                  <div className={s.volumeRow}>
+                    <span className={s.volumeLabel}>Предупреждение через</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={slaWarnMinutes}
+                      onChange={(e) => setSlaWarnMinutes(Math.max(1, Number(e.target.value) || 1))}
+                      className={s.volumeValue}
+                      style={{ width: 56, textAlign: "center", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", background: "var(--surface-2)", color: "var(--text-primary)", padding: "4px 6px" }}
+                    />
+                    <span className={s.volumeLabel}>мин</span>
+                  </div>
+                  <div className={s.volumeRow}>
+                    <span className={s.volumeLabel}>Эскалация (звук + Windows-уведомление) через</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={240}
+                      value={slaOverdueMinutes}
+                      onChange={(e) => setSlaOverdueMinutes(Math.max(1, Number(e.target.value) || 1))}
+                      className={s.volumeValue}
+                      style={{ width: 56, textAlign: "center", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", background: "var(--surface-2)", color: "var(--text-primary)", padding: "4px 6px" }}
+                    />
+                    <span className={s.volumeLabel}>мин</span>
+                  </div>
+                </>
+              )}
+            </div>
 
             {soundEnabled && (
               <div className={s.soundSection}>

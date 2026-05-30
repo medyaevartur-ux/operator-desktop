@@ -81,6 +81,7 @@ export function WidgetSettingsScreen() {
   const fileRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const prevTabRef = useRef<Tab | undefined>(undefined);
 
   const handleExportConfig = () => {
     const dataStr = JSON.stringify({ widget_config: config, prechat_form: prechat, business_hours: hours }, null, 2);
@@ -278,7 +279,9 @@ export function WidgetSettingsScreen() {
             window.__zsPreviewConfig = {
               widget_config: \${JSON.stringify(config)},
               prechat_form: \${JSON.stringify(prechat)},
-              business_hours: \${JSON.stringify(hours)}
+              business_hours: \${JSON.stringify(hours)},
+              api_base: \${JSON.stringify(API_BASE)},
+              previewSize: \${JSON.stringify(previewSize)}
             };
             window.fetch = () => Promise.resolve(new Response(JSON.stringify({})));
           </script>
@@ -294,15 +297,21 @@ export function WidgetSettingsScreen() {
 
   useEffect(() => {
     if (loading) return;
+    const isTabChanged = prevTabRef.current !== tab;
+    prevTabRef.current = tab;
+
     if (iframeRef.current && iframeRef.current.contentWindow) {
       iframeRef.current.contentWindow.postMessage({
         type: "ZS_PREVIEW_UPDATE",
         payload: { widget_config: config, prechat_form: prechat, business_hours: hours },
-        forceOpen: tab !== "appearance",
-        skipPrechatPreview: tab !== "prechat"
+        previewSize,
+        // На вкладке «Внешний вид» всегда держим виджет раскрытым и без пречата,
+        // чтобы было видно оформление шапки/цветов. Пречат показываем на своей вкладке.
+        forceOpen: tab === "appearance" ? true : (isTabChanged ? true : undefined),
+        skipPrechatPreview: tab === "appearance" ? true : (isTabChanged ? (tab !== "prechat") : undefined)
       }, "*");
     }
-  }, [config, prechat, hours, tab, loading]);
+  }, [config, prechat, hours, tab, previewSize, loading]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -785,54 +794,6 @@ export function WidgetSettingsScreen() {
                 </div>
               </div>
 
-              {/* Custom CSS */}
-              <div className={s.section}>
-                <div className={s.sectionTitle}>Кастомный CSS</div>
-                <div className={s.sectionCard}>
-                  <div className={s.cssWarning}>
-                    <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0 }} />
-                    Неправильный CSS может сломать виджет
-                  </div>
-                  <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-default)" }}>
-                    <Editor
-                      height="200px"
-                      language="css"
-                      theme="vs-dark"
-                      value={config.custom_css || ""}
-                      onChange={(val) => upd({ custom_css: val || "" })}
-                      options={{
-                        minimap: { enabled: false },
-                        fontSize: 12,
-                        lineNumbers: "on",
-                        scrollBeyondLastLine: false,
-                        folding: false,
-                        wordWrap: "on"
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ═══ TAB: BEHAVIOR ═══ */}
-          {tab === "behavior" && (
-            <>
-              {/* Auto open */}
-              <div className={s.section}>
-                <div className={s.sectionTitle}>Автооткрытие</div>
-                <div className={s.sectionCard}>
-                  <div className={s.field}>
-                    <div className={s.fieldLabel}>Задержка авто-открытия (0 = выкл)</div>
-                    <div className={s.numberRow}>
-                      <input type="number" className={s.numberInput} value={config.auto_open_delay} onChange={(e) => upd({ auto_open_delay: Math.max(0, +e.target.value) })} min={0} max={300} />
-                      <span className={s.numberUnit}>сек</span>
-                    </div>
-                  </div>
-                  <Toggle label="Скрыть на мобильных" checked={config.hide_on_mobile} onChange={(v) => upd({ hide_on_mobile: v })} />
-                </div>
-              </div>
-
               {/* Мобильные настройки */}
               <div className={s.section}>
                 <div className={s.sectionTitle}>📱 Мобильные настройки (отдельно от десктопа)</div>
@@ -903,6 +864,56 @@ export function WidgetSettingsScreen() {
                   </div>
                 </div>
               </div>
+
+              {/* Custom CSS */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>Кастомный CSS</div>
+                <div className={s.sectionCard}>
+                  <div className={s.cssWarning}>
+                    <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0 }} />
+                    Неправильный CSS может сломать виджет
+                  </div>
+                  <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-default)" }}>
+                    <Editor
+                      height="200px"
+                      language="css"
+                      theme="vs-dark"
+                      value={config.custom_css || ""}
+                      onChange={(val) => upd({ custom_css: val || "" })}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 12,
+                        lineNumbers: "on",
+                        scrollBeyondLastLine: false,
+                        folding: false,
+                        wordWrap: "on"
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ═══ TAB: BEHAVIOR ═══ */}
+          {tab === "behavior" && (
+            <>
+              {/* Auto open */}
+              <div className={s.section}>
+                <div className={s.sectionTitle}>Автооткрытие</div>
+                <div className={s.sectionCard}>
+                  <div className={s.field}>
+                    <div className={s.fieldLabel}>Задержка авто-открытия (0 = выкл)</div>
+                    <div className={s.numberRow}>
+                      <input type="number" className={s.numberInput} value={config.auto_open_delay} onChange={(e) => upd({ auto_open_delay: Math.max(0, +e.target.value) })} min={0} max={300} />
+                      <span className={s.numberUnit}>сек</span>
+                    </div>
+                  </div>
+                  <Toggle label="Скрыть на мобильных" checked={config.hide_on_mobile} onChange={(v) => upd({ hide_on_mobile: v })} />
+                </div>
+              </div>
+
+
 
               {/* Видимость виджета по страницам */}
               <div className={s.section}>

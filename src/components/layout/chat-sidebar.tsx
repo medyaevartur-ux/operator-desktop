@@ -1,12 +1,13 @@
 import { Search, Inbox, Flame, Clock, User, Bot, CheckCircle2 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useVisitorsStore } from "@/store/visitors.store";
+import { useNotificationStore } from "@/store/notification.store";
 import { Avatar } from "@/components/ui";
 import { SkeletonCard } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
-import { formatChatTime } from "@/features/inbox/inbox.utils";
+import { formatChatTime, getSlaMinutes, getSlaState, formatSlaLabel } from "@/features/inbox/inbox.utils";
 import { markChatSessionRead } from "@/features/inbox/inbox.api";
 import type { InboxFilter } from "@/features/inbox/inbox.utils";
 import type { ChatSession } from "@/types/chat";
@@ -56,14 +57,22 @@ function SessionCard({
   const unread = session.unread_count ?? 0;
   const lastTime = formatChatTime(session.last_message_at ?? session.created_at);
   const preview = session.last_message_text || session.visitor_email || session.current_page || session.visitor_phone || "Новый диалог";
-  const totalVisits = (session as any).total_visitor_sessions ?? 1;
-  const priority = (session as any).priority || "normal";
-  const isVip = (session as any).is_vip === true;  
+  const totalVisits = session.total_visitor_sessions ?? session.visit_count ?? 1;
+  const priority = session.priority || "normal";
+  const isVip = session.is_vip === true;
+
+  const slaEnabled = useNotificationStore((n) => n.slaEnabled);
+  const slaWarnMin = useNotificationStore((n) => n.slaWarnMinutes);
+  const slaOverdueMin = useNotificationStore((n) => n.slaOverdueMinutes);
+  const slaMin = slaEnabled ? getSlaMinutes(session) : null;
+  const slaState = getSlaState(slaMin, slaWarnMin, slaOverdueMin);
+
   return (
     <button
       type="button"
       onClick={onClick}
       className={`${s.card} ${isActive ? s.cardActive : ""} ${
+        slaState === "overdue" ? s.cardSlaOverdue :
         priority === "urgent" ? s.cardUrgent :
         priority === "high" ? s.cardHigh :
         priority === "low" ? s.cardLow : ""
@@ -95,8 +104,17 @@ function SessionCard({
           </div>
         </div>
 
-        {/* Preview + repeat badge */}
+        {/* Preview + repeat/SLA badges */}
         <div className={s.cardPreview}>
+          {slaState !== "none" && (
+            <span
+              className={`${s.slaBadge} ${slaState === "overdue" ? s.slaOverdue : s.slaWarn}`}
+              title={`Без ответа оператора ${slaMin} мин`}
+            >
+              <Clock style={{ width: 10, height: 10 }} />
+              {formatSlaLabel(slaMin ?? 0)}
+            </span>
+          )}
           {totalVisits > 1 && (
             <span className={s.repeatBadge}>×{totalVisits}</span>
           )}
@@ -146,6 +164,14 @@ export function ChatSidebar() {
   } = useInboxStore();
   const myOperatorId = useAuthStore((st) => st.operator?.id);
   const visitors = useVisitorsStore((st) => st.visitors);
+
+  // Тик раз в 30с — чтобы SLA-таймеры на карточках «росли» без новых событий.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick((x) => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
   const onlineVisitorIds = useMemo(
     () => new Set(visitors.filter((v) => v.is_online).map((v) => v.visitor_id)),
     [visitors]

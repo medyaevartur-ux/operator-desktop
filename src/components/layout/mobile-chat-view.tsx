@@ -21,7 +21,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useTypingIndicator } from "@/features/inbox/use-typing";
 import { uploadMessageImage, toggleReaction } from "@/features/inbox/inbox.api";
-import { Avatar } from "@/components/ui";
+import { Avatar, toast } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
 import { formatChatTime } from "@/features/inbox/inbox.utils";
 import { API_BASE } from "@/lib/api";
@@ -146,6 +146,7 @@ export function MobileChatView() {
       await useInboxStore.getState().loadMessages(activeSession.id);
     } catch (err) {
       console.error("Upload error:", err);
+      toast.error("Не удалось отправить файл", "Проверьте соединение и попробуйте снова");
     } finally {
       setSending(false);
     }

@@ -479,11 +479,6 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     const activeSession = get().activeSession;
     const operator = useAuthStore.getState().operator;
 
-    console.log("=== CREATE NOTE DEBUG ===");
-    console.log("activeSession.id:", activeSession?.id);
-    console.log("operator:", JSON.stringify(operator, null, 2));
-    console.log("noteText:", noteText);
-
     if (!activeSession?.id || !operator?.id || !noteText.trim()) {
       return;
     }
@@ -517,10 +512,6 @@ export const useInboxStore = create<InboxState>((set, get) => ({
 
   createTagAndAttach: async (name, color) => {
     const activeSession = get().activeSession;
-
-    console.log("=== CREATE TAG DEBUG ===");
-    console.log("activeSession.id:", activeSession?.id);
-    console.log("name:", name, "color:", color);
 
     if (!activeSession?.id || !name.trim()) {
       return;

@@ -64,7 +64,7 @@ function QueueCard({
   const displayName = getSessionDisplayName(session.visitor_name, session.visitor_id);
   const priority = session.priority || "normal";
   const isVip = session.is_vip === true;
-  const totalVisits = (session as any).total_visitor_sessions ?? session.visit_count ?? 1;
+  const totalVisits = session.total_visitor_sessions ?? session.visit_count ?? 1;
 
   return (
     <div

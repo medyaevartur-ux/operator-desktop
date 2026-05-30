@@ -72,35 +72,35 @@
    SEMANTIC TOKENS — Light Mode
    ═══════════════════════════════════════════════ */
 :root {
-  /* Surfaces */
-  --surface-bg:       var(--neutral-100);
-  --surface-bg-deep:  var(--neutral-150);
-  --surface-1:        var(--neutral-0);
-  --surface-2:        var(--neutral-50);
-  --surface-3:        var(--neutral-100);
+  /* Surfaces — чистые прохладные нейтральные (деловой Jivo-стиль) */
+  --surface-bg:       #F3F5F8;
+  --surface-bg-deep:  #E9EDF2;
+  --surface-1:        #FFFFFF;
+  --surface-2:        #F6F8FA;
+  --surface-3:        #EEF1F5;
 
-  /* Text */
-  --text-primary:     var(--neutral-900);
-  --text-secondary:   var(--neutral-600);
-  --text-muted:       var(--neutral-400);
-  --text-disabled:    var(--neutral-300);
+  /* Text — прохладный графит */
+  --text-primary:     #18212F;
+  --text-secondary:   #56606F;
+  --text-muted:       #8893A2;
+  --text-disabled:    #B6BFCB;
   --text-on-accent:   #FFFFFF;
 
-  /* Borders */
-  --border-default:   rgba(0, 0, 0, 0.08);
-  --border-subtle:    rgba(0, 0, 0, 0.04);
-  --border-strong:    rgba(0, 0, 0, 0.14);
-  --border-focus:     var(--violet-500);
+  /* Borders — холодные, деликатные */
+  --border-default:   rgba(20, 33, 61, 0.10);
+  --border-subtle:    rgba(20, 33, 61, 0.06);
+  --border-strong:    rgba(20, 33, 61, 0.16);
+  --border-focus:     #2F6FED;
 
-  /* Accent */
-  --accent:           var(--violet-500);
-  --accent-hover:     var(--violet-600);
-  --accent-soft:      var(--violet-50);
-  --accent-muted:     rgba(124, 92, 191, 0.08);
+  /* Accent — спокойный деловой синий */
+  --accent:           #2F6FED;
+  --accent-hover:     #2159CE;
+  --accent-soft:      #EAF1FE;
+  --accent-muted:     rgba(47, 111, 237, 0.10);
 
   /* Gradients */
-  --gradient-accent:  linear-gradient(135deg, #7C5CBF 0%, #B07CD8 100%);
-  --gradient-subtle:  linear-gradient(135deg, rgba(124,92,191,0.12) 0%, rgba(176,124,216,0.08) 100%);
+  --gradient-accent:  linear-gradient(135deg, #2F6FED 0%, #4C8DF5 100%);
+  --gradient-subtle:  linear-gradient(135deg, rgba(47,111,237,0.10) 0%, rgba(76,141,245,0.06) 100%);
 
   /* Shadows */
   --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.05);
@@ -108,8 +108,8 @@
   --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
   --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-xl:      0 16px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-glow:    0 4px 20px rgba(124, 92, 191, 0.30);
-  --shadow-glow-sm: 0 2px 10px rgba(124, 92, 191, 0.20);
+  --shadow-glow:    0 4px 20px rgba(47, 111, 237, 0.26);
+  --shadow-glow-sm: 0 2px 10px rgba(47, 111, 237, 0.18);
 
   /* Status */
   --status-online:  var(--green-500);
@@ -132,8 +132,8 @@
   --bubble-operator-text: #FFFFFF;
   --bubble-visitor-bg:    var(--neutral-0);
   --bubble-visitor-text:  var(--text-primary);
-  --bubble-ai-bg:         var(--violet-50);
-  --bubble-ai-text:       var(--violet-800);
+  --bubble-ai-bg:         #EAF1FE;
+  --bubble-ai-text:       #1E3A8A;
   --bubble-system-bg:     var(--surface-2);
   --bubble-system-text:   var(--text-muted);
 

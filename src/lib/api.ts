@@ -12,6 +12,21 @@ export function removeToken() {
   localStorage.removeItem("chat_token");
 }
 
+/**
+ * Истёк ли JWT по полю exp. Если exp нет или токен нечитаем — считаем НЕ истёкшим
+ * (не выкидываем оператора из-за нестандартного токена/сетевых причин).
+ */
+export function isTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (!payload || typeof payload.exp !== "number") return false;
+    return payload.exp * 1000 <= Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export async function api<T = any>(
   path: string,
   options: RequestInit = {}
@@ -36,9 +51,14 @@ export async function api<T = any>(
   });
 
   if (res.status === 401) {
-    removeToken();
-    const { useAuthStore } = await import("@/store/auth.store");
-    useAuthStore.getState().reset();
+    // Выкидываем в логин ТОЛЬКО если токен действительно истёк.
+    // Транзиентный 401 от отдельного эндпоинта не должен сбрасывать всю сессию —
+    // оператор остаётся в приложении до реального истечения или явного выхода.
+    if (isTokenExpired(token)) {
+      removeToken();
+      const { useAuthStore } = await import("@/store/auth.store");
+      useAuthStore.getState().reset();
+    }
     throw new Error("Unauthorized");
   }
 

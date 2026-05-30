@@ -10,6 +10,7 @@ import {
   UserX,
   Send,
   Users,
+  Route,
 } from "lucide-react";
 import { useVisitorsStore } from "@/store/visitors.store";
 import { useNavigationStore } from "@/store/navigation.store";
@@ -33,13 +34,26 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(h / 24)} д`;
 }
 
-function duration(first: string, last: string): string {
-  const diff = new Date(last).getTime() - new Date(first).getTime();
-  const min = Math.max(0, Math.floor(diff / 60_000));
-  if (min < 60) return `${min} мин`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${h}ч ${m}м`;
+function refHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** Источник трафика: UTM-метка > домен реферера > прямой переход. */
+function formatSource(v: SiteVisitor): string {
+  if (v.utm_source) {
+    return v.utm_medium ? `${v.utm_source} · ${v.utm_medium}` : v.utm_source;
+  }
+  if (v.referrer && v.referrer.trim()) return refHost(v.referrer);
+  return "Прямой переход";
+}
+
+/** Новый посетитель или вернувшийся (по числу визитов). */
+function visitorKind(v: SiteVisitor): string {
+  return (v.session_count ?? 1) > 1 ? `Вернулся · ${v.session_count}` : "Новый";
 }
 
 function shortVisitorId(id: string): string {
@@ -126,8 +140,9 @@ export function VisitorsScreen() {
       if (search) params.search = search;
       const data = await getVisitors(params);
       setVisitors(data);
-    } catch {
-      /* api not ready */
+    } catch (err) {
+      // Тихо логируем: это фоновый поллер (раз в 30с), toast здесь спамил бы оператора.
+      console.warn("[visitors] fetch failed:", err);
     } finally {
       setLoading(false);
     }
@@ -245,7 +260,7 @@ export function VisitorsScreen() {
           <div className={s.headerTitle}>Посетители</div>
           <div className={s.headerCount}>
             <span className={s.onlineDot} />
-            {onlineCount} онлайн · {visitors.length} всего
+            {onlineCount} онлайн · {visitors.length} в списке
           </div>
         </div>
       </div>
@@ -479,17 +494,25 @@ export function VisitorsScreen() {
                   <div className={s.infoGroup}>
                     <div className={s.infoGroupTitle}>Информация</div>
                     <InfoRow label="Visitor ID" value={selectedVisitor.visitor_id} />
+                    <InfoRow label="Тип" value={visitorKind(selectedVisitor)} />
                     <InfoRow label="Визитов" value={String(selectedVisitor.session_count)} />
-                    <InfoRow label="На сайте" value={duration(selectedVisitor.first_seen_at, selectedVisitor.last_seen_at)} />
                     <InfoRow label="Первый визит" value={new Date(selectedVisitor.first_seen_at).toLocaleString()} />
                     <InfoRow label="Последняя активность" value={timeAgo(selectedVisitor.last_seen_at)} />
+                  </div>
+
+                  <div className={s.infoGroup}>
+                    <div className={s.infoGroupTitle}>Источник трафика</div>
+                    <InfoRow label="Источник" value={formatSource(selectedVisitor)} />
+                    {selectedVisitor.utm_campaign && (
+                      <InfoRow label="Кампания" value={selectedVisitor.utm_campaign} />
+                    )}
+                    <InfoRow label="Referrer" value={selectedVisitor.referrer ? refHost(selectedVisitor.referrer) : "Прямой заход"} />
                   </div>
 
                   <div className={s.infoGroup}>
                     <div className={s.infoGroupTitle}>Устройство</div>
                     <InfoRow label="Браузер" value={selectedVisitor.browser ?? "—"} />
                     <InfoRow label="ОС" value={selectedVisitor.os ?? "—"} />
-                    <InfoRow label="Referrer" value={selectedVisitor.referrer || "Прямой заход"} />
                   </div>
 
                   <div className={s.infoGroup}>
@@ -605,9 +628,9 @@ function OnlineCard({
       <div className={s.cardInfo}>
         <div className={s.cardTopRow}>
           <span className={s.cardVisitorId}>{shortVisitorId(visitor.visitor_id)}</span>
-          <span className={s.cardTime}>
+          <span className={s.cardTime} title="Последняя активность">
             <Clock style={{ width: 11, height: 11 }} />
-            {duration(visitor.first_seen_at, visitor.last_seen_at)}
+            {timeAgo(visitor.last_seen_at)}
           </span>
         </div>
 
@@ -615,6 +638,11 @@ function OnlineCard({
         <div className={s.cardUrl}>{visitor.current_page || "—"}</div>
 
         <div className={s.cardMeta}>
+          <span className={s.cardMetaItem} title={visitor.referrer || undefined}>
+            <Route style={{ width: 11, height: 11 }} />
+            {formatSource(visitor)}
+          </span>
+          <span className={s.cardMetaItem}>{visitorKind(visitor)}</span>
           {visitor.city && (
             <span className={s.cardMetaItem}>
               <Globe style={{ width: 11, height: 11 }} />
@@ -692,15 +720,16 @@ function HistoryRow({ visitor, isSelected, onSelect }: HistoryRowProps) {
       </div>
 
       <div className={s.histMeta}>
+        <span className={s.histMetaItem} title={visitor.referrer || undefined}>
+          <Route style={{ width: 11, height: 11 }} />
+          {formatSource(visitor)}
+        </span>
         <span className={s.histMetaItem}>
           <Monitor style={{ width: 11, height: 11 }} />
           {visitor.browser ?? "?"} / {visitor.os ?? "?"}
         </span>
-        <span className={s.histMetaItem}>
+        <span className={s.histMetaItem} title="Последняя активность">
           <Clock style={{ width: 11, height: 11 }} />
-          {duration(visitor.first_seen_at, visitor.last_seen_at)}
-        </span>
-        <span className={s.histMetaItem}>
           {timeAgo(visitor.last_seen_at)}
         </span>
       </div>

@@ -148,10 +148,10 @@ export function SessionHistoryList({
                   {ses.rating}
                 </div>
               )}
-              {(ses as any).operator_name && (
+              {ses.operator_name && (
                 <div className={s.historyMeta}>
                   <User style={{ width: 12, height: 12 }} />
-                  {(ses as any).operator_name}
+                  {ses.operator_name}
                 </div>
               )}
             </div>

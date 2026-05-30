@@ -121,7 +121,7 @@ export function LoginScreen() {
           </form>
 
           <div className={`${s.footer} ${s.stagger5}`}>
-            v2.0.0 • Живая Сказка
+            v{__APP_VERSION__} • Живая Сказка
           </div>
         </div>
       </div>

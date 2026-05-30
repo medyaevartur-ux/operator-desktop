@@ -755,7 +755,7 @@
 
 .systemBubbleAuto {
   background: var(--accent-soft, #f3f0ff);
-  border: 1px solid rgba(139, 92, 246, 0.15);
+  border: 1px solid var(--accent-muted);
   color: var(--text-primary);
 }
 

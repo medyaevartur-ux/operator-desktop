@@ -20,8 +20,10 @@ export interface ChatSession {
   current_page_title: string | null;
   priority: "urgent" | "high" | "normal" | "low";
   is_vip: boolean;
-  visit_count: number;   
-  queued_at: string | null;  
+  visit_count: number;
+  total_visitor_sessions?: number | null;
+  operator_name?: string | null;
+  queued_at: string | null;
   auto_replied: boolean;   
   referrer: string | null;
   city: string | null;

@@ -1,11 +1,12 @@
 {
   "name": "operator-desktop",
   "private": true,
-  "version": "5.0.6",
+  "version": "5.1.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:widget": "node scripts/build-widget.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

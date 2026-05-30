@@ -55,9 +55,9 @@ function applyTheme(resolved: ResolvedTheme, accentHue: number, density: "comfor
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: "fairytale",
-      resolved: "fairytale",
-      accentHue: 32,         // золотисто-янтарный по умолчанию
+      theme: "light",
+      resolved: "light",
+      accentHue: 222,        // деловой синий по умолчанию (сказочная/тёмная — в настройках)
       density: "comfortable",
       autoTimeTheme: false,
 

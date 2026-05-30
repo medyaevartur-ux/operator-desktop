@@ -45,12 +45,7 @@
   position: relative;
   overflow: hidden;
   padding: 24px 18px 20px;
-  background: linear-gradient(
-    135deg,
-    rgba(124, 92, 191, 0.12),
-    rgba(176, 124, 216, 0.08),
-    rgba(255, 255, 255, 0.50)
-  );
+  background: linear-gradient(135deg, var(--accent-muted), transparent 65%);
   border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
@@ -62,7 +57,7 @@
   width: 120px;
   height: 120px;
   border-radius: var(--radius-full);
-  background: rgba(124, 92, 191, 0.10);
+  background: var(--accent-muted);
   filter: blur(6px);
   pointer-events: none;
   will-change: transform;
@@ -733,7 +728,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--error);
   animation: livePulse 1.5s ease-in-out infinite;
 }
 
@@ -741,7 +736,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--warning);
 }
 
 .priorityDotNormal {
@@ -762,7 +757,7 @@
   font-size: 9px;
   font-weight: 800;
   color: #fff;
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, var(--warning), var(--error));
   padding: 0 4px;
   border-radius: 3px;
   line-height: 14px;
@@ -770,8 +765,8 @@
 }
 
 .smallBtnDanger {
-  background: rgba(239, 68, 68, 0.08);
-  color: #ef4444;
+  background: var(--error-soft);
+  color: var(--error);
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 

@@ -5,7 +5,10 @@
  * позволяя приложению мгновенно загружаться и полноценно работать в оффлайн-режиме.
  */
 
-const CACHE_NAME = "zs-operator-cache-v1";
+// Версия берётся из query-параметра регистрации (`/sw.js?v=<версия приложения>`),
+// поэтому каждый релиз создаёт новое имя кэша, а старые удаляются на этапе activate.
+const SW_VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
+const CACHE_NAME = `zs-operator-cache-${SW_VERSION}`;
 
 // Базовые ресурсы для кэширования при установке
 const PRECACHE_ASSETS = [
@@ -49,6 +52,14 @@ self.addEventListener("activate", (event) => {
 
 // Стратегия кэширования: Stale-While-Revalidate для локальных запросов статики
 self.addEventListener("fetch", (event) => {
+  // Полностью игнорируем любые запросы в среде Tauri для исключения конфликтов с кастомными протоколами
+  if (
+    self.location.origin.includes("tauri.localhost") ||
+    self.location.protocol === "tauri:"
+  ) {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // Не перехватываем API запросы, WebSocket соединения и Tauri-специфичные схемы

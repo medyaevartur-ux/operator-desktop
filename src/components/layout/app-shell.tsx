@@ -1,6 +1,7 @@
 import { useNavigationStore } from "@/store/navigation.store";
 import { useInbox } from "@/features/inbox/use-inbox";
 import { useInboxRealtime } from "@/features/inbox/use-inbox-realtime";
+import { useSla } from "@/features/inbox/use-sla";
 import { useVisitorsRealtime } from "@/features/visitors/use-visitors-realtime";
 import { ChatDetails } from "@/components/layout/chat-details";
 import { ChatMain } from "@/components/layout/chat-main";
@@ -54,6 +55,7 @@ export function AppShell() {
 function DesktopAppShell() {
   useInbox();
   useInboxRealtime();
+  useSla();
   useVisitorsRealtime();
 
   const screen = useNavigationStore((s) => s.screen);

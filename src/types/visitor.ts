@@ -5,6 +5,9 @@ export interface SiteVisitor {
   current_page: string;
   current_page_title: string;
   referrer: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
   city: string | null;
   country: string | null;
   browser: string | null;
@@ -16,6 +19,7 @@ export interface SiteVisitor {
   chat_session_id: string | null;
   score?: number;
   is_blocked?: boolean;
+  is_vip?: boolean;
 }
 
 export interface VisitorPageEvent {

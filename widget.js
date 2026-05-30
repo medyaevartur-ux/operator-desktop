@@ -6,7 +6,7 @@
   window.__zsWidgetInited = true;
 
   const SCRIPT = document.currentScript;
-  const API_BASE = (SCRIPT && SCRIPT.getAttribute("data-api")) || "https://zhivaya-skazka.ru";
+  const API_BASE = (window.__zsPreviewConfig && window.__zsPreviewConfig.api_base) || (SCRIPT && SCRIPT.getAttribute("data-api")) || "https://zhivaya-skazka.ru";
   const VISITOR_KEY = "zs_visitor_id";
   const SOUND_KEY = "zs_sound_enabled";
 
@@ -54,6 +54,27 @@
     let id = localStorage.getItem(VISITOR_KEY);
     if (!id) { id = genId(); localStorage.setItem(VISITOR_KEY, id); }
     return id;
+  }
+
+  const UTM_KEY = "zs_utm";
+  // First-touch атрибуция: метки utm_* захватываются из URL при первом заходе
+  // и сохраняются, чтобы источник трафика не терялся при переходах по сайту.
+  function getUtm() {
+    try {
+      const params = new URLSearchParams(location.search);
+      const fresh = {
+        utm_source: params.get("utm_source") || "",
+        utm_medium: params.get("utm_medium") || "",
+        utm_campaign: params.get("utm_campaign") || ""
+      };
+      if (fresh.utm_source || fresh.utm_medium || fresh.utm_campaign) {
+        if (!localStorage.getItem(UTM_KEY)) localStorage.setItem(UTM_KEY, JSON.stringify(fresh));
+        return fresh;
+      }
+      const stored = localStorage.getItem(UTM_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch (e) { /* ignore */ }
+    return { utm_source: "", utm_medium: "", utm_campaign: "" };
   }
 
   function esc(s) {
@@ -200,6 +221,8 @@
   const state = {
     open: false, config: null, prechat: null, session: null,
     messages: [], visitorId: getVisitorId(),
+    visitorDraftMessage: "", prechatDrafts: {},
+    cardDismissed: !!sessionStorage.getItem("zs_card_dismissed"),
     visitorName: localStorage.getItem("zs_visitor_name") || "",
     prechatDone: !!localStorage.getItem("zs_prechat_done"),
     socket: null, unread: 0, typing: false, typingTimeout: null,
@@ -242,6 +265,7 @@
   // ═══ SHADOW DOM ═══
   const host = document.createElement("div");
   host.id = "zs-widget-host";
+  host.style.cssText = "position: fixed !important; z-index: 2147483647 !important; pointer-events: none; left: 0; right: 0; bottom: 0; top: 0; height: 0; width: 0; overflow: visible; display: block;";
   const shadow = host.attachShadow({ mode: "closed" });
   document.body.appendChild(host);
 
@@ -333,7 +357,9 @@
 
 *{margin:0;padding:0;box-sizing:border-box;}
 
-.zw{font-family:var(--font);font-size:${fontSize};line-height:1.5;position:fixed;bottom:${edgeMargin};${side}:${edgeMargin};z-index:2147483647;}
+.zw{font-family:var(--font);font-size:${fontSize};line-height:1.5;position:fixed;bottom:${edgeMargin};${side}:${edgeMargin};z-index:2147483647;pointer-events:auto;isolation:isolate;}
+/* Класс .zw-open ставится JS-ом при открытии — упрощает мобильные правила */
+.zw.zw-open .zw-launcher-card{display:none!important;}
 
 /* FAB */
 .zw-fab{width:var(--fab-size);height:var(--fab-size);border-radius:var(--fab-radius);background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:${fabShadow},0 0 0 1px rgba(255,255,255,0.15) inset;transition:transform .2s var(--ez,cubic-bezier(.16,1,.3,1)),box-shadow .25s;position:relative;${gt === "glass" ? "backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.3);" : ""}${gt === "animated" ? "background-size:400% 400%;animation:zw-gradient-shift 3s ease infinite;" : ""}}
@@ -349,16 +375,16 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 
 /* Launcher card */
 .zw-launcher{position:absolute;bottom:0;${side}:0;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .2s;}
-.zw-launcher-card{background:#fff;border-radius:16px;padding:12px 16px;box-shadow:0 4px 24px rgba(0,0,0,0.12);display:flex;align-items:center;gap:12px;border:1px solid #f0f0f0;max-width:280px;margin-${side}:68px;transition:all .2s;}
-.zw-launcher-card:hover{box-shadow:0 6px 28px rgba(0,0,0,0.16);transform:translateY(-2px);}
-.zw-launcher-ava{width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+.zw-launcher-card{background:rgba(255,255,255,0.9);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:20px;padding:12px 18px 12px 14px;box-shadow:0 12px 32px rgba(0,0,0,0.12),0 1px 2px rgba(0,0,0,0.04);display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,0.5);max-width:320px;margin-${side}:68px;transition:all .3s cubic-bezier(.16,1,.3,1);position:relative;}
+.zw-launcher-card:hover{box-shadow:0 16px 40px rgba(0,0,0,0.16);transform:translateY(-2px);}
+.zw-launcher-ava{width:44px;height:44px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 2px 8px var(--accent-30);}
 .zw-launcher-ava img{width:100%;height:100%;object-fit:cover;}
-.zw-launcher-ava svg{width:20px;height:20px;fill:#fff;}
-.zw-launcher-info{flex:1;min-width:0;}
-.zw-launcher-text{font-size:13px;font-weight:700;color:#1f2937;line-height:1.3;}
-.zw-launcher-sub{font-size:11px;color:#6b7280;margin-top:2px;}
-.zw-launcher-close{width:20px;height:20px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9ca3af;cursor:pointer;flex-shrink:0;transition:all .15s;}
-.zw-launcher-close:hover{background:#e5e7eb;color:#374151;}
+.zw-launcher-ava svg{width:22px;height:22px;fill:#fff;}
+.zw-launcher-info{flex:1;min-width:0;padding-right:6px;}
+.zw-launcher-text{font-size:14px;font-weight:700;color:#1c1917;line-height:1.3;}
+.zw-launcher-sub{font-size:12px;color:#78716c;margin-top:2px;line-height:1.2;}
+.zw-launcher-close{width:22px;height:22px;border-radius:50%;background:#f5f5f4;display:flex;align-items:center;justify-content:center;font-size:14px;color:#a8a29e;cursor:pointer;flex-shrink:0;transition:all .15s;font-weight:bold;margin-left:auto;}
+.zw-launcher-close:hover{background:#e7e5e4;color:#44403c;}
 
 /* Icon+text launcher */
 .zw-fab-text{display:flex;align-items:center;gap:8px;padding:0 20px 0 16px;width:auto;border-radius:28px;height:var(--fab-size);}
@@ -567,32 +593,247 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-toast-info{background:linear-gradient(135deg,#d97706,#fbbf24);color:#1c1917;}
 .zw-toast-error{background:linear-gradient(135deg,#dc2626,#ef4444);}
 
-/* Mobile */
-@media(max-width:480px){
-  .zw{bottom:16px;${side}:16px;}
-  ${(() => {
-    const mode = cfg.mobile_window_mode || "fullscreen";
-    if (mode === "fullscreen") {
-      return ".zw-win{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;max-width:100%;max-height:100%;border-radius:0;z-index:2147483647;height:100vh;height:100dvh;height:-webkit-fill-available;}.zw-win.open~.zw-fab{display:none;}";
+/* Mobile (.zw-mobile) */
+.zw.zw-mobile {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
+}
+.zw.zw-mobile * {
+  box-sizing: border-box !important;
+}
+.zw.zw-mobile .zw-win,
+.zw.zw-mobile .zw-fab,
+.zw.zw-mobile .zw-launcher-card,
+.zw.zw-mobile .zw-greet,
+.zw.zw-mobile .zw-inv,
+.zw.zw-mobile .zw-mob-invite {
+  pointer-events: auto !important;
+}
+.zw.zw-mobile .zw-fab {
+  position: absolute !important;
+  bottom: 16px !important;
+  ${side}: 16px !important;
+}
+.zw.zw-mobile .zw-launcher-card {
+  position: absolute !important;
+  bottom: 16px !important;
+  ${side}: 16px !important;
+  margin: 0 !important;
+  max-width: calc(100vw - 32px) !important;
+  width: calc(100% - 32px) !important;
+  display: ${(cfg.mobile_launcher_type === "card" || (cfg.mobile_launcher_type === "inherit" && cfg.launcher_type === "card")) ? "flex" : "none"} !important;
+}
+/* Когда чат открыт — скрываем ВСЕ launcher-элементы во всех мобильных режимах */
+.zw.zw-mobile.zw-open .zw-fab,
+.zw.zw-mobile.zw-open .zw-launcher-card,
+.zw.zw-mobile.zw-open .zw-greet,
+.zw.zw-mobile.zw-open .zw-mob-invite,
+.zw.zw-mobile.zw-open .zw-inv {
+  display: none !important;
+  pointer-events: none !important;
+}
+/* Затемняющий backdrop позади мобильного окна */
+.zw.zw-mobile.zw-open::before {
+  content: "" !important;
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  z-index: 2147483646 !important;
+  animation: zw-bd-in 0.25s ease !important;
+  pointer-events: auto !important;
+}
+@keyframes zw-bd-in { from { opacity: 0; } to { opacity: 1; } }
+${(() => {
+  const mode = cfg.mobile_window_mode || "fullscreen";
+  if (mode === "fullscreen") {
+    return `
+      .zw.zw-mobile .zw-win {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        max-height: 100dvh !important;
+        border-radius: 0 !important;
+        z-index: 2147483647 !important;
+        height: 100vh !important;
+        height: 100svh !important;
+        height: 100dvh !important;
+        transform: translateY(100%) !important;
+        opacity: 0 !important;
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease !important;
+        pointer-events: none !important;
+      }
+      .zw.zw-mobile .zw-win.open {
+        transform: translateY(0) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+    `;
+  }
+  if (mode === "bottom_sheet") {
+    return `
+      .zw.zw-mobile .zw-win {
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        top: auto !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 80vh !important;
+        height: 80svh !important;
+        height: 80dvh !important;
+        max-height: 80dvh !important;
+        border-radius: 22px 22px 0 0 !important;
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.30) !important;
+        z-index: 2147483647 !important;
+        transform: translate3d(0, 100%, 0) !important;
+        opacity: 0 !important;
+        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease !important;
+        pointer-events: none !important;
+        will-change: transform !important;
+        backface-visibility: hidden !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+      }
+      .zw.zw-mobile .zw-win.open {
+        transform: translate3d(0, 0, 0) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
+      /* Маленький handle сверху шторки — визуальная подсказка */
+      .zw.zw-mobile .zw-win.open::after {
+        content: "" !important;
+        position: absolute !important;
+        top: 8px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 40px !important;
+        height: 4px !important;
+        background: rgba(0,0,0,0.18) !important;
+        border-radius: 2px !important;
+        z-index: 11 !important;
+      }
+    `;
+  }
+  // popup
+  return `
+    .zw.zw-mobile .zw-win {
+      position: fixed !important;
+      left: 8px !important;
+      right: 8px !important;
+      bottom: 80px !important;
+      top: auto !important;
+      width: auto !important;
+      max-width: none !important;
+      height: auto !important;
+      max-height: 70vh !important;
+      border-radius: 20px !important;
+      z-index: 2147483647 !important;
+      transform: scale(0.85) translateY(20px) !important;
+      opacity: 0 !important;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease !important;
+      pointer-events: none !important;
     }
-    if (mode === "bottom_sheet") {
-      return ".zw-win{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;max-width:100%;height:75vh;height:75dvh;max-height:75dvh;border-radius:22px 22px 0 0;box-shadow:0 -8px 28px rgba(0,0,0,0.18);z-index:2147483647;}.zw-win.open~.zw-fab{display:none;}";
+    .zw.zw-mobile .zw-win.open {
+      transform: scale(1) translateY(0) !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
     }
-    // popup
-    return ".zw-win{position:fixed;left:8px;right:8px;bottom:80px;top:auto;width:auto;max-width:none;height:auto;max-height:70vh;border-radius:20px;z-index:2147483647;}";
-  })()}
-  .zw-launcher-card{${(cfg.mobile_launcher_type === "card" || (cfg.mobile_launcher_type === "inherit" && cfg.launcher_type === "card")) ? "display:flex;max-width:280px;" : "display:none;"}}
-  .zw-hdr{padding:14px 16px;padding-top:max(14px, env(safe-area-inset-top, 0px));position:sticky;top:0;z-index:10;flex-shrink:0;}
-  .zw-comp{padding:10px 12px;padding-bottom:max(10px, env(safe-area-inset-bottom, 0px));padding-right:max(12px, env(safe-area-inset-right, 0px));padding-left:max(12px, env(safe-area-inset-left, 0px));position:sticky;bottom:0;z-index:10;flex-shrink:0;}
-  .zw-offline{padding-bottom:max(12px, env(safe-area-inset-bottom, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-left:max(16px, env(safe-area-inset-left, 0px));}
-  .zw-msgs{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-  .zw-inp{font-size:16px;}
+  `;
+})()}
+.zw.zw-mobile .zw-hdr {
+  padding: 14px 16px !important;
+  padding-top: max(14px, env(safe-area-inset-top, 0px)) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  flex-shrink: 0 !important;
+}
+.zw.zw-mobile .zw-comp {
+  padding: 10px 12px !important;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+  padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 10 !important;
+  flex-shrink: 0 !important;
+}
+.zw.zw-mobile .zw-offline {
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  padding-right: max(16px, env(safe-area-inset-right, 0px)) !important;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)) !important;
+}
+.zw.zw-mobile .zw-msgs {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.zw.zw-mobile .zw-inp {
+  font-size: 16px !important;
+}
 
-  /* Мобильное приглашение поверх FAB */
-  .zw-mob-invite{position:absolute;bottom:calc(var(--fab-size) + 20px);${side}:0;background:#fff;color:#1c1917;padding:10px 14px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:13px;font-weight:600;max-width:220px;white-space:normal;cursor:pointer;animation:zw-mob-pop .35s cubic-bezier(.16,1,.3,1);}
-  .zw-mob-invite::after{content:"";position:absolute;bottom:-6px;${side}:24px;width:12px;height:12px;background:#fff;transform:rotate(45deg);box-shadow:2px 2px 4px rgba(0,0,0,0.06);}
-  .zw-mob-invite-x{position:absolute;top:-8px;${isR ? "left" : "right"}:-8px;width:22px;height:22px;border-radius:50%;background:#1c1917;color:#fff;border:none;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.2);}
-  @keyframes zw-mob-pop{from{opacity:0;transform:scale(0.7) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
+/* Мобильное приглашение поверх FAB */
+.zw.zw-mobile .zw-mob-invite {
+  position: absolute !important;
+  bottom: calc(var(--fab-size) + 20px) !important;
+  ${side}: 16px !important;
+  background: #fff !important;
+  color: #1c1917 !important;
+  padding: 10px 14px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  max-width: 220px !important;
+  white-space: normal !important;
+  cursor: pointer !important;
+  animation: zw-mob-pop .35s cubic-bezier(.16,1,.3,1) !important;
+}
+.zw.zw-mobile .zw-mob-invite::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: -6px !important;
+  ${side}: 24px !important;
+  width: 12px !important;
+  height: 12px !important;
+  background: #fff !important;
+  transform: rotate(45deg) !important;
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.06) !important;
+}
+.zw.zw-mobile .zw-mob-invite-x {
+  position: absolute !important;
+  top: -8px !important;
+  ${isR ? "left" : "right"}: -8px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 50% !important;
+  background: #1c1917 !important;
+  color: #fff !important;
+  border: none !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+}
+@keyframes zw-mob-pop {
+  from { opacity: 0; transform: scale(0.7) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 ${safeCss}`;
   }
@@ -627,16 +868,25 @@ ${safeCss}`;
     if (existingLb) shadow.removeChild(existingLb);
     if (state.lightboxUrl) renderLightbox();
 
+    // Support container-based previewSize
+    const isMobileViewport = (window.__zsPreviewConfig && window.__zsPreviewConfig.previewSize)
+      ? (window.__zsPreviewConfig.previewSize === "mobile" || window.__zsPreviewConfig.previewSize === "tablet")
+      : (window.innerWidth <= 480 || /Mobi|Android/i.test(navigator.userAgent));
+
     // 2. Reuse or create Root container
     let root = shadow.querySelector(".zw");
     if (!root) {
       root = document.createElement("div");
-      root.className = "zw";
       root.setAttribute("role", "region");
       shadow.appendChild(root);
     }
+    root.className = "zw" + (isMobileViewport ? " zw-mobile" : "") + (state.open ? " zw-open" : "");
     root.setAttribute("aria-label", cfg.header_title || "Онлайн-чат");
     state.refs.root = root;
+
+    if (state.open && document.body && document.body.lastChild !== host) {
+      try { document.body.appendChild(host); } catch(e) {}
+    }
 
     // 3. Remove temporary elements from root so we can rebuild them, but KEEP 'win' and 'fab'
     const existingWin = shadow.querySelector(".zw-win");
@@ -650,14 +900,13 @@ ${safeCss}`;
     });
 
     // 4. Greeting (only for icon_only launcher)
-    const isMobileViewport = window.innerWidth <= 480;
     const mobileLT = cfg.mobile_launcher_type;
     const lt = (isMobileViewport && mobileLT && mobileLT !== "inherit")
       ? mobileLT
       : (cfg.launcher_type || "icon_only");
-    const greetSeen = cfg.greet_once === true && localStorage.getItem("zs_greet_seen") === "1";
+    const greetSeen = cfg.greet_once === true && !window.__zsPreviewConfig && localStorage.getItem("zs_greet_seen") === "1";
     if (!state.open && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen) {
-      if (cfg.greet_once === true) {
+      if (cfg.greet_once === true && !window.__zsPreviewConfig) {
         try { localStorage.setItem("zs_greet_seen", "1"); } catch (e) { /* ignore */ }
       }
       const g = document.createElement("div");
@@ -674,7 +923,8 @@ ${safeCss}`;
     }
 
     // 5. Launcher card
-    if (!state.open && lt === "card") {
+    const cardDismissed = state.cardDismissed;
+    if (!state.open && lt === "card" && !cardDismissed) {
       const lc = document.createElement("div");
       lc.className = "zw-launcher-card";
       const lcAva = document.createElement("div");
@@ -702,7 +952,14 @@ ${safeCss}`;
       const lcClose = document.createElement("div");
       lcClose.className = "zw-launcher-close";
       lcClose.textContent = "\u00d7";
-      lcClose.onclick = (e) => { e.stopPropagation(); lc.style.display = "none"; };
+      lcClose.onclick = (e) => {
+        e.stopPropagation();
+        state.cardDismissed = true;
+        if (!window.__zsPreviewConfig) {
+          try { sessionStorage.setItem("zs_card_dismissed", "1"); } catch(err) {}
+        }
+        scheduleRender();
+      };
       lc.appendChild(lcClose);
       lc.onclick = (e) => {
         if (e.target === lcClose) return;
@@ -788,16 +1045,22 @@ ${safeCss}`;
     fab.setAttribute("aria-label", state.open ? "Закрыть чат" : "Открыть чат");
 
     const icon = IC[cfg.button_icon] || IC.chat;
-    if (!state.open && (lt === "icon_text" || lt === "text_only")) {
-      fab.className = "zw-fab zw-fab-text";
-      if (lt !== "text_only") fab.innerHTML = icon;
-      const lbl = document.createElement("span");
-      lbl.className = "zw-fab-label";
-      lbl.textContent = cfg.launcher_text || cfg.button_text || "Помощь";
-      fab.appendChild(lbl);
+    const isCardVisible = !state.open && lt === "card" && !cardDismissed;
+    if (isCardVisible) {
+      fab.style.display = "none";
     } else {
-      fab.className = "zw-fab";
-      fab.innerHTML = state.open ? IC.close : icon;
+      fab.style.display = "flex";
+      if (!state.open && (lt === "icon_text" || lt === "text_only")) {
+        fab.className = "zw-fab zw-fab-text";
+        if (lt !== "text_only") fab.innerHTML = icon;
+        const lbl = document.createElement("span");
+        lbl.className = "zw-fab-label";
+        lbl.textContent = cfg.launcher_text || cfg.button_text || "Помощь";
+        fab.appendChild(lbl);
+      } else {
+        fab.className = "zw-fab";
+        fab.innerHTML = state.open ? IC.close : icon;
+      }
     }
 
     if (!state.open && cfg.launcher_pulse !== false && lt === "icon_only") {
@@ -819,7 +1082,7 @@ ${safeCss}`;
 
     fab.onclick = () => {
       if (state.open) {
-        state.open = false;
+        closeChat();
         if (cfg.remember_open_state !== false) {
           try { localStorage.setItem("zs_widget_open", "0"); } catch (e) { /* ignore */ }
         }
@@ -838,7 +1101,7 @@ ${safeCss}`;
     }
 
     // 9. Мобильное мини-приглашение поверх FAB
-    if (isMobileViewport && !state.open && cfg.mobile_invitation_enabled !== false && !state.mobileInviteDismissed && state.mobileInviteShown) {
+    if (isMobileViewport && !state.open && lt !== "card" && cfg.mobile_invitation_enabled !== false && !state.mobileInviteDismissed && state.mobileInviteShown) {
       const inv = document.createElement("div");
       inv.className = "zw-mob-invite";
       inv.textContent = cfg.mobile_invitation_text || "Нужна помощь? Нажмите!";
@@ -871,6 +1134,20 @@ ${safeCss}`;
         } else {
           newMsgs.scrollTop = prevScrollTop;
         }
+        // Когда картинки в сообщениях догрузились — они меняют высоту,
+        // поэтому повторно скроллим вниз если до этого были внизу.
+        if (wasAtBottom || prevScrollHeight === 0) {
+          const imgs = newMsgs.querySelectorAll("img");
+          imgs.forEach((img) => {
+            if (!img.complete) {
+              img.addEventListener("load", () => {
+                // Только если пользователь не отскроллил вверх вручную
+                const distFromBottom = newMsgs.scrollHeight - newMsgs.scrollTop - newMsgs.clientHeight;
+                if (distFromBottom < 200) newMsgs.scrollTop = newMsgs.scrollHeight;
+              }, { once: true });
+            }
+          });
+        }
       }
     }
 
@@ -879,35 +1156,79 @@ ${safeCss}`;
       const firstFocus = shadow.querySelector(".zw-inp") || shadow.querySelector(".zw-hdr-btn");
       if (firstFocus) setTimeout(() => firstFocus.focus(), 100);
     }
-    // Fix mobile keyboard resize
-    if (state.open && window.visualViewport && window.innerWidth <= 480) {
-      const vv = window.visualViewport;
-      const winEl = shadow.querySelector(".zw-win");
-      if (winEl) {
-        const applyVV = () => {
-          winEl.style.height = vv.height + "px";
-          winEl.style.top = vv.offsetTop + "px";
-        };
-        vv.addEventListener("resize", applyVV);
-        vv.addEventListener("scroll", applyVV);
-        applyVV();
+    // visualViewport handler намеренно НЕ используем — он вызывал «прыжки» при
+    // появлении/исчезновении клавиатуры. Вместо него полагаемся на `100dvh`
+    // в CSS (dynamic viewport height) — современные браузеры (iOS 15.4+, Android
+    // Chrome 108+) автоматически учитывают клавиатуру.
+    // Подчищаем старые подписки, если были.
+    if (window.visualViewport && state._lastApplyVV) {
+      try {
+        window.visualViewport.removeEventListener("resize", state._lastApplyVV);
+        window.visualViewport.removeEventListener("scroll", state._lastApplyVV);
+      } catch(e) {}
+      state._lastApplyVV = null;
+    }
+  }
+
+  // Lock/unlock скролла body на мобильном (чтобы сайт не съезжал за шторкой)
+  function lockBodyScroll() {
+    // НЕ используем position:fixed — это вызывает «прыжки» (страница телепортируется).
+    // Используем overflow:hidden на html — мягче и сохраняет scroll-позицию.
+    try {
+      const mobileOpen = window.innerWidth <= 480 || /Mobi|Android/i.test(navigator.userAgent);
+      if (mobileOpen && document.documentElement && !document.documentElement.dataset.zsLocked) {
+        document.documentElement.dataset.zsLocked = "1";
+        document.documentElement.dataset.zsPrevOverflow = document.documentElement.style.overflow || "";
+        document.documentElement.style.overflow = "hidden";
+        // Дополнительно фиксируем touchmove на body чтобы остановить iOS rubber-band scroll
+        document.body && document.body.addEventListener("touchmove", preventTouchMove, { passive: false });
       }
-    } 
+    } catch (e) { /* ignore */ }
+  }
+  function preventTouchMove(e) {
+    // Разрешаем скролл внутри виджета (Shadow DOM), блокируем за его пределами.
+    const path = e.composedPath ? e.composedPath() : [];
+    const inWidget = path.some((node) => node === host);
+    if (!inWidget) {
+      try { e.preventDefault(); } catch (_) { /* ignore */ }
+    }
+  }
+  function unlockBodyScroll() {
+    try {
+      if (document.documentElement && document.documentElement.dataset.zsLocked === "1") {
+        document.documentElement.style.overflow = document.documentElement.dataset.zsPrevOverflow || "";
+        delete document.documentElement.dataset.zsLocked;
+        delete document.documentElement.dataset.zsPrevOverflow;
+        document.body && document.body.removeEventListener("touchmove", preventTouchMove);
+      }
+    } catch (e) { /* ignore */ }
+  }
+  function closeChat() {
+    state.open = false;
+    unlockBodyScroll();
   }
 
   function openChat() {
     state.open = true;
     state.unread = 0;
     markVisibleAsRead();
+
+    // Перемещаем хост на самый верх дерева DOM, чтобы z-index работал безотказно
+    if (document.body && document.body.lastChild !== host) {
+      try { document.body.appendChild(host); } catch(e) {}
+    }
+
+    lockBodyScroll();
+
     const cfg = state.config || {};
-    if (cfg.remember_open_state !== false) {
+    if (cfg.remember_open_state !== false && !window.__zsPreviewConfig) {
       try { localStorage.setItem("zs_widget_open", "1"); } catch (e) { /* ignore */ }
     }
     // Сброс таймера авто-сворачивания
     if (state._autoMinTimer) { clearTimeout(state._autoMinTimer); state._autoMinTimer = null; }
     if ((cfg.auto_minimize_after || 0) > 0) {
       state._autoMinTimer = setTimeout(() => {
-        state.open = false;
+        closeChat();
         scheduleRender();
       }, cfg.auto_minimize_after * 1000);
     }
@@ -915,11 +1236,24 @@ ${safeCss}`;
       state._abTrackedOpen = true;
       api("POST", "/api/widget/ab-track", { variant: cfg._ab_variant, event: "opened", visitor_id: state.visitorId });
     }
+
+    // При открытии чата с историей — гарантированно проскроллить вниз к последнему сообщению.
+    // Делаем несколько вызовов: сразу, после рендера, после загрузки картинок.
+    requestAnimationFrame(() => scrollBottom(true));
+    setTimeout(() => scrollBottom(true), 50);
+    setTimeout(() => scrollBottom(true), 200);
+    setTimeout(() => scrollBottom(true), 500);
   }
 
-  function scrollBottom() {
+  function scrollBottom(force) {
     const el = shadow.getElementById("zw-msgs");
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (force) {
+      // принудительно — без анимации
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   }
 
   function updateTypingIndicator() {
@@ -1043,7 +1377,7 @@ ${safeCss}`;
     closeBtn.className = "zw-hdr-btn";
     closeBtn.innerHTML = IC.close;
     closeBtn.setAttribute("aria-label", "Закрыть чат");
-    closeBtn.onclick = () => { state.open = false; scheduleRender(); };
+    closeBtn.onclick = () => { closeChat(); scheduleRender(); };
     acts.appendChild(closeBtn);
     h.appendChild(acts);
 
@@ -1113,6 +1447,13 @@ ${safeCss}`;
       inp.placeholder = f.placeholder || f.label;
       inp.setAttribute("aria-label", f.label);
       if (f.name === "name" && state.visitorName) inp.value = state.visitorName;
+      if (state.prechatDrafts && state.prechatDrafts[f.name] !== undefined) {
+        inp.value = state.prechatDrafts[f.name];
+      }
+      inp.oninput = () => {
+        if (!state.prechatDrafts) state.prechatDrafts = {};
+        state.prechatDrafts[f.name] = inp.value;
+      };
       inputs[f.name] = inp;
       wrap.appendChild(inp);
       fieldsWrap.appendChild(wrap);
@@ -1149,6 +1490,8 @@ ${safeCss}`;
       });
 
       if (!ok) return;
+
+      state.prechatDrafts = {};
 
       if (inputs.name) {
         state.visitorName = inputs.name.value.trim();
@@ -1446,13 +1789,14 @@ ${safeCss}`;
     typ.className = "zw-typ" + (state.typing ? " show" : "");
     state.refs.typingEl = typ;
     const tAva = document.createElement("div");
-    tAva.className = state.session?.status === "with_operator" ? "zw-ava op" : "zw-ava ai";
-    tAva.textContent = state.session?.status === "with_operator" ? "\uD83D\uDC68\u200D\uD83D\uDCBC" : "\uD83E\uDD16";
+    const isHuman = state.session?.status === "with_operator" || state.session?.status === "waiting_operator";
+    tAva.className = isHuman ? "zw-ava op" : "zw-ava ai";
+    tAva.textContent = isHuman ? "\uD83D\uDC68\u200D\uD83D\uDCBC" : "\uD83E\uDD16";
     typ.appendChild(tAva);
     const tBbl = document.createElement("div");
     tBbl.className = "zw-typ-bbl";
     tBbl.innerHTML = '<div class="zw-typ-dots"><span></span><span></span><span></span></div><span class="zw-typ-lbl">' +
-      (state.session?.status === "with_operator" ? "Оператор" : "AI-бот") + " печатает...</span>";
+      (isHuman ? "Оператор" : "AI-бот") + " печатает...</span>";
     typ.appendChild(tBbl);
     c.appendChild(typ);
 
@@ -1628,7 +1972,11 @@ ${safeCss}`;
     inp.placeholder = "Введите сообщение...";
     inp.setAttribute("aria-label", "Введите сообщение");
     inp.rows = 1;
+    if (state.visitorDraftMessage) {
+      inp.value = state.visitorDraftMessage;
+    }
     inp.oninput = () => {
+      state.visitorDraftMessage = inp.value;
       inp.style.height = "auto";
       inp.style.height = Math.min(inp.scrollHeight, 100) + "px";
       emitTyping();
@@ -1668,7 +2016,7 @@ ${safeCss}`;
       setTimeout(() => {
         state.showRating = false;
         state.ratingSubmitted = false;
-        state.open = false;
+        closeChat();
         resetChat();
         scheduleRender();
       }, 2500);
@@ -1726,7 +2074,7 @@ ${safeCss}`;
     skip.textContent = "Пропустить";
     skip.onclick = () => {
       state.showRating = false;
-      state.open = false;
+      closeChat();
       resetChat();
       scheduleRender();
     };
@@ -1844,6 +2192,7 @@ ${safeCss}`;
     if (!text || !state.session || state.sending) return;
     inp.value = "";
     inp.style.height = "auto";
+    state.visitorDraftMessage = "";
 
     // A/B tracking
     const cfg2 = state.config || {};
@@ -1876,8 +2225,9 @@ ${safeCss}`;
     // Offline AI Auto-response & Lead form capture (Task 30)
     const hasOnlineOperator = state.teamOperators && state.teamOperators.some(op => op.status === "online");
     const isOfflineMode = state.isOffline || !hasOnlineOperator;
+    const isAiSession = !state.session || state.session.status === "ai";
 
-    if (isOfflineMode && !state.showOfflineLeadForm && !state.offlineFormSent) {
+    if (isAiSession && isOfflineMode && !state.showOfflineLeadForm && !state.offlineFormSent) {
       setTimeout(async () => {
         const botMsgText = "Я сейчас оффлайн, но подключусь в ближайшее время. Оставьте ваши контакты, и я сразу свяжусь с вами!";
         
@@ -1932,9 +2282,18 @@ ${safeCss}`;
     scheduleRender();
   }
 
+  var _lastTypingEmit = 0;
   function emitTyping() {
     if (!state.socket || !state.session) return;
-    state.socket.emit("typing", { sessionId: state.session.id, sender: "visitor" });
+    // Троттлинг: не чаще раза в 2с, иначе сокет флудит событиями на каждое нажатие.
+    var now = Date.now();
+    if (now - _lastTypingEmit < 2000) return;
+    _lastTypingEmit = now;
+    state.socket.emit("typing", {
+      sessionId: state.session.id,
+      session_id: state.session.id,
+      sender: "visitor"
+    });
   }
 
   async function submitRating(rating, comment) {
@@ -2068,6 +2427,7 @@ ${safeCss}`;
         state.isOffline = checkOffline();
         if (wasOffline !== state.isOffline) scheduleRender();
       }
+      loadTeamOperators();
     }, 5000);
   }
 
@@ -2093,13 +2453,12 @@ ${safeCss}`;
 
   // ═══ SOCKET.IO ═══
   function connectSocket(sid) {
-    // Уже есть сокет — просто заджойнить комнату (один раз) и подвесить хендлеры (один раз).
     if (state.socket) {
       if (!state.socket._handlersAttached) {
         setupSessionHandlers(state.socket, sid);
       }
-      if (state.socket.connected && !state.socket._joinedSession) {
-        state.socket._joinedSession = true;
+      if (state.socket.connected && state.socket._joinedSessionId !== sid) {
+        state.socket._joinedSessionId = sid;
         state.socket.emit("join_session", sid);
       }
       scheduleRender();
@@ -2107,7 +2466,7 @@ ${safeCss}`;
     }
 
     const script = document.createElement("script");
-    script.src = API_BASE + "/socket.io/socket.io.js";
+    script.src = API_BASE + "/socket.io/socket.io.min.js"; // минифицированная сборка клиента (−~24 КиБ)
     script.onload = () => {
       const ioLib = window.io;
       if (!ioLib) return;
@@ -2117,16 +2476,17 @@ ${safeCss}`;
 
       socket.on("connect", () => {
         state.connected = true;
-        if (!socket._joinedSession) {
-          socket._joinedSession = true;
-          socket.emit("join_session", sid);
+        const currentSid = state.session?.id || sid;
+        if (socket._joinedSessionId !== currentSid) {
+          socket._joinedSessionId = currentSid;
+          socket.emit("join_session", currentSid);
         }
         startVisitorPingTimers(socket);
         scheduleRender();
       });
 
       socket.on("disconnect", () => {
-        socket._joinedSession = false;
+        socket._joinedSessionId = null;
         state.connected = false;
         stopVisitorPingTimers();
         scheduleRender();
@@ -2167,11 +2527,15 @@ ${safeCss}`;
 
   function sendVisitorPing() {
     if (!state.socket?.connected) return;
+    const utm = getUtm();
     state.socket.emit("visitor_ping", {
       visitor_id: state.visitorId,
       page: location.href,
       title: document.title,
       referrer: document.referrer || "",
+      utm_source: utm.utm_source,
+      utm_medium: utm.utm_medium,
+      utm_campaign: utm.utm_campaign,
       browser: detectBrowser(),
       os: detectOS(),
       language: navigator.language || "",
@@ -2204,7 +2568,8 @@ ${safeCss}`;
     socket._handlersAttached = true;
 
     socket.on("new_message", (msg) => {
-      if (msg.session_id !== sid) return;
+      const currentSid = state.session?.id || sid;
+      if (String(msg.session_id) !== String(currentSid)) return;
       if (msg.sender === "visitor") {
         state.messages = state.messages.filter((m) => {
           return !(m.id && String(m.id).indexOf("t_") === 0 && m.message === msg.message);
@@ -2223,13 +2588,15 @@ ${safeCss}`;
       } else if (msg.sender === "operator") {
         state.deliveredIds[msg.id] = true;
         state.readIds[msg.id] = true;
-        api("PATCH", "/api/widget/sessions/" + sid + "/messages/read", { message_ids: [msg.id] });
+        api("PATCH", "/api/widget/sessions/" + currentSid + "/messages/read", { message_ids: [msg.id] });
       }
       scheduleRender();
     });
 
     socket.on("typing", (data) => {
-      if (data.sessionId !== sid || data.sender === "visitor") return;
+      const dataSid = data.sessionId || data.session_id;
+      const currentSid = state.session?.id || sid;
+      if (String(dataSid) !== String(currentSid) || data.sender === "visitor") return;
       state.typing = true;
       updateTypingIndicator();
       clearTimeout(state.typingTimeout);
@@ -2240,7 +2607,8 @@ ${safeCss}`;
     });
 
     socket.on("message_status_changed", (data) => {
-      if (data.session_id !== sid) return;
+      const currentSid = state.session?.id || sid;
+      if (String(data.session_id) !== String(currentSid)) return;
       data.messages.forEach((u) => {
         state.messages.forEach((m) => {
           if (m.id === u.id) {
@@ -2254,12 +2622,16 @@ ${safeCss}`;
     });
     socket.on("reaction_updated", (data) => {
       if (!data.message_id) return;
-      api("GET", "/api/widget/sessions/" + sid + "/messages").then(function(msgs) {
+      const currentSid = state.session?.id || sid;
+      api("GET", "/api/widget/sessions/" + currentSid + "/messages").then(function(msgs) {
         if (Array.isArray(msgs)) {
           state.messages = msgs;
           scheduleRender();
         }
       });
+    });
+    socket.on("operator_status_changed", () => {
+      loadTeamOperators();
     });
   }
 
@@ -2549,10 +2921,28 @@ ${safeCss}`;
   async function loadTeamOperators() {
     const data = await api("GET", "/api/widget/team");
     if (Array.isArray(data)) {
+      const changed = JSON.stringify(data) !== JSON.stringify(state.teamOperators);
       state.teamOperators = data;
-      scheduleRender();
+      if (changed) {
+        scheduleRender();
+      }
     } else {
+      const changed = state.teamOperators && state.teamOperators.length > 0;
       state.teamOperators = [];
+      if (changed) {
+        scheduleRender();
+      }
+    }
+  }
+
+  function ensurePreviewTeam() {
+    if (!window.__zsPreviewConfig) return;
+    if (state.config && state.config.team_mode && (!state.teamOperators || !state.teamOperators.length)) {
+      state.teamOperators = [
+        { id: "demo1", name: "Анна", avatar_url: null },
+        { id: "demo2", name: "Иван", avatar_url: null },
+        { id: "demo3", name: "Мария", avatar_url: null }
+      ];
     }
   }
 
@@ -2562,9 +2952,15 @@ ${safeCss}`;
     window.addEventListener("message", (event) => {
       if (event.data && event.data.type === "ZS_PREVIEW_UPDATE") {
         const payload = event.data.payload || {};
+        if (event.data.previewSize) {
+          if (!window.__zsPreviewConfig) window.__zsPreviewConfig = {};
+          window.__zsPreviewConfig.previewSize = event.data.previewSize;
+        }
         if (payload.widget_config) {
           state.config = payload.widget_config;
           loadFont(state.config);
+          state.cardDismissed = false; // Reset dismissed state to show updated card styling immediately
+          ensurePreviewTeam();
         }
         if (payload.prechat_form) {
           state.prechat = payload.prechat_form;
@@ -2573,11 +2969,14 @@ ${safeCss}`;
           state.businessHours = payload.business_hours;
           state.isOffline = checkOffline();
         }
-        if (event.data.forceOpen) {
-          state.open = true;
-          if (payload.prechat_form?.enabled && !event.data.skipPrechatPreview) {
+        if (event.data.forceOpen !== undefined) {
+          state.open = !!event.data.forceOpen;
+          if (state.open && payload.prechat_form?.enabled && !event.data.skipPrechatPreview) {
             state.prechatDone = false;
           }
+        }
+        if (event.data.skipPrechatPreview !== undefined) {
+          state.prechatDone = !!event.data.skipPrechatPreview;
         }
         scheduleRender();
       }
@@ -2627,17 +3026,29 @@ ${safeCss}`;
     // Load font
     loadFont(state.config);
 
-    // Load team operators
+    // Load team operators (в превью — демо-состав, реальный API замокан)
     if (state.config.team_mode) {
-      loadTeamOperators();
+      if (window.__zsPreviewConfig) {
+        ensurePreviewTeam();
+      } else {
+        loadTeamOperators();
+      }
+    }
+
+    // В превью всегда показываем раскрытый виджет, чтобы было видно оформление шапки/цветов.
+    // Точное состояние (открыт / пречат-форма) дальше уточняет postMessage от экрана настроек.
+    if (window.__zsPreviewConfig) {
+      state.cardDismissed = false;
+      state.open = true;
+      state.prechatDone = true;
     }
 
     render();
 
-    // Light socket for invitations
-    if (!state.socket) {
+    // Light socket for invitations (only in normal mode, skip in preview)
+    if (!window.__zsPreviewConfig && !state.socket) {
       const invScript = document.createElement("script");
-      invScript.src = API_BASE + "/socket.io/socket.io.js";
+      invScript.src = API_BASE + "/socket.io/socket.io.min.js"; // минифицированная сборка клиента (−~24 КиБ)
       invScript.onload = () => {
         const ioLib = window.io;
         if (!ioLib || state.socket) return;
@@ -2646,11 +3057,15 @@ ${safeCss}`;
 
         lightSocket.on("connect", () => {
           state.connected = true;
+          const utm = getUtm();
           lightSocket.emit("visitor_ping", {
             visitor_id: state.visitorId,
             page: location.href,
             title: document.title,
             referrer: document.referrer || "",
+            utm_source: utm.utm_source,
+            utm_medium: utm.utm_medium,
+            utm_campaign: utm.utm_campaign,
             browser: navigator.userAgent.indexOf("Chrome") > -1 ? "Chrome" : "Other",
             os: navigator.userAgent.indexOf("Win") > -1 ? "Windows" : "Other",
             language: navigator.language || "",
@@ -2674,10 +3089,10 @@ ${safeCss}`;
       document.head.appendChild(invScript);
     }
 
-    if (state.prechatDone) resumeSession();
+    if (!window.__zsPreviewConfig && state.prechatDone) resumeSession();
 
     // Мобильное приглашение «Нажми на меня» — показать после задержки
-    if (window.innerWidth <= 480 && state.config.mobile_invitation_enabled !== false) {
+    if (!window.__zsPreviewConfig && window.innerWidth <= 480 && state.config.mobile_invitation_enabled !== false) {
       const delay = Math.max(0, state.config.mobile_invitation_delay ?? 5) * 1000;
       setTimeout(() => {
         if (!state.open && !state.mobileInviteDismissed) {
@@ -2688,7 +3103,7 @@ ${safeCss}`;
     }
 
     // Восстановление состояния "открыто" между визитами
-    if (state.config.remember_open_state !== false) {
+    if (!window.__zsPreviewConfig && state.config.remember_open_state !== false) {
       try {
         if (localStorage.getItem("zs_widget_open") === "1" && state.prechatDone) {
           setTimeout(() => { openChat(); scheduleRender(); }, 300);
@@ -2697,7 +3112,7 @@ ${safeCss}`;
     }
 
     // Auto open delay
-    if (state.config.auto_open_delay > 0 && !state.prechatDone) {
+    if (!window.__zsPreviewConfig && state.config.auto_open_delay > 0 && !state.prechatDone) {
       const wasAuto = sessionStorage.getItem("zw_auto");
       if (!wasAuto) {
         setTimeout(() => {
@@ -2711,7 +3126,9 @@ ${safeCss}`;
     }
 
     // Setup triggers
-    setupTriggers(state.config);
+    if (!window.__zsPreviewConfig) {
+      setupTriggers(state.config);
+    }
 
     // Auto theme: listen for changes
     if (state.config.theme === "auto") {
@@ -2721,6 +3138,13 @@ ${safeCss}`;
         });
       } catch(e) {}
     }
+
+    // Listen for window resize to handle preview size changes dynamically
+    window.addEventListener("resize", () => {
+      if (window.__zsPreviewConfig) {
+        scheduleRender();
+      }
+    });
   }
 
   if (document.readyState === "loading") {

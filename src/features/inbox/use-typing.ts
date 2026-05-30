@@ -19,8 +19,9 @@ export function useTypingIndicator() {
 
     const socket = getSocket();
 
-    const handleTyping = (data: { sessionId: string; sender: string }) => {
-      if (data.sessionId === activeSession.id && data.sender === "visitor") {
+    const handleTyping = (data: { sessionId?: string; session_id?: string; sender: string }) => {
+      const dataSid = data.sessionId || data.session_id;
+      if (dataSid === activeSession.id && data.sender === "visitor") {
         setIsVisitorTyping(true);
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -46,6 +47,7 @@ export function useTypingIndicator() {
     const socket = getSocket();
     socket.emit("typing", {
       sessionId: activeSession.id,
+      session_id: activeSession.id,
       sender: "operator",
     });
   }, [activeSession?.id, operator?.id]);

@@ -1,8 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { readFileSync } from "node:fs";
+
+const pkg = JSON.parse(
+  readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+) as { version: string };
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [react()],
   resolve: {
     alias: {
@@ -12,26 +20,6 @@ export default defineConfig({
   css: {
     modules: {
       localsConvention: "camelCase",
-    },
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("@monaco-editor") || id.includes("monaco-editor")) {
-              return "monaco";
-            }
-            if (id.includes("react") || id.includes("react-dom")) {
-              return "react-core";
-            }
-            if (id.includes("framer-motion") || id.includes("lucide-react")) {
-              return "animations-icons";
-            }
-            return "vendor";
-          }
-        },
-      },
     },
   },
   server: {

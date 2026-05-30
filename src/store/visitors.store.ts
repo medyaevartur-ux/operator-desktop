@@ -9,7 +9,7 @@ export function calculateLeadScore(visitor: SiteVisitor): number {
   score += (visitor.session_count || 1) * 10;
 
   // 2. VIP статус
-  if ((visitor as any).is_vip === true) {
+  if (visitor.is_vip === true) {
     score += 40;
   }
 
@@ -42,11 +42,24 @@ export function calculateLeadScore(visitor: SiteVisitor): number {
   return Math.min(100, Math.max(0, score));
 }
 
+// Посетитель считается онлайн, только если бэкенд отметил его онлайн И последняя
+// активность была недавно. Это убирает «призрачных» онлайн (когда событие
+// visitor_left потерялось, а is_online остался true).
+const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;
+
+function isEffectivelyOnline(v: SiteVisitor): boolean {
+  if (!v.is_online) return false;
+  const last = new Date(v.last_seen_at).getTime();
+  if (Number.isNaN(last)) return true; // нет даты — доверяем флагу
+  return Date.now() - last < ONLINE_THRESHOLD_MS;
+}
+
 function processAndSortVisitors(list: SiteVisitor[]): SiteVisitor[] {
   return list
     .filter((v) => !v.is_blocked)
     .map((v) => ({
       ...v,
+      is_online: isEffectivelyOnline(v),
       score: calculateLeadScore(v),
     }))
     .sort((a, b) => {

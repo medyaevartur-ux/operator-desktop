@@ -44,7 +44,7 @@
 .input:focus {
   border-color: var(--border-focus);
   background: var(--surface-1);
-  box-shadow: 0 0 0 3px rgba(124, 92, 191, 0.12);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 .hasIcon {

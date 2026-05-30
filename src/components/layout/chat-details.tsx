@@ -568,7 +568,7 @@ export function ChatDetails() {
                     type="button"
                     className={activeSession.is_vip ? `${s.smallBtn} ${s.smallBtnDanger}` : `${s.smallBtn} ${s.smallBtnAccent}`}
                     onClick={async () => {
-                      await setSessionPriority(activeSession.id, undefined as any, !activeSession.is_vip, operator?.id);
+                      await setSessionPriority(activeSession.id, undefined, !activeSession.is_vip, operator?.id);
                       void useInboxStore.getState().loadSessions();
                     }}
                   >

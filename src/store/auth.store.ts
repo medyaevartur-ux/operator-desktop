@@ -1,6 +1,24 @@
 import { create } from "zustand";
-import { api, setToken, removeToken } from "@/lib/api";
+import { api, setToken, removeToken, isTokenExpired } from "@/lib/api";
 import type { ChatOperator } from "@/types/operator";
+
+// Кэш оператора — чтобы при перезапуске/возврате в приложение сессия
+// восстанавливалась мгновенно, без ожидания сети и без повторного логина.
+const OPERATOR_KEY = "chat_operator";
+function loadCachedOperator(): ChatOperator | null {
+  try {
+    const raw = localStorage.getItem(OPERATOR_KEY);
+    return raw ? (JSON.parse(raw) as ChatOperator) : null;
+  } catch {
+    return null;
+  }
+}
+function cacheOperator(op: ChatOperator) {
+  try { localStorage.setItem(OPERATOR_KEY, JSON.stringify(op)); } catch { /* ignore quota */ }
+}
+function clearCachedOperator() {
+  localStorage.removeItem(OPERATOR_KEY);
+}
 
 interface AuthUser {
   id: string;
@@ -38,6 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     setToken(data.token);
+    cacheOperator(data.operator);
 
     set({
       user: {
@@ -76,6 +95,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       unregisterFcmToken();
     }).catch(() => {});
     removeToken();
+    clearCachedOperator();
     set({
       user: null,
       operator: null,
@@ -92,9 +112,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
+    // Мгновенное восстановление сессии из кэша — приложение открывается сразу,
+    // без ожидания сети. Серверная валидация идёт фоном ниже.
+    const cached = loadCachedOperator();
+    if (cached) {
+      set({
+        user: { id: cached.id, email: cached.email ?? "", role: cached.role ?? "operator" },
+        operator: cached,
+        token,
+        isLoading: false,
+      });
+    }
+
     try {
       const data = await api<{ operator: ChatOperator }>("/api/auth/me");
-
+      cacheOperator(data.operator);
       set({
         user: {
           id: data.operator.id,
@@ -108,11 +140,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Регистрируем FCM токен для push-уведомлений (Android)
       import("@/lib/fcm").then(({ registerFcmToken }) => {
         registerFcmToken(data.operator.id);
-      }).catch(() => {});      
+      }).catch(() => {});
     } catch {
-
-      removeToken();
-      set({ user: null, operator: null, token: null, isLoading: false });
+      // Выходим в логин ТОЛЬКО если токен реально истёк. Сетевой сбой /
+      // недоступность сервера не должны разлогинивать — остаёмся в сессии.
+      if (isTokenExpired(token)) {
+        removeToken();
+        clearCachedOperator();
+        set({ user: null, operator: null, token: null, isLoading: false });
+      } else {
+        // Токен ещё валиден — снимаем индикатор загрузки и работаем с кэшем.
+        set({ isLoading: false });
+      }
     }
   },
 
@@ -133,6 +172,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   reset: () => {
     removeToken();
+    clearCachedOperator();
     set({ user: null, operator: null, token: null, isLoading: false });
   },
 }));
