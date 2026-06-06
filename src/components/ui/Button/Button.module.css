@@ -1,120 +1,88 @@
+/* MD3 Button — filled / tonal / text / error.
+   State layers через ::before (currentColor overlay), pill-радиус, label-large. */
 .button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   font-family: var(--font-sans);
-  font-weight: var(--weight-bold);
+  font-weight: 500;
+  letter-spacing: 0.1px;
   white-space: nowrap;
   user-select: none;
+  border-radius: var(--md-sys-shape-corner-full);
   transition:
     background var(--duration-fast) var(--ease-default),
     color var(--duration-fast) var(--ease-default),
     box-shadow var(--duration-fast) var(--ease-default),
-    transform var(--duration-fast) var(--ease-default),
-    opacity var(--duration-fast) var(--ease-default);
+    border-color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-spring);
 }
 
-.button:active:not(:disabled) {
-  transform: scale(0.97);
+/* state layer */
+.button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-default);
+  pointer-events: none;
+  z-index: 0;
 }
-
-.button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.button > * {
+  position: relative;
+  z-index: 1;
 }
+.button:hover:not(:disabled)::before { opacity: var(--md-sys-state-hover-opacity); }
+.button:focus-visible::before { opacity: var(--md-sys-state-focus-opacity); }
+.button:active:not(:disabled)::before { opacity: var(--md-sys-state-pressed-opacity); }
+.button:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.button:active:not(:disabled) { transform: scale(0.98); }
+.button:disabled { opacity: 0.38; cursor: not-allowed; }
 
-/* ── Sizes ── */
-
-.sm {
-  height: 32px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-}
-
-.md {
-  height: 38px;
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-}
-
-.lg {
-  height: 46px;
-  padding: 0 var(--space-6);
-  border-radius: var(--radius-md);
-  font-size: var(--text-md);
-}
+/* ── Sizes (MD3) ── */
+.sm { height: 32px; padding: 0 16px; font-size: 13px; }
+.md { height: 40px; padding: 0 24px; font-size: 14px; }
+.lg { height: 48px; padding: 0 28px; font-size: 15px; }
 
 /* ── Variants ── */
-
+/* filled */
 .primary {
-  background: var(--gradient-accent);
-  color: var(--text-on-accent);
-  box-shadow: var(--shadow-glow-sm);
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
 }
-
-.primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-glow);
-  filter: brightness(1.05);
-}
-
+/* filled-tonal (нейтральная) */
 .secondary {
-  background: var(--surface-1);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
 }
-
-.secondary:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
+/* text */
 .ghost {
   background: transparent;
-  color: var(--text-muted);
+  color: var(--md-sys-color-primary);
+  padding-left: 12px;
+  padding-right: 12px;
 }
-
-.ghost:hover:not(:disabled) {
-  background: var(--accent-muted);
-  color: var(--accent);
-}
-
+/* filled error */
 .danger {
-  background: var(--error);
-  color: var(--text-on-accent);
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
 }
-
-.danger:hover:not(:disabled) {
-  background: var(--red-600);
-}
-
+/* text error */
 .dangerGhost {
   background: transparent;
-  color: var(--error);
+  color: var(--md-sys-color-error);
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
-.dangerGhost:hover:not(:disabled) {
-  background: var(--error-soft);
-}
-
-/* ── Full width ── */
-
-.fullWidth {
-  width: 100%;
-}
-
-/* ── Loading ── */
-
-.loading {
-  pointer-events: none;
-  opacity: 0.75;
-}
-
-.spinner {
-  animation: spin 1s linear infinite;
-}
+.fullWidth { width: 100%; }
+.loading { pointer-events: none; opacity: 0.75; }
+.spinner { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

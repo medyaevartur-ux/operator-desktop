@@ -20,11 +20,11 @@
 
 .input {
   width: 100%;
-  height: 40px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
-  background: var(--surface-2);
+  height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--md-sys-shape-corner-small);
+  border: 1px solid var(--md-sys-color-outline);
+  background: transparent;
   color: var(--text-primary);
   font-size: var(--text-base);
   transition:
@@ -38,13 +38,14 @@
 }
 
 .input:hover {
-  border-color: var(--border-strong);
+  border-color: var(--md-sys-color-on-surface);
 }
 
 .input:focus {
-  border-color: var(--border-focus);
-  background: var(--surface-1);
-  box-shadow: 0 0 0 3px var(--accent-muted);
+  border-color: var(--md-sys-color-primary);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+  outline: none;
 }
 
 .hasIcon {
