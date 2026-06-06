@@ -15,7 +15,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a103a 0%, #0f172a 50%, #1e1145 100%);
+  background: linear-gradient(135deg, #0e3f3b 0%, #08302d 50%, #11433f 100%);
   position: relative;
   overflow: hidden;
   padding: 40px;
@@ -28,7 +28,7 @@
   width: 400px;
   height: 400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(78, 218, 211, 0.16) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -39,7 +39,7 @@
   width: 300px;
   height: 300px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(217, 70, 239, 0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(219, 195, 161, 0.12) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -47,10 +47,10 @@
   width: 80px;
   height: 80px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #8b5cf6, #d946ef);
+  background: linear-gradient(135deg, #0f6b66, #4edad3);
   display: grid;
   place-items: center;
-  box-shadow: 0 12px 40px rgba(139, 92, 246, 0.35);
+  box-shadow: 0 12px 40px rgba(15, 107, 102, 0.4);
   margin-bottom: 32px;
   color: white;
   position: relative;
@@ -99,7 +99,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: #4edad3;
   flex-shrink: 0;
 }
 
