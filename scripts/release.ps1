@@ -16,8 +16,17 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 
 if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-  throw "TAURI_SIGNING_PRIVATE_KEY не задан в окружении — без него обновление не будет подписано."
+  $keyFile = Join-Path $root "src-tauri\keys\update.key"
+  if (Test-Path $keyFile) {
+    $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $keyFile -Raw
+    if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "" }
+    Write-Host "Ключ подписи взят из src-tauri\keys\update.key" -ForegroundColor Yellow
+  } else {
+    throw "TAURI_SIGNING_PRIVATE_KEY не задан и нет файла src-tauri\keys\update.key — без ключа обновление не будет подписано."
+  }
 }
+# гарантируем непустое (но возможно пустой пароль) значение, чтобы tauri не спрашивал интерактивно
+if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "" }
 
 Write-Host "=== Релиз v$Version ===" -ForegroundColor Cyan
 
