@@ -254,8 +254,8 @@
   padding: 0 4px;
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
-  background: #f97316;
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
   border-radius: 8px;
   display: flex;
   align-items: center;
