@@ -15,7 +15,7 @@
   letter-spacing: 0.1px;
   white-space: nowrap;
   user-select: none;
-  border-radius: var(--md-sys-shape-corner-full);
+  border-radius: var(--md-sys-shape-corner-medium);
   transition:
     background var(--duration-fast) var(--ease-default),
     color var(--duration-fast) var(--ease-default),
@@ -52,16 +52,21 @@
 .lg { height: 48px; padding: 0 28px; font-size: 15px; }
 
 /* ── Variants ── */
-/* filled */
+/* filled — бирюза с мягким объёмом */
 .primary {
   background: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-sys-elevation-level2);
 }
-/* filled-tonal (нейтральная) */
+.primary:hover:not(:disabled) { box-shadow: var(--md-sys-elevation-level3); }
+.primary:active:not(:disabled) { box-shadow: var(--md-sys-elevation-level1); }
+/* filled-tonal (тёплый тан) */
 .secondary {
   background: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
+  box-shadow: var(--md-sys-elevation-level1);
 }
+.secondary:hover:not(:disabled) { box-shadow: var(--md-sys-elevation-level2); }
 /* text */
 .ghost {
   background: transparent;
@@ -73,7 +78,9 @@
 .danger {
   background: var(--md-sys-color-error);
   color: var(--md-sys-color-on-error);
+  box-shadow: var(--md-sys-elevation-level2);
 }
+.danger:hover:not(:disabled) { box-shadow: var(--md-sys-elevation-level3); }
 /* text error */
 .dangerGhost {
   background: transparent;

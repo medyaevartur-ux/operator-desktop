@@ -12,6 +12,14 @@
 /* Мост: семантические токены приложения → MD3 (перекрашивает весь апп) */
 @import "./bridge.css";
 
+/* Нативные контролы — бирюзовый акцент (checkbox/radio/slider/progress) */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+progress {
+  accent-color: var(--md-sys-color-primary);
+}
+
 /* Базовый класс иконок Material Symbols (вариативные оси) */
 .md-icon {
   font-family: "Material Symbols Rounded";
