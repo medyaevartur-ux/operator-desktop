@@ -3,8 +3,8 @@
 
 :root {
   /* ─── Шрифты ─── */
-  --md-ref-typeface-brand: "Roboto Flex", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --md-ref-typeface-plain: "Roboto Flex", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --md-ref-typeface-brand: "Roboto Flex Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --md-ref-typeface-plain: "Roboto Flex Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   /* ─── Type scale (MD3) ─── */
   --md-sys-typescale-display-large-font: var(--md-ref-typeface-brand);

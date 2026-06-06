@@ -1,5 +1,6 @@
-/* СГЕНЕРИРОВАНО scripts/gen-md3-theme.mjs из seed #4F5BD5. Не редактировать вручную. */
-/* Сменить вайб: node scripts/gen-md3-theme.mjs "#NEWHEX" */
+/* СГЕНЕРИРОВАНО scripts/gen-md3-theme.mjs. Не редактировать вручную. */
+/* primary seed: #4F5BD5 | fairytale seed: #D97706 */
+/* Сменить вайб: node scripts/gen-md3-theme.mjs "#NEW" ["#FAIRY"] */
 
 :root {
   --md-sys-color-primary: #4450ca;
@@ -40,7 +41,7 @@
   --md-sys-color-inverse-primary: #bdc2ff;
 }
 
-.theme-dark {
+:root[data-theme="dark"] {
   --md-sys-color-primary: #bdc2ff;
   --md-sys-color-on-primary: #07159d;
   --md-sys-color-primary-container: #2935b2;
@@ -79,4 +80,41 @@
   --md-sys-color-inverse-primary: #4450ca;
 }
 
-/* seed: #4F5BD5 */
+:root[data-theme="fairytale"] {
+  --md-sys-color-primary: #904d00;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #ffdcc3;
+  --md-sys-color-on-primary-container: #2f1500;
+  --md-sys-color-secondary: #745944;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #ffdcc3;
+  --md-sys-color-on-secondary-container: #2a1707;
+  --md-sys-color-tertiary: #5c6236;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #e1e7b0;
+  --md-sys-color-on-tertiary-container: #1a1e00;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+  --md-sys-color-background: #fffbff;
+  --md-sys-color-on-background: #201b17;
+  --md-sys-color-surface: #fff8f5;
+  --md-sys-color-on-surface: #201b17;
+  --md-sys-color-surface-variant: #f3dfd2;
+  --md-sys-color-on-surface-variant: #51443b;
+  --md-sys-color-surface-dim: #e3d8d1;
+  --md-sys-color-surface-bright: #fff8f5;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #fdf1eb;
+  --md-sys-color-surface-container: #f7ece5;
+  --md-sys-color-surface-container-high: #f2e6df;
+  --md-sys-color-surface-container-highest: #ece0da;
+  --md-sys-color-outline: #847469;
+  --md-sys-color-outline-variant: #d6c3b6;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-inverse-surface: #352f2b;
+  --md-sys-color-inverse-on-surface: #faeee8;
+  --md-sys-color-inverse-primary: #ffb77d;
+}

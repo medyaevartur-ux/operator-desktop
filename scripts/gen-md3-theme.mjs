@@ -1,20 +1,23 @@
-// Генератор MD3-цветовых токенов из seed-цвета.
-// Запуск: node scripts/gen-md3-theme.mjs [#hexSeed]
-// Пишет src/styles/md3/color.css (:root = светлая, .theme-dark = тёмная).
+// Генератор MD3-цветовых токенов из seed-цветов.
+// Запуск: node scripts/gen-md3-theme.mjs ["#primarySeed"] ["#fairytaleSeed"]
+// Пишет src/styles/md3/color.css:
+//   :root                         = светлая (primary seed)
+//   :root[data-theme="dark"]      = тёмная  (primary seed)
+//   :root[data-theme="fairytale"] = тёплая  (fairytale seed)
 import { themeFromSourceColor, argbFromHex, hexFromArgb } from "@material/material-color-utilities";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-const SEED = process.argv[2] || "#4F5BD5"; // «Глубокий индиго»
-const theme = themeFromSourceColor(argbFromHex(SEED));
-const hex = (argb) => hexFromArgb(argb);
-const P = theme.palettes; // primary, secondary, tertiary, neutral, neutralVariant, error
-const tone = (pal, t) => hex(pal.tone(t));
+const PRIMARY_SEED = process.argv[2] || "#4F5BD5";   // «Глубокий индиго»
+const FAIRY_SEED = process.argv[3] || "#D97706";     // тёплый янтарь (сказочная тема)
 
-// Современный набор surface-container из нейтральной шкалы (спека MD3)
-function scheme(mode) {
+const hex = (argb) => hexFromArgb(argb);
+
+function buildScheme(theme, mode) {
   const s = theme.schemes[mode];
+  const P = theme.palettes;
   const N = P.neutral, NV = P.neutralVariant, PR = P.primary;
+  const tone = (pal, t) => hex(pal.tone(t));
   const light = mode === "light";
   return {
     primary: hex(s.primary), "on-primary": hex(s.onPrimary),
@@ -48,16 +51,19 @@ function scheme(mode) {
 const toBlock = (sel, vars) =>
   `${sel} {\n` + Object.entries(vars).map(([k, v]) => `  --md-sys-color-${k}: ${v};`).join("\n") + "\n}\n";
 
+const primaryTheme = themeFromSourceColor(argbFromHex(PRIMARY_SEED));
+const fairyTheme = themeFromSourceColor(argbFromHex(FAIRY_SEED));
+
 const out =
-  `/* СГЕНЕРИРОВАНО scripts/gen-md3-theme.mjs из seed ${SEED}. Не редактировать вручную. */\n` +
-  `/* Сменить вайб: node scripts/gen-md3-theme.mjs "#NEWHEX" */\n\n` +
-  toBlock(":root", scheme("light")) + "\n" +
-  toBlock(".theme-dark", scheme("dark")) +
-  `\n/* seed: ${SEED} */\n`;
+  `/* СГЕНЕРИРОВАНО scripts/gen-md3-theme.mjs. Не редактировать вручную. */\n` +
+  `/* primary seed: ${PRIMARY_SEED} | fairytale seed: ${FAIRY_SEED} */\n` +
+  `/* Сменить вайб: node scripts/gen-md3-theme.mjs "#NEW" ["#FAIRY"] */\n\n` +
+  toBlock(":root", buildScheme(primaryTheme, "light")) + "\n" +
+  toBlock(':root[data-theme="dark"]', buildScheme(primaryTheme, "dark")) + "\n" +
+  toBlock(':root[data-theme="fairytale"]', buildScheme(fairyTheme, "light"));
 
 const target = "src/styles/md3/color.css";
 mkdirSync(dirname(target), { recursive: true });
 writeFileSync(target, out, "utf8");
-console.log(`Записано ${target} (seed ${SEED})`);
-console.log("light.primary =", scheme("light").primary, "| dark.primary =", scheme("dark").primary);
-console.log("light.surface =", scheme("light").surface, "| dark.surface =", scheme("dark").surface);
+console.log(`Записано ${target}`);
+console.log("light.primary =", buildScheme(primaryTheme, "light").primary, "| dark.primary =", buildScheme(primaryTheme, "dark").primary, "| fairy.primary =", buildScheme(fairyTheme, "light").primary);

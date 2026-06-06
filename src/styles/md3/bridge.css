@@ -1,0 +1,59 @@
+/* ═══════════════════════════════════════════════════════════════
+   МОСТ: семантические токены приложения → роли MD3.
+   Один файл перекрашивает ВСЁ приложение и все ui-компоненты в
+   индиго-MD3 (light/dark/fairytale) — без правки экранов, обратимо.
+
+   Селектор-лист тай-брейкает специфичность с tokens.css
+   (:root vs :root[data-theme=...]); этот файл грузится ПОЗЖЕ → выигрывает.
+   Значения ссылаются на --md-sys-color-*, которые заданы по темам в
+   color.css, поэтому одно правило корректно покрывает все 3 темы.
+   ═══════════════════════════════════════════════════════════════ */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"],
+:root[data-theme="fairytale"] {
+  /* ── Поверхности ── */
+  --surface-bg:        var(--md-sys-color-surface-container);
+  --surface-bg-deep:   var(--md-sys-color-surface-container-high);
+  --surface-1:         var(--md-sys-color-surface-container-lowest);
+  --surface-2:         var(--md-sys-color-surface-container-low);
+  --surface-3:         var(--md-sys-color-surface-container);
+
+  /* ── Текст ── */
+  --text-primary:      var(--md-sys-color-on-surface);
+  --text-secondary:    var(--md-sys-color-on-surface-variant);
+  --text-muted:        var(--md-sys-color-on-surface-variant);
+  --text-disabled:     color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  --text-on-accent:    var(--md-sys-color-on-primary);
+
+  /* ── Границы ── */
+  --border-default:    var(--md-sys-color-outline-variant);
+  --border-subtle:     color-mix(in srgb, var(--md-sys-color-outline-variant) 55%, transparent);
+  --border-strong:     var(--md-sys-color-outline);
+  --border-focus:      var(--md-sys-color-primary);
+
+  /* ── Акцент ── */
+  --accent:            var(--md-sys-color-primary);
+  --accent-hover:      color-mix(in srgb, var(--md-sys-color-primary), var(--md-sys-color-on-primary) 14%);
+  --accent-soft:       var(--md-sys-color-primary-container);
+  --accent-muted:      color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent);
+  --gradient-accent:   linear-gradient(135deg, var(--md-sys-color-primary), color-mix(in srgb, var(--md-sys-color-primary), #fff 16%));
+
+  /* ── Бабблы чата ── */
+  --bubble-operator-bg:   var(--md-sys-color-primary);
+  --bubble-operator-text: var(--md-sys-color-on-primary);
+  --bubble-visitor-bg:    var(--md-sys-color-surface-container-lowest);
+  --bubble-visitor-text:  var(--md-sys-color-on-surface);
+  --bubble-ai-bg:         var(--md-sys-color-secondary-container);
+  --bubble-ai-text:       var(--md-sys-color-on-secondary-container);
+  --bubble-system-bg:     var(--md-sys-color-surface-container-high);
+  --bubble-system-text:   var(--md-sys-color-on-surface-variant);
+
+  /* ── Шрифт MD3 ── */
+  --font-sans: "Roboto Flex Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* ── Радиусы под MD3 (мягче, «expressive») ── */
+  --radius-md:  var(--md-sys-shape-corner-medium);
+  --radius-lg:  var(--md-sys-shape-corner-large);
+  --radius-xl:  var(--md-sys-shape-corner-extra-large);
+}

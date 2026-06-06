@@ -9,6 +9,8 @@
 /* Токены */
 @import "./tokens.css";
 @import "./color.css";
+/* Мост: семантические токены приложения → MD3 (перекрашивает весь апп) */
+@import "./bridge.css";
 
 /* Базовый класс иконок Material Symbols (вариативные оси) */
 .md-icon {
