@@ -4,7 +4,8 @@
   z-index: 200;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: color-mix(in srgb, var(--md-sys-color-scrim) 42%, transparent);
+  backdrop-filter: blur(2px);
 }
 
 .content {
