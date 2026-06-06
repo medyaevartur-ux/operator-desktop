@@ -34,13 +34,13 @@ Write-Host "=== Релиз v$Version ===" -ForegroundColor Cyan
 $pkgPath = Join-Path $root "package.json"
 $pkg = Get-Content $pkgPath -Raw
 $pkg = $pkg -replace '("version":\s*")[0-9]+\.[0-9]+\.[0-9]+(")', "`${1}$Version`${2}"
-Set-Content $pkgPath $pkg -Encoding utf8 -NoNewline
+[System.IO.File]::WriteAllText($pkgPath, $pkg, (New-Object System.Text.UTF8Encoding($false)))
 
 # 2. версия в tauri.conf.json
 $confPath = Join-Path $root "src-tauri\tauri.conf.json"
 $conf = Get-Content $confPath -Raw
 $conf = $conf -replace '("version":\s*")[0-9]+\.[0-9]+\.[0-9]+(")', "`${1}$Version`${2}"
-Set-Content $confPath $conf -Encoding utf8 -NoNewline
+[System.IO.File]::WriteAllText($confPath, $conf, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Версия проставлена в package.json и tauri.conf.json" -ForegroundColor Green
 
 # 3. сборка
@@ -78,7 +78,7 @@ $json = @"
 }
 "@
 $outJson = Join-Path $rel "latest.json"
-Set-Content $outJson $json -Encoding utf8
+[System.IO.File]::WriteAllText($outJson, $json, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "`n=== latest.json готов: $outJson ===" -ForegroundColor Green
 Write-Host "`nДеплой на сервер (бэкап + загрузка):" -ForegroundColor Cyan
