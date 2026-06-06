@@ -1,0 +1,82 @@
+/* СГЕНЕРИРОВАНО scripts/gen-md3-theme.mjs из seed #4F5BD5. Не редактировать вручную. */
+/* Сменить вайб: node scripts/gen-md3-theme.mjs "#NEWHEX" */
+
+:root {
+  --md-sys-color-primary: #4450ca;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #e0e0ff;
+  --md-sys-color-on-primary-container: #000668;
+  --md-sys-color-secondary: #5c5d72;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #e1e0f9;
+  --md-sys-color-on-secondary-container: #191a2c;
+  --md-sys-color-tertiary: #78536b;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffd7ef;
+  --md-sys-color-on-tertiary-container: #2e1126;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+  --md-sys-color-background: #fffbff;
+  --md-sys-color-on-background: #1b1b1f;
+  --md-sys-color-surface: #fcf8fd;
+  --md-sys-color-on-surface: #1b1b1f;
+  --md-sys-color-surface-variant: #e3e1ec;
+  --md-sys-color-on-surface-variant: #46464f;
+  --md-sys-color-surface-dim: #dcd9de;
+  --md-sys-color-surface-bright: #fcf8fd;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f6f2f7;
+  --md-sys-color-surface-container: #f0edf1;
+  --md-sys-color-surface-container-high: #eae7ec;
+  --md-sys-color-surface-container-highest: #e4e1e6;
+  --md-sys-color-outline: #777680;
+  --md-sys-color-outline-variant: #c7c5d0;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-inverse-surface: #303034;
+  --md-sys-color-inverse-on-surface: #f3f0f4;
+  --md-sys-color-inverse-primary: #bdc2ff;
+}
+
+.theme-dark {
+  --md-sys-color-primary: #bdc2ff;
+  --md-sys-color-on-primary: #07159d;
+  --md-sys-color-primary-container: #2935b2;
+  --md-sys-color-on-primary-container: #e0e0ff;
+  --md-sys-color-secondary: #c4c4dd;
+  --md-sys-color-on-secondary: #2d2f42;
+  --md-sys-color-secondary-container: #444559;
+  --md-sys-color-on-secondary-container: #e1e0f9;
+  --md-sys-color-tertiary: #e7b9d5;
+  --md-sys-color-on-tertiary: #45263c;
+  --md-sys-color-tertiary-container: #5e3c53;
+  --md-sys-color-on-tertiary-container: #ffd7ef;
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffb4ab;
+  --md-sys-color-background: #1b1b1f;
+  --md-sys-color-on-background: #e4e1e6;
+  --md-sys-color-surface: #131316;
+  --md-sys-color-on-surface: #e4e1e6;
+  --md-sys-color-surface-variant: #46464f;
+  --md-sys-color-on-surface-variant: #c7c5d0;
+  --md-sys-color-surface-dim: #131316;
+  --md-sys-color-surface-bright: #39393c;
+  --md-sys-color-surface-container-lowest: #0e0e11;
+  --md-sys-color-surface-container-low: #1b1b1f;
+  --md-sys-color-surface-container: #1f1f23;
+  --md-sys-color-surface-container-high: #2a2a2d;
+  --md-sys-color-surface-container-highest: #353438;
+  --md-sys-color-outline: #91909a;
+  --md-sys-color-outline-variant: #46464f;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-inverse-surface: #e4e1e6;
+  --md-sys-color-inverse-on-surface: #303034;
+  --md-sys-color-inverse-primary: #4450ca;
+}
+
+/* seed: #4F5BD5 */

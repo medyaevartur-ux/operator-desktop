@@ -8,6 +8,7 @@ import "./styles/tokens.css";
 import "./styles/reset.css";
 import "./styles/animations.css";
 import "./styles/global.css";
+import "./styles/md3/index.css"; // MD3 дизайн-система (токены/шрифты), редизайн Трек B
 import "@/lib/logger";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
