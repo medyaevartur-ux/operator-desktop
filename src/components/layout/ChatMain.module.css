@@ -740,7 +740,7 @@
   font-size: 10px;
   font-weight: 800;
   color: #fff;
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, var(--warning), var(--error));
   padding: 1px 6px;
   border-radius: 4px;
   margin-right: 6px;
