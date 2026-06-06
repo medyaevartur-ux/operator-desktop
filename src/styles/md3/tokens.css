@@ -108,13 +108,31 @@
   --md-sys-shape-corner-extra-large-increased: 32px;
   --md-sys-shape-corner-full: 9999px;
 
-  /* ─── Elevation (тени для оверлеев/выделения над busy-фоном) ─── */
+  /* ─── Soft UI elevation (мягкие «объёмные» тени: highlight сверху-слева + тень снизу-справа) ─── */
+  /* Цвета подсветки/тени — тема-зависимые (см. ниже data-theme) */
+  --soft-hi: rgba(255, 255, 255, 0.75);
+  --soft-lo: rgba(124, 100, 64, 0.20);
+
   --md-sys-elevation-level0: none;
-  --md-sys-elevation-level1: 0 1px 2px rgba(0,0,0,.30), 0 1px 3px 1px rgba(0,0,0,.15);
-  --md-sys-elevation-level2: 0 1px 2px rgba(0,0,0,.30), 0 2px 6px 2px rgba(0,0,0,.15);
-  --md-sys-elevation-level3: 0 4px 8px 3px rgba(0,0,0,.15), 0 1px 3px rgba(0,0,0,.30);
-  --md-sys-elevation-level4: 0 6px 10px 4px rgba(0,0,0,.15), 0 2px 3px rgba(0,0,0,.30);
-  --md-sys-elevation-level5: 0 8px 12px 6px rgba(0,0,0,.15), 0 4px 4px rgba(0,0,0,.30);
+  /* Flat */
+  --md-sys-elevation-level1: 0 1px 2px var(--soft-lo);
+  /* Hover */
+  --md-sys-elevation-level2: -2px -2px 5px var(--soft-hi), 3px 3px 8px var(--soft-lo);
+  /* Raised */
+  --md-sys-elevation-level3: -4px -4px 9px var(--soft-hi), 5px 5px 13px var(--soft-lo);
+  /* Modal */
+  --md-sys-elevation-level4: -2px -2px 6px var(--soft-hi), 10px 16px 32px var(--soft-lo);
+  /* Popover */
+  --md-sys-elevation-level5: -3px -3px 8px var(--soft-hi), 16px 20px 44px var(--soft-lo);
+  /* Утопленный (inset) и raised-алиасы для нейморфных контролов */
+  --soft-inset: inset 2px 2px 5px var(--soft-lo), inset -2px -2px 5px var(--soft-hi);
+  --soft-raised: -4px -4px 9px var(--soft-hi), 5px 5px 13px var(--soft-lo);
+  --soft-pressed: inset 3px 3px 7px var(--soft-lo), inset -2px -2px 5px var(--soft-hi);
+
+  /* ─── Толщина бордеров ─── */
+  --border-1: 1px;
+  --border-2: 2px;
+  --border-4: 4px;
 
   /* ─── Motion (длительности) ─── */
   --md-sys-motion-duration-short1: 50ms;
@@ -152,4 +170,14 @@
   --md-sys-state-focus-opacity: 0.10;
   --md-sys-state-pressed-opacity: 0.10;
   --md-sys-state-dragged-opacity: 0.16;
+}
+
+/* ─── Soft UI: тема-зависимые highlight/shadow ─── */
+:root[data-theme="dark"] {
+  --soft-hi: rgba(255, 255, 255, 0.045);
+  --soft-lo: rgba(0, 0, 0, 0.55);
+}
+:root[data-theme="fairytale"] {
+  --soft-hi: rgba(255, 255, 255, 0.8);
+  --soft-lo: rgba(146, 90, 20, 0.22);
 }

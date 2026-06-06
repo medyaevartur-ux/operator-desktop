@@ -52,8 +52,17 @@
   /* ── Шрифт MD3 ── */
   --font-sans: "Roboto Flex Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-  /* ── Радиусы под MD3 (мягче, «expressive») ── */
+  /* ── Радиусы (шкала референса 4/8/12/16/24) ── */
   --radius-md:  var(--md-sys-shape-corner-medium);
   --radius-lg:  var(--md-sys-shape-corner-large);
-  --radius-xl:  var(--md-sys-shape-corner-extra-large);
+  --radius-xl:  var(--md-sys-shape-corner-large-increased);
+
+  /* ── Мягкие «объёмные» тени (soft UI) на весь апп ── */
+  --shadow-xs:  var(--md-sys-elevation-level1);
+  --shadow-sm:  var(--md-sys-elevation-level2);
+  --shadow-md:  var(--md-sys-elevation-level3);
+  --shadow-lg:  var(--md-sys-elevation-level4);
+  --shadow-xl:  var(--md-sys-elevation-level5);
+  --shadow-glow:    var(--md-sys-elevation-level3);
+  --shadow-glow-sm: var(--md-sys-elevation-level2);
 }
