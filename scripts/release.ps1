@@ -30,15 +30,15 @@ if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIV
 
 Write-Host "=== Релиз v$Version ===" -ForegroundColor Cyan
 
-# 1. версия в package.json
+# 1. версия в package.json (читаем как UTF-8, иначе PS5.1 ломает не-ASCII)
 $pkgPath = Join-Path $root "package.json"
-$pkg = Get-Content $pkgPath -Raw
+$pkg = [System.IO.File]::ReadAllText($pkgPath)
 $pkg = $pkg -replace '("version":\s*")[0-9]+\.[0-9]+\.[0-9]+(")', "`${1}$Version`${2}"
 [System.IO.File]::WriteAllText($pkgPath, $pkg, (New-Object System.Text.UTF8Encoding($false)))
 
-# 2. версия в tauri.conf.json
+# 2. версия в tauri.conf.json (читаем как UTF-8 — в файле есть кириллица в title)
 $confPath = Join-Path $root "src-tauri\tauri.conf.json"
-$conf = Get-Content $confPath -Raw
+$conf = [System.IO.File]::ReadAllText($confPath)
 $conf = $conf -replace '("version":\s*")[0-9]+\.[0-9]+\.[0-9]+(")', "`${1}$Version`${2}"
 [System.IO.File]::WriteAllText($confPath, $conf, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Версия проставлена в package.json и tauri.conf.json" -ForegroundColor Green
