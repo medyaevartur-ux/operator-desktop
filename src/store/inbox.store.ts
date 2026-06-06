@@ -50,6 +50,7 @@ interface InboxState {
   setFilter: (filter: InboxFilter) => void;
   setSearchQuery: (value: string) => void;
   setActiveSession: (session: ChatSession | null) => void;
+  openSession: (session: ChatSession) => void;
   loadSessions: () => Promise<void>;
   loadMessages: (sessionId?: string | null) => Promise<void>;
   loadNotes: (sessionId?: string | null) => Promise<void>;
@@ -157,6 +158,21 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   },  
 
   setActiveSession: (session) => set({ activeSession: session }),
+
+  // Явное открытие чата оператором: делаем активным и СРАЗУ «забираем себе»,
+  // если чат ещё ничей и не закрыт. Тогда сервер шлёт session_updated и чат
+  // исчезает из «Входящих» у других операторов (разделение диалогов).
+  openSession: (session) => {
+    set({ activeSession: session });
+    if (session && !session.operator_id && session.status !== "closed") {
+      const operator = useAuthStore.getState().operator;
+      if (operator?.id) {
+        void assignOperatorToSession(session.id, operator.id)
+          .then(() => get().loadSessions())
+          .catch((e) => console.warn("[claim-on-open] failed:", e));
+      }
+    }
+  },
 
   loadSessions: async () => {
     try {

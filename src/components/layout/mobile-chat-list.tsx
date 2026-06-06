@@ -65,7 +65,7 @@ function MobileSessionCard({
 export function MobileChatList() {
   const {
     sessions,
-    setActiveSession,
+    openSession,
     isSessionsLoading,
     filter,
     setFilter,
@@ -92,7 +92,7 @@ export function MobileChatList() {
   }, [filter, searchQuery, sessions]);
 
   const handleSelectSession = (session: ChatSession) => {
-    setActiveSession(session);
+    openSession(session);
     void useInboxStore.getState().loadMessages(session.id);
     if (session.unread_count && session.unread_count > 0) {
       void markChatSessionRead(session.id);

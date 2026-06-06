@@ -36,7 +36,7 @@ export function useInboxRealtime() {
         const sessions = useInboxStore.getState().sessions;
         const target = sessions.find((s) => s.id === detail.sessionId);
         if (target) {
-          useInboxStore.getState().setActiveSession(target);
+          useInboxStore.getState().openSession(target);
         }
         useNotificationStore.getState().clearNotifications(detail.sessionId);
       }
@@ -53,8 +53,12 @@ export function useInboxRealtime() {
         appendMessage(message);
       }
 
-      if (message.sender !== "operator" && message.sender !== "system") {
-        const operator = useAuthStore.getState().operator;
+      const operator = useAuthStore.getState().operator;
+      const isOwnOperatorMsg =
+        message.sender === "operator" && !!operator && message.operator_id === operator.id;
+
+      // Не уведомляем о системных и о СВОИХ сообщениях; сообщения других операторов — уведомляем
+      if (message.sender !== "system" && !isOwnOperatorMsg) {
         if (operator?.status === "dnd") return;
 
         const sessions = useInboxStore.getState().sessions;
@@ -131,6 +135,33 @@ export function useInboxRealtime() {
       void loadSessions();
     };
 
+    // ═══ Новый диалог: сервер шлёт отдельное событие new_session ═══
+    // Раньше оно не слушалось → новые чаты приходили без звука/бейджа.
+    const handleNewSession = (session: { id?: string; visitor_name?: string } | undefined) => {
+      void loadSessions();
+      const operator = useAuthStore.getState().operator;
+      if (operator?.status === "dnd") return;
+      const sid = session?.id || "new";
+      const visitorName = session?.visitor_name?.trim() || `Гость ${String(sid).slice(-6)}`;
+      // Отдельный звук "new_chat" (восходящее трезвучие) + бейдж + системный тост
+      useNotificationStore.getState().addNotification(sid, visitorName, "Начал новый диалог", "new_chat");
+    };
+
+    // ═══ Re-join после реконнекта ═══
+    // socket.io переподключается сам, но серверные комнаты (session:*) теряются.
+    // На каждый (пере)коннект: заново join активной сессии + перезагрузка списков,
+    // чтобы не пропустить сообщения, пришедшие во время обрыва.
+    const handleConnect = () => {
+      const activeId = activeSessionRef.current;
+      void loadSessions();
+      if (activeId) {
+        socket.emit("join_session", activeId);
+        void loadMessages();
+      }
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("new_session", handleNewSession);
     socket.on("new_message", handleNewMessage);
     socket.on("session_updated", handleSessionUpdated);
     const handlePageChanged = (data: { sessionId: string; url: string; title: string }) => {
@@ -167,6 +198,8 @@ export function useInboxRealtime() {
     socket.on("operator_requested", handleOperatorRequested);
 
     return () => {
+      socket.off("connect", handleConnect);
+      socket.off("new_session", handleNewSession);
       socket.off("new_message", handleNewMessage);
       socket.off("session_updated", handleSessionUpdated);
       socket.off("message_status_changed", handleMessageStatusChanged);

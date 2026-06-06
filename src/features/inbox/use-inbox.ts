@@ -61,6 +61,15 @@ export function useInbox() {
 
     useNotificationStore.getState().syncBadge();
 
+    // Запросить разрешение на системные уведомления один раз при старте,
+    // чтобы тосты в трее работали сразу, а не после первого сообщения.
+    import("@tauri-apps/plugin-notification").then(async (m) => {
+      try {
+        const granted = await m.isPermissionGranted();
+        if (!granted) await m.requestPermission();
+      } catch { /* не в Tauri — игнорируем */ }
+    }).catch(() => {});
+
     const handleBeforeUnload = () => {
       navigator.sendBeacon?.(
         `${API_URL}/api/operators/${operatorId}/online`,
@@ -86,6 +95,54 @@ export function useInbox() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       clearInterval(heartbeat);
       if (unlistenClose) unlistenClose();
+    };
+  }, [operatorId]);
+
+  // ═══ Авто-статус: away при простое, обратно в online при активности ═══
+  // Чтобы новые чаты не маршрутизировались на отошедшего оператора (Поведение 2),
+  // и список онлайн-операторов был честным. Ручные статусы (dnd/offline/ручной away) не трогаем.
+  useEffect(() => {
+    if (!operatorId) return;
+    const IDLE_MS = 5 * 60 * 1000; // 5 минут простоя → away
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    let autoAway = false;
+
+    const patchStatus = (status: "online" | "away") => {
+      void api(`/api/operators/${operatorId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+    };
+
+    const goAway = () => {
+      // Уходим в away только из online (не перетираем ручной dnd/offline/away)
+      if (useAuthStore.getState().operator?.status === "online") {
+        autoAway = true;
+        patchStatus("away");
+      }
+    };
+
+    const onActivity = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      // Возвращаем online только если away выставили МЫ автоматически
+      if (autoAway) {
+        autoAway = false;
+        if (useAuthStore.getState().operator?.status === "away") patchStatus("online");
+      }
+      idleTimer = setTimeout(goAway, IDLE_MS);
+    };
+
+    const events = ["mousemove", "mousedown", "keydown", "wheel", "touchstart", "focus"];
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    const onVisible = () => { if (!document.hidden) onActivity(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    idleTimer = setTimeout(goAway, IDLE_MS);
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [operatorId]);
 }

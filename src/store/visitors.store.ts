@@ -44,8 +44,11 @@ export function calculateLeadScore(visitor: SiteVisitor): number {
 
 // Посетитель считается онлайн, только если бэкенд отметил его онлайн И последняя
 // активность была недавно. Это убирает «призрачных» онлайн (когда событие
-// visitor_left потерялось, а is_online остался true).
-const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;
+// visitor_offline потерялось, а is_online остался true).
+// Порог согласован с серверным TTL (60с) + запас: виджет пингует ~25-30с,
+// экран опрашивает REST раз в 30с → 120с гарантированно не даёт ложного офлайна,
+// но быстро убирает зависших призраков, если событие потерялось.
+const ONLINE_THRESHOLD_MS = 120 * 1000;
 
 function isEffectivelyOnline(v: SiteVisitor): boolean {
   if (!v.is_online) return false;

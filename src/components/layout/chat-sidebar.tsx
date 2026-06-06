@@ -155,7 +155,7 @@ export function ChatSidebar() {
   const {
     sessions,
     activeSession,
-    setActiveSession,
+    openSession,
     isSessionsLoading,
     filter,
     setFilter,
@@ -223,13 +223,14 @@ export function ChatSidebar() {
 
     for (const ses of filteredSessions) {
       if (ses.status === "closed") { closed.push(ses); continue; }
+      // Разделение операторов: чат, который взял ДРУГОЙ оператор, во «Входящих» не показываем
+      if (ses.operator_id && ses.operator_id !== myOperatorId) { continue; }
       const lastTs = ses.last_message_at ? new Date(ses.last_message_at).getTime() : 0;
       const unread = ses.unread_count ?? 0;
       const isUrgent = unread > 0 && lastTs > 0 && (now - lastTs) > URGENT_THRESHOLD_MS && !ses.operator_id;
 
       if (isUrgent) { urgent.push(ses); continue; }
       if (ses.operator_id === myOperatorId && myOperatorId) { mine.push(ses); continue; }
-      if (ses.status === "with_operator") { mine.push(ses); continue; }
       if (ses.status === "ai") { ai.push(ses); continue; }
       waiting.push(ses);
     }
@@ -311,7 +312,7 @@ export function ChatSidebar() {
   );
 
   function pickSession(session: ChatSession) {
-    setActiveSession(session);
+    openSession(session);
     void useInboxStore.getState().loadMessages(session.id);
     if (session.unread_count && session.unread_count > 0) {
       void markChatSessionRead(session.id);

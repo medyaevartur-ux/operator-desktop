@@ -130,7 +130,7 @@ interface NotificationState {
   setSlaWarnMinutes: (v: number) => void;
   setSlaOverdueMinutes: (v: number) => void;
 
-  addNotification: (sessionId: string, visitorName: string, message: string) => void;
+  addNotification: (sessionId: string, visitorName: string, message: string, soundType?: SoundType) => void;
   clearNotifications: (sessionId: string) => void;
   clearAll: () => void;
 
@@ -221,9 +221,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     if (from <= to) return current >= from && current < to;
     return current >= from || current < to; // overnight
   },
-  addNotification: (sessionId, visitorName, message) => {
+  addNotification: (sessionId, visitorName, message, soundType = "new_message") => {
     // DND schedule check
-    if (get().isDndNow()) return;    
+    if (get().isDndNow()) return;
     const pending = { ...get().pending };
     const existing = pending[sessionId];
 
@@ -253,7 +253,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     });
 
     if (get().soundEnabled) {
-      get().playSound("new_message");
+      get().playSound(soundType);
     }
 
     if (get().desktopEnabled) {

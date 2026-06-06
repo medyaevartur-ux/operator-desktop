@@ -470,6 +470,22 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-qr{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 12px;}
 .zw-qr-btn{padding:8px 14px;border-radius:18px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
 .zw-qr-btn:hover{background:var(--accent);color:#fff;}
+.zw-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.zw-cbtn{padding:9px 14px;border-radius:14px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+.zw-cbtn:hover{background:var(--accent);color:#fff;}
+.zw-cbtn:disabled{opacity:.55;cursor:default;}
+.zw-cbtn.pos{border-color:#16a34a;color:#16a34a;}
+.zw-cbtn.pos:hover{background:#16a34a;color:#fff;}
+.zw-cbtn.neg{border-color:#e64646;color:#e64646;}
+.zw-cbtn.neg:hover{background:#e64646;color:#fff;}
+.zw-cards{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
+.zw-card{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--bg);box-shadow:0 2px 10px rgba(0,0,0,.06);}
+.zw-card-img{width:100%;height:130px;object-fit:cover;display:block;}
+.zw-card-body{padding:11px 13px;}
+.zw-card-title{font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;}
+.zw-card-desc{font-size:13px;color:var(--text);opacity:.82;line-height:1.45;margin-bottom:9px;}
+.zw-card-btns{display:flex;flex-wrap:wrap;gap:6px;}
+.zw-guide-btn{border-style:dashed;font-weight:700;}
 
 /* Typing */
 .zw-typ{display:none;align-items:flex-end;gap:8px;margin-bottom:6px;}
@@ -555,7 +571,7 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-greet-x:hover{color:#999;}
 
 /* Lightbox */
-.zw-lb{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px;animation:zw-fade .2s ease;}
+.zw-lb{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px;animation:zw-fade .2s ease;pointer-events:auto;}
 .zw-lb img{max-width:90vw;max-height:90vh;border-radius:12px;object-fit:contain;cursor:default;}
 .zw-lb-x{position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
 .zw-lb-x:hover{background:rgba(255,255,255,0.25);}
@@ -1005,6 +1021,27 @@ ${safeCss}`;
             qr.appendChild(btn);
           });
           win.appendChild(qr);
+        }
+      }
+
+      // Гид по продукции — показываем любому свежему посетителю,
+      // пока он не начал писать живому оператору (или оператор не взял чат).
+      if (!state.isOffline && state.session?.status !== "with_operator") {
+        const hasBotControls = state.messages.some((m) => {
+          let mm = m.metadata;
+          if (typeof mm === "string") { try { mm = JSON.parse(mm); } catch (e) { mm = null; } }
+          return mm && (mm.kind === "cards" || mm.kind === "buttons");
+        });
+        const hasVisitorMsg = state.messages.some((m) => m.sender === "visitor");
+        if (!hasBotControls && !hasVisitorMsg) {
+          const guide = document.createElement("div");
+          guide.className = "zw-qr";
+          const gb = document.createElement("button");
+          gb.className = "zw-qr-btn zw-guide-btn";
+          gb.textContent = "✨ Ознакомиться с продукцией";
+          gb.onclick = () => { gb.disabled = true; startProductGuide(); };
+          guide.appendChild(gb);
+          win.appendChild(guide);
         }
       }
 
@@ -1618,7 +1655,7 @@ ${safeCss}`;
         imgW.className = "zw-img";
         const img = document.createElement("img");
         img.src = imgUrl; img.alt = "Изображение"; img.loading = "lazy";
-        img.onclick = () => { state.lightboxUrl = imgUrl; scheduleRender(); };
+        img.onclick = () => openLightbox(imgUrl);
         imgW.appendChild(img);
         bbl.appendChild(imgW);
       }
@@ -1636,6 +1673,41 @@ ${safeCss}`;
         txt.className = "zw-txt";
         txt.innerHTML = parseMarkdown(msg.message);
         bbl.appendChild(txt);
+      }
+
+      // Бот: кнопки / карточки из metadata (виджет-бот)
+      var _md = msg.metadata;
+      if (typeof _md === "string") { try { _md = JSON.parse(_md); } catch (e) { _md = null; } }
+      if (!isV && _md && typeof _md === "object") {
+        if (_md.kind === "cards" && Array.isArray(_md.cards)) {
+          const cardsW = document.createElement("div");
+          cardsW.className = "zw-cards";
+          _md.cards.forEach((card) => {
+            const cd = document.createElement("div");
+            cd.className = "zw-card";
+            if (card.image) {
+              const im = document.createElement("img");
+              im.className = "zw-card-img"; im.loading = "lazy"; im.src = card.image; im.alt = card.title || "";
+              cd.appendChild(im);
+            }
+            const cbody = document.createElement("div");
+            cbody.className = "zw-card-body";
+            if (card.title) { const tt = document.createElement("div"); tt.className = "zw-card-title"; tt.textContent = card.title; cbody.appendChild(tt); }
+            if (card.description) { const dd = document.createElement("div"); dd.className = "zw-card-desc"; dd.textContent = card.description; cbody.appendChild(dd); }
+            if (Array.isArray(card.buttons) && card.buttons.length) {
+              const cbw = document.createElement("div"); cbw.className = "zw-card-btns";
+              card.buttons.forEach((b) => cbw.appendChild(makeBotBtn(b, _md.node)));
+              cbody.appendChild(cbw);
+            }
+            cd.appendChild(cbody);
+            cardsW.appendChild(cd);
+          });
+          bbl.appendChild(cardsW);
+        } else if (_md.kind === "buttons" && Array.isArray(_md.buttons)) {
+          const bw = document.createElement("div"); bw.className = "zw-btns";
+          _md.buttons.forEach((b) => bw.appendChild(makeBotBtn(b, _md.node)));
+          bbl.appendChild(bw);
+        }
       }
 
       const meta = document.createElement("div");
@@ -2164,18 +2236,37 @@ ${safeCss}`;
   }
 
   // ═══ LIGHTBOX ═══
+  let _zsPausedMedia = [];
+  function pauseBackgroundMedia() {
+    try {
+      document.documentElement.style.overflow = "hidden";
+      _zsPausedMedia = [];
+      document.querySelectorAll("video, audio").forEach((m) => {
+        if (!m.paused) { _zsPausedMedia.push(m); try { m.pause(); } catch (e) {} }
+      });
+    } catch (e) {}
+  }
+  function resumeBackgroundMedia() {
+    try {
+      document.documentElement.style.overflow = "";
+      _zsPausedMedia.forEach((m) => { try { m.play(); } catch (e) {} });
+      _zsPausedMedia = [];
+    } catch (e) {}
+  }
+  function openLightbox(url) { state.lightboxUrl = url; pauseBackgroundMedia(); scheduleRender(); }
+  function closeLightbox() { state.lightboxUrl = null; resumeBackgroundMedia(); scheduleRender(); }
   function renderLightbox() {
     const lb = document.createElement("div");
     lb.className = "zw-lb";
     lb.setAttribute("role", "dialog");
     lb.setAttribute("aria-label", "Просмотр изображения");
-    lb.onclick = () => { state.lightboxUrl = null; scheduleRender(); };
+    lb.onclick = () => closeLightbox();
 
     const x = document.createElement("button");
     x.className = "zw-lb-x";
     x.innerHTML = IC.close;
     x.setAttribute("aria-label", "Закрыть просмотр");
-    x.onclick = () => { state.lightboxUrl = null; scheduleRender(); };
+    x.onclick = () => closeLightbox();
     lb.appendChild(x);
 
     const img = document.createElement("img");
@@ -2187,6 +2278,41 @@ ${safeCss}`;
     shadow.appendChild(lb);
   }
   // ═══ ACTIONS ═══
+  // ═══ Виджет-бот: клик по кнопке/карточке → продвинуть сценарий ═══
+  function sendBotEvent(nodeId, handle, value) {
+    if (!state.session) return;
+    api("POST", "/api/widget/sessions/" + state.session.id + "/bot-event", { node_id: nodeId, handle: handle, value: value });
+  }
+
+  function makeBotBtn(b, nodeId) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "zw-cbtn" + (b.color === "positive" ? " pos" : b.color === "negative" ? " neg" : "");
+    btn.textContent = b.label || "Выбрать";
+    btn.onclick = () => {
+      if (b.url) { try { window.open(b.url, "_blank", "noopener"); } catch (e) {} return; }
+      btn.disabled = true;
+      sendBotEvent(nodeId, b.handle, b.label);
+    };
+    return btn;
+  }
+
+  async function startProductGuide() {
+    let sid = state.session && state.session.id;
+    if (!sid) {
+      const body = { visitor_id: state.visitorId, visitor_name: state.visitorName || "Гость", current_page: location.href, user_agent: navigator.userAgent };
+      const session = await api("POST", "/api/widget/sessions", body);
+      if (!session || session.error) return;
+      state.session = session;
+      loadMessages(session.id);
+      connectSocket(session.id);
+      startSessionPoll(session.id);
+      sid = session.id;
+      scheduleRender();
+    }
+    await api("POST", "/api/widget/sessions/" + sid + "/bot-start", {});
+  }
+
   async function doSend(inp) {
     const text = inp.value.trim();
     if (!text || !state.session || state.sending) return;
@@ -2461,6 +2587,10 @@ ${safeCss}`;
         state.socket._joinedSessionId = sid;
         state.socket.emit("join_session", sid);
       }
+      // Гарантируем, что таймеры пингов запущены: light-сокет мог не стартовать их
+      if (state.socket.connected && !state.socket._visitorPingTimer) {
+        startVisitorPingTimers(state.socket);
+      }
       scheduleRender();
       return;
     }
@@ -2546,7 +2676,7 @@ ${safeCss}`;
   function startVisitorPingTimers(socket) {
     stopVisitorPingTimers();
     sendVisitorPing();
-    socket._visitorPingTimer = setInterval(sendVisitorPing, 30000);
+    socket._visitorPingTimer = setInterval(sendVisitorPing, 25000);
     socket._lastTrackedUrl = location.href;
     socket._pageCheckTimer = setInterval(() => {
       if (location.href !== socket._lastTrackedUrl) {
@@ -2647,12 +2777,25 @@ ${safeCss}`;
           state.sessionPollTimer = null;
         }
       } else {
+        // Вернулись на вкладку — сразу пингуем, чтобы снова попасть в онлайн
+        sendVisitorPing();
         if (state.session) {
           startSessionPoll(state.session.id);
           markVisibleAsRead();
         }
       }
     });
+
+    // Уход со страницы — сообщаем серверу, чтобы presence освободился сразу (не ждать TTL)
+    var notifyLeave = function () {
+      try {
+        if (state.socket && state.socket.connected && state.visitorId) {
+          state.socket.emit("visitor_leave", { visitor_id: state.visitorId });
+        }
+      } catch (e) { /* ignore */ }
+    };
+    window.addEventListener("pagehide", notifyLeave);
+    window.addEventListener("beforeunload", notifyLeave);
 
     let lastUrl = location.href;
     setInterval(() => {
@@ -3057,20 +3200,9 @@ ${safeCss}`;
 
         lightSocket.on("connect", () => {
           state.connected = true;
-          const utm = getUtm();
-          lightSocket.emit("visitor_ping", {
-            visitor_id: state.visitorId,
-            page: location.href,
-            title: document.title,
-            referrer: document.referrer || "",
-            utm_source: utm.utm_source,
-            utm_medium: utm.utm_medium,
-            utm_campaign: utm.utm_campaign,
-            browser: navigator.userAgent.indexOf("Chrome") > -1 ? "Chrome" : "Other",
-            os: navigator.userAgent.indexOf("Win") > -1 ? "Windows" : "Other",
-            language: navigator.language || "",
-            screen: screen.width + "x" + screen.height,
-          });
+          // Рекуррентный heartbeat + трекинг страницы даже до открытия чата,
+          // иначе сервер метит посетителя offline через ~60с (главная причина «нет посетителей»).
+          startVisitorPingTimers(lightSocket);
         });
 
         lightSocket.on("invitation_sent", (data) => {
@@ -3082,6 +3214,7 @@ ${safeCss}`;
 
         lightSocket.on("disconnect", () => {
           state.connected = false;
+          stopVisitorPingTimers();
         });
 
         state.socket = lightSocket;
