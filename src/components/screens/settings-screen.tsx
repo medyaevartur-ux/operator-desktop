@@ -7,6 +7,7 @@ import { uploadAvatar, updateOperator } from "@/features/operators/operators.api
 import { API_BASE } from "@/lib/api";
 import { ArrowLeft, Camera, Save, LogOut, Zap, Plus, Pencil, Trash2, Power } from "lucide-react";
 import { Toggle, toast, useConfirm } from "@/components/ui";
+import { checkForUpdatesManually } from "@/components/updater";
 import {
   getAutoResponses,
   createAutoResponse,
@@ -517,6 +518,22 @@ export function SettingsScreen() {
             <div className={s.dndHint}>
               Отключите для конфиденциальности — будет показано только имя отправителя
             </div>
+            <button
+              type="button"
+              className={s.previewBtn}
+              style={{ marginTop: 12 }}
+              onClick={async () => {
+                try {
+                  toast.info("Проверяем обновления…");
+                  const res = await checkForUpdatesManually();
+                  toast.success(res);
+                } catch (e: any) {
+                  toast.error("Ошибка проверки обновлений", e?.message || String(e));
+                }
+              }}
+            >
+              Проверить обновления
+            </button>
           </div>
         </div>
 

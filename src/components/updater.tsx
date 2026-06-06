@@ -3,8 +3,15 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import s from "./Updater.module.css";
 
+/** Ручная проверка обновлений (для кнопки в настройках). Бросает при ошибке проверки. */
+export async function checkForUpdatesManually(): Promise<string> {
+  const update = await check();
+  if (update) return "Доступна версия v" + update.version;
+  return "У вас последняя версия";
+}
+
 export function AppUpdater() {
-  const [status, setStatus] = useState<"idle" | "available" | "downloading" | "ready">("idle");
+  const [status, setStatus] = useState<"idle" | "available" | "downloading" | "ready" | "error">("idle");
   const [version, setVersion] = useState("");
   const [progress, setProgress] = useState(0);
   const [debugInfo, setDebugInfo] = useState("");
@@ -19,6 +26,8 @@ export function AppUpdater() {
         }
       } catch (e) {
         console.error("Update check failed:", e);
+        setDebugInfo("Проверка обновлений недоступна: " + ((e as any)?.message || e));
+        setStatus("error");
       }
     };
 
@@ -107,6 +116,16 @@ export function AppUpdater() {
 
       {status === "ready" && (
         <div className={s.readyText}>✅ Перезапуск...</div>
+      )}
+
+      {status === "error" && (
+        <>
+          <div className={s.title}>⚠️ Не удалось проверить обновления</div>
+          <div className={s.desc}>{debugInfo}</div>
+          <div className={s.btnRow}>
+            <button className={s.laterBtn} onClick={() => setStatus("idle")}>Скрыть</button>
+          </div>
+        </>
       )}
     </div>
   );
