@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useNavigationStore } from "@/store/navigation.store";
+import { useInboxStore } from "@/store/inbox.store";
 import { useInbox } from "@/features/inbox/use-inbox";
 import { useInboxRealtime } from "@/features/inbox/use-inbox-realtime";
 import { useSla } from "@/features/inbox/use-sla";
@@ -17,6 +19,7 @@ import { TemplatesScreen } from "@/components/screens/templates-screen";
 import LogsPage from "@/pages/LogsPage";
 import { MobileAppShell } from "@/components/layout/mobile-app-shell";
 import { TopBar } from "@/components/layout/top-bar";
+import { NotificationBanner } from "@/components/layout/notification-banner";
 import { ErrorBoundary } from "@/app/error-boundary";
 import { isMobile } from "@/lib/platform";
 import { AnimatePresence, motion } from "framer-motion";
@@ -62,6 +65,19 @@ function DesktopAppShell() {
   const isDetailsOpen = useNavigationStore((s) => s.isDetailsOpen);
   const isVisitorsOpen = useNavigationStore((s) => s.isVisitorsOpen);
 
+  // Счётчик непрочитанных в заголовке окна — заметно даже в свёрнутом виде
+  const unreadTotal = useInboxStore((st) =>
+    st.sessions.reduce((acc, ses) => acc + (ses.unread_count ?? 0), 0)
+  );
+  useEffect(() => {
+    const base = "Живая Сказка — Оператор";
+    const title = unreadTotal > 0 ? `(${unreadTotal > 99 ? "99+" : unreadTotal}) ${base}` : base;
+    document.title = title;
+    import("@/lib/tauri-bridge")
+      .then((m: any) => { if (typeof m.setWindowTitle === "function") m.setWindowTitle(title); })
+      .catch(() => {});
+  }, [unreadTotal]);
+
   let columns = "68px 340px minmax(0,1fr)";
   if (isDetailsOpen && isVisitorsOpen) {
     columns = "68px 340px minmax(0,1fr) 340px 300px";
@@ -75,6 +91,7 @@ function DesktopAppShell() {
     return (
       <div className={s.root}>
         <TopBar />
+        <NotificationBanner />
         <div
           className={s.shell}
           style={{ "--shell-columns": "68px minmax(0,1fr)" } as React.CSSProperties}

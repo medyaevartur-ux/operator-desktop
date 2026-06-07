@@ -21,20 +21,12 @@ import {
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useDraftsStore } from "@/store/drafts.store";
-import { useTemplatesStore } from "@/store/templates.store";
+import { useTemplatesStore, applyTemplate, type QuickTemplate } from "@/store/templates.store";
 import { Tooltip } from "@/components/ui";
 import { FileThumb } from "./FileThumb";
 import s from "./ChatComposer.module.css";
 
 /* ── Data ── */
-
-const QUICK_REPLIES = [
-  "Здравствуйте! Подскажите, пожалуйста, чем могу помочь?",
-  "Передаю ваш запрос оператору. Обычно отвечаем в течение 2–3 минут.",
-  "Спасибо за обращение! Уже уточняю информацию для вас.",
-  "Подскажите, пожалуйста, ваш номер телефона для связи.",
-  "Если удобно, опишите вопрос подробнее одним сообщением.",
-];
 
 const EMOJI_LIST = [
   "😊", "👍", "❤️", "🔥", "✅", "👋", "🙏", "🥇",
@@ -80,13 +72,17 @@ export function ChatComposer() {
   const clearDraft = useDraftsStore((st) => st.clearDraft);
   const templates = useTemplatesStore((st) => st.templates);
   const resolveTemplateBody = useTemplatesStore((st) => st.resolveBody);
-  const incrementTemplateUses = useTemplatesStore((st) => st.incrementUses);
+  const searchTemplates = useTemplatesStore((st) => st.searchTemplates);
+  const findByShortcut = useTemplatesStore((st) => st.findByShortcut);
   const [value, setValue] = useState(() => getDraft(activeSession?.id ?? ""));
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
+  const [showSlash, setShowSlash] = useState(false);
+  const [slashFilter, setSlashFilter] = useState("");
+  const [slashIndex, setSlashIndex] = useState(0);
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -170,11 +166,30 @@ export function ChatComposer() {
   const charCount = value.length;
   const isOverLimit = charCount > MAX_CHARS;
 
-  const filteredReplies = useMemo(() => {
-    const q = value.trim().toLowerCase();
-    if (!q) return QUICK_REPLIES;
-    return QUICK_REPLIES.filter((r) => r.toLowerCase().includes(q));
-  }, [value]);
+  // Единая точка применения шаблона: resolveBody + incrementUses.
+  const applyTpl = useCallback(
+    (tpl: QuickTemplate) => applyTemplate(tpl, activeSession, operator),
+    [activeSession, operator],
+  );
+
+  // Превью resolved-текста для попапа/подсказок (без побочных эффектов).
+  const previewTpl = useCallback(
+    (tpl: QuickTemplate) =>
+      resolveTemplateBody(tpl.body, {
+        name: activeSession?.visitor_name ?? null,
+        visitor_id: activeSession?.visitor_id ?? null,
+        operator: operator?.name?.trim() || operator?.email?.trim() || null,
+      }),
+    [resolveTemplateBody, activeSession, operator],
+  );
+
+  // Кандидаты для «/»-автодополнения. Пустой токен «/» → показываем все шаблоны.
+  const slashCandidates = useMemo(() => {
+    if (!showSlash) return [];
+    const token = slashFilter.replace(/^\//, "");
+    const list = token ? searchTemplates(slashFilter) : templates;
+    return [...list].sort((a, b) => b.uses - a.uses).slice(0, 8);
+  }, [showSlash, slashFilter, searchTemplates, templates]);
 
   const filteredOperators = useMemo(() => {
     if (!mentionFilter) return operators.slice(0, 8);
@@ -245,6 +260,16 @@ export function ChatComposer() {
           setShowMentions(false);
           setMentionFilter("");
         }
+        // «/»-автодополнение шаблонов: ловим /(\S*) в начале токена.
+        const slashMatch = textBefore.match(/(?:^|\s)\/(\S*)$/);
+        if (slashMatch) {
+          setShowSlash(true);
+          setSlashFilter(`/${slashMatch[1]}`);
+          setSlashIndex(0);
+        } else {
+          setShowSlash(false);
+          setSlashFilter("");
+        }
       }
       if (!typingThrottleRef.current) {
         sendTyping();
@@ -277,7 +302,40 @@ export function ChatComposer() {
     [value],
   );
 
-
+  // Вставка шаблона из «/»-автодополнения: убираем токен «/...», вставляем resolved-текст.
+  const insertTemplate = useCallback(
+    (tpl: QuickTemplate) => {
+      const ta = textareaRef.current;
+      const resolved = applyTpl(tpl);
+      if (!ta) {
+        setValue((prev) => prev + resolved);
+        setShowSlash(false);
+        return;
+      }
+      const pos = ta.selectionStart;
+      const textBefore = value.substring(0, pos);
+      const slashMatch = textBefore.match(/(^|\s)\/(\S*)$/);
+      if (!slashMatch) {
+        // На всякий случай — просто вставка по курсору.
+        insertAtCursor(resolved);
+        setShowSlash(false);
+        return;
+      }
+      // Сохраняем ведущий разделитель (пробел/начало строки) из совпадения.
+      const lead = slashMatch[1];
+      const start = pos - slashMatch[0].length + lead.length;
+      const after = value.substring(pos);
+      const next = value.substring(0, start) + resolved + after;
+      setValue(next);
+      setShowSlash(false);
+      setSlashFilter("");
+      requestAnimationFrame(() => {
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = start + resolved.length;
+      });
+    },
+    [value, applyTpl, insertAtCursor],
+  );
 
   /* ── Submit ── */
 
@@ -308,13 +366,9 @@ export function ChatComposer() {
           const tokenEnd = trimmed.search(/\s|$/);
           const token = trimmed.slice(0, tokenEnd);
           const rest = trimmed.slice(tokenEnd).trim();
-          const tpl = templates.find((t) => t.shortcut === token);
+          const tpl = findByShortcut(token);
           if (tpl) {
-            const resolved = resolveTemplateBody(tpl.body, {
-              name: activeSession?.visitor_name ?? undefined,
-              operator: operator?.name ?? undefined,
-            });
-            incrementTemplateUses(tpl.id);
+            const resolved = applyTpl(tpl);
             finalText = rest ? `${resolved}\n\n${rest}` : resolved;
           }
         }
@@ -342,6 +396,21 @@ export function ChatComposer() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showMentions]);
+
+  // Close slash autocomplete on outside click
+  useEffect(() => {
+    if (!showSlash) return;
+    function handleClick() {
+      setShowSlash(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showSlash]);
+
+  // Держим выделение в пределах списка кандидатов.
+  useEffect(() => {
+    if (slashIndex > slashCandidates.length - 1) setSlashIndex(0);
+  }, [slashCandidates.length, slashIndex]);
 
   if (!activeSession) return null;
 
@@ -429,6 +498,33 @@ export function ChatComposer() {
           </div>
         )}
 
+        {/* ── Slash template autocomplete (inline) ── */}
+        {showSlash && slashCandidates.length > 0 && (
+          <div className={s.slashContent} onMouseDown={(e) => e.stopPropagation()}>
+            <div className={s.mentionLabel}>Шаблоны — выберите и вставьте</div>
+            {slashCandidates.map((tpl, i) => {
+              const preview = previewTpl(tpl);
+              return (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  className={`${s.slashItem} ${i === slashIndex ? s.slashItemActive : ""}`}
+                  onMouseEnter={() => setSlashIndex(i)}
+                  onClick={() => insertTemplate(tpl)}
+                >
+                  <div className={s.slashItemHead}>
+                    <span className={s.slashItemTitle}>{tpl.title}</span>
+                    {tpl.shortcut && <span className={s.slashItemShortcut}>{tpl.shortcut}</span>}
+                  </div>
+                  <div className={s.slashItemPreview}>
+                    {preview.slice(0, 90)}{preview.length > 90 ? "…" : ""}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── Pending files ── */}
         {pendingFiles.length > 0 && (
           <div className={s.filesBar}>
@@ -460,6 +556,30 @@ export function ChatComposer() {
               value={value}
               onChange={(e) => handleTextChange(e.target.value)}
               onKeyDown={(e) => {
+                // Навигация по «/»-автодополнению имеет приоритет.
+                if (showSlash && slashCandidates.length > 0) {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSlashIndex((i) => (i + 1) % slashCandidates.length);
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSlashIndex((i) => (i - 1 + slashCandidates.length) % slashCandidates.length);
+                    return;
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    const tpl = slashCandidates[slashIndex] ?? slashCandidates[0];
+                    if (tpl) insertTemplate(tpl);
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowSlash(false);
+                    return;
+                  }
+                }
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   e.currentTarget.form?.requestSubmit();
@@ -567,16 +687,13 @@ export function ChatComposer() {
                         <div className={s.quickReplyEmpty}>Создайте шаблон в разделе «Шаблоны»</div>
                       )}
                       {[...templates].sort((a, b) => b.uses - a.uses).map((tpl) => {
-                        const resolved = resolveTemplateBody(tpl.body, {
-                          name: activeSession?.visitor_name ?? undefined,
-                          operator: operator?.name ?? undefined,
-                        });
+                        const resolved = previewTpl(tpl);
                         return (
                           <Popover.Close asChild key={tpl.id}>
                             <button
                               type="button"
                               className={s.quickReplyBtn}
-                              onClick={() => { setValue(resolved); incrementTemplateUses(tpl.id); }}
+                              onClick={() => insertAtCursor(applyTpl(tpl))}
                               title={tpl.shortcut || tpl.title}
                             >
                               <div style={{ fontWeight: 700, marginBottom: 2 }}>

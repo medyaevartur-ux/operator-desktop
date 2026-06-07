@@ -8,3 +8,4 @@ src-tauri/keys/
 
 .claude/
 scratch/
+_audit-server/

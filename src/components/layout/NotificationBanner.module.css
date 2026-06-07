@@ -1,0 +1,113 @@
+/* ═══ NotificationBanner — висящая плашка о непрочитанных чатах ═══ */
+
+.banner {
+  position: fixed;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+
+  width: min(560px, calc(100vw - var(--space-6)));
+  padding: var(--space-3) var(--space-4);
+
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--md-sys-shape-corner-large);
+  box-shadow: var(--md-sys-elevation-level4);
+}
+
+.badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface-1);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.message {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.more {
+  color: var(--text-muted);
+  font-weight: var(--weight-extrabold);
+}
+
+.actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.openBtn,
+.dismissBtn {
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-extrabold);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+
+.openBtn {
+  background: var(--accent);
+  color: var(--surface-1);
+}
+
+.openBtn:hover {
+  filter: brightness(1.05);
+}
+
+.dismissBtn {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle, var(--border-default));
+}
+
+.dismissBtn:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .banner {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

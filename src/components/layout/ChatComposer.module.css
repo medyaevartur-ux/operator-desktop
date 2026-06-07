@@ -282,6 +282,73 @@
   color: var(--text-disabled);
 }
 
+/* ── Slash template autocomplete ── */
+
+.slashContent {
+  min-width: 320px;
+  max-width: 440px;
+  max-height: 300px;
+  overflow-y: auto;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--md-sys-elevation-level5);
+  padding: var(--space-1);
+  margin-bottom: var(--space-2);
+  z-index: 50;
+  animation: scaleIn var(--duration-fast) var(--ease-spring);
+}
+
+.slashItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-instant) var(--ease-default);
+}
+
+.slashItem:hover,
+.slashItemActive {
+  background: var(--accent-soft);
+}
+
+.slashItemHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slashItemTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+}
+
+.slashItemShortcut {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: var(--md-sys-shape-corner-full);
+  font-weight: var(--weight-semibold);
+}
+
+.slashItemPreview {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Pending files ── */
 
 .filesBar {

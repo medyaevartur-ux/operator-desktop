@@ -257,6 +257,39 @@ export function SettingsScreen() {
 
       {/* ── Body ── */}
       <div className={`${s.body} scrollbar-thin`}>
+        {/* ═══ Разделы (перенесены из рейла для чистоты) ═══ */}
+        <div className={s.section}>
+          <div className={s.sectionTitle}>Разделы</div>
+          <div className={s.sectionCard}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "var(--space-3)" }}>
+              {[
+                { label: "Очередь", emoji: "📋", screen: "queue" as const, desc: "Чаты, ждущие оператора" },
+                { label: "Виджет на сайте", emoji: "🎨", screen: "widget_settings" as const, desc: "Внешний вид и поведение" },
+                { label: "Логи", emoji: "📜", screen: "logs" as const, desc: "Диагностика приложения" },
+              ].map((it) => (
+                <button
+                  key={it.screen}
+                  type="button"
+                  onClick={() => setScreen(it.screen)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "var(--space-3)",
+                    padding: "var(--space-4)", textAlign: "left",
+                    background: "var(--surface-2)", border: "1px solid var(--border-subtle)",
+                    borderRadius: "var(--md-sys-shape-corner-large)", cursor: "pointer",
+                    color: "var(--text-primary)", boxShadow: "var(--md-sys-elevation-level1)",
+                  }}
+                >
+                  <span style={{ fontSize: 22 }}>{it.emoji}</span>
+                  <span style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontWeight: 600 }}>{it.label}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{it.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* ═══ Профиль ═══ */}
         <div className={s.section}>
           <div className={s.sectionTitle}>Профиль</div>

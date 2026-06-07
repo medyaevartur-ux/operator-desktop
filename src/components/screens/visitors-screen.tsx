@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Eye,
   Search,
@@ -11,17 +11,26 @@ import {
   Send,
   Users,
   Route,
+  Calendar,
 } from "lucide-react";
 import { useVisitorsStore } from "@/store/visitors.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useInboxStore } from "@/store/inbox.store";
-import { getVisitors, getVisitorHistory, startChatWithVisitor } from "@/features/visitors/visitors.api";
+import {
+  getVisitors,
+  getVisitorsPage,
+  startChatWithVisitor,
+} from "@/features/visitors/visitors.api";
+import { friendlyIdentity } from "@/features/visitors/friendly-name";
+import { VisitorJourney } from "@/features/visitors/visitor-journey";
 import { sendInvitation, getInvitations, type ProactiveInvitation } from "@/features/inbox/inbox.api";
 import { useAuthStore } from "@/store/auth.store";
 import { useVisitorsRealtime } from "@/features/visitors/use-visitors-realtime";
-import type { SiteVisitor, VisitorPageEvent } from "@/types/visitor";
+import type { SiteVisitor } from "@/types/visitor";
 import { VisitorsStats } from "./visitors-stats";
 import s from "./VisitorsScreen.module.css";
+
+const HISTORY_PAGE_SIZE = 10;
 
 /* ── helpers ── */
 function timeAgo(dateStr: string): string {
@@ -84,24 +93,66 @@ function getDayKey(dateStr: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/* ── group by day ── */
-function groupByDay(visitors: SiteVisitor[]): { key: string; label: string; visitors: SiteVisitor[] }[] {
-  const map = new Map<string, SiteVisitor[]>();
+function getHourKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  return String(d.getHours()).padStart(2, "0");
+}
+
+function getHourLabel(hourKey: string): string {
+  return `${hourKey}:00`;
+}
+
+interface HourGroup {
+  key: string;
+  label: string;
+  visitors: SiteVisitor[];
+}
+
+interface DayGroup {
+  key: string;
+  label: string;
+  count: number;
+  hours: HourGroup[];
+}
+
+/* ── group by day → hour (двухуровневая, БЕЗ пересортировки внутри: порядок от сервера) ── */
+function groupByDayHour(visitors: SiteVisitor[]): DayGroup[] {
+  const dayMap = new Map<string, Map<string, SiteVisitor[]>>();
+  const dayOrder: string[] = [];
+
   for (const v of visitors) {
-    const key = getDayKey(v.last_seen_at);
-    const arr = map.get(key) ?? [];
+    const dayKey = getDayKey(v.last_seen_at);
+    const hourKey = getHourKey(v.last_seen_at);
+    let hourMap = dayMap.get(dayKey);
+    if (!hourMap) {
+      hourMap = new Map<string, SiteVisitor[]>();
+      dayMap.set(dayKey, hourMap);
+      dayOrder.push(dayKey);
+    }
+    const arr = hourMap.get(hourKey) ?? [];
     arr.push(v);
-    map.set(key, arr);
+    hourMap.set(hourKey, arr);
   }
-  return Array.from(map.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([key, list]) => ({
-      key,
-      label: getDayLabel(list[0].last_seen_at),
-      visitors: list.sort(
-        (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime()
-      ),
-    }));
+
+  return dayOrder.map((dayKey) => {
+    const hourMap = dayMap.get(dayKey)!;
+    let count = 0;
+    // Часы — по убыванию (более поздние сверху), но визиторов внутри часа
+    // НЕ пересортировываем, доверяем серверу.
+    const hours: HourGroup[] = Array.from(hourMap.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([hourKey, list]) => {
+        count += list.length;
+        return { key: hourKey, label: getHourLabel(hourKey), visitors: list };
+      });
+    const sample = hourMap.values().next().value as SiteVisitor[] | undefined;
+    return {
+      key: dayKey,
+      label: sample ? getDayLabel(sample[0].last_seen_at) : dayKey,
+      count,
+      hours,
+    };
+  });
 }
 
 /* ══ Main ══ */
@@ -112,6 +163,16 @@ export function VisitorsScreen() {
   const {
     visitors,
     setVisitors,
+    historyVisitors,
+    setHistoryVisitors,
+    appendVisitors,
+    resetHistory,
+    hasMore,
+    setHasMore,
+    isLoadingMore,
+    setLoadingMore,
+    historyDate,
+    setHistoryDate,
     filter,
     setFilter,
     countryFilter,
@@ -129,8 +190,19 @@ export function VisitorsScreen() {
   const setActiveSession = useInboxStore((st) => st.setActiveSession);
   const sessions = useInboxStore((st) => st.sessions);
 
-  /* ── fetch ── */
-  const fetchVisitors = useCallback(async () => {
+  /* ── common filter params (без offset/limit) ── */
+  const baseParams = useCallback(() => {
+    const params: Record<string, any> = {};
+    if (filter === "with_chat") params.has_chat = true;
+    if (filter === "without_chat") params.has_chat = false;
+    if (countryFilter) params.country = countryFilter;
+    if (search) params.search = search;
+    if (historyDate) params.date = historyDate;
+    return params;
+  }, [filter, countryFilter, search, historyDate]);
+
+  /* ── online poller (только живой блок, историю НЕ трогает) ── */
+  const fetchOnline = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, any> = {};
@@ -149,10 +221,72 @@ export function VisitorsScreen() {
   }, [filter, countryFilter, search, setVisitors, setLoading]);
 
   useEffect(() => {
-    fetchVisitors();
-    const interval = setInterval(fetchVisitors, 30_000);
+    fetchOnline();
+    const interval = setInterval(fetchOnline, 30_000);
     return () => clearInterval(interval);
-  }, [fetchVisitors]);
+  }, [fetchOnline]);
+
+  /* ── history: первая страница (при смене фильтров/дня) ── */
+  const fetchHistoryFirstPage = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const { items, has_more } = await getVisitorsPage({
+        ...baseParams(),
+        limit: HISTORY_PAGE_SIZE,
+        offset: 0,
+      });
+      setHistoryVisitors(items);
+      setHasMore(has_more);
+    } catch (err) {
+      console.warn("[visitors] history fetch failed:", err);
+      setHistoryVisitors([]);
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [baseParams, setHistoryVisitors, setHasMore, setLoadingMore]);
+
+  useEffect(() => {
+    resetHistory();
+    fetchHistoryFirstPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, countryFilter, search, historyDate]);
+
+  /* ── history: догрузка по 10 (infinite scroll) ── */
+  const loadMore = useCallback(async () => {
+    const st = useVisitorsStore.getState();
+    if (st.isLoadingMore || !st.hasMore) return;
+    setLoadingMore(true);
+    try {
+      const { items, has_more } = await getVisitorsPage({
+        ...baseParams(),
+        limit: HISTORY_PAGE_SIZE,
+        offset: st.historyOffset,
+      });
+      appendVisitors(items);
+      setHasMore(has_more && items.length > 0);
+    } catch (err) {
+      console.warn("[visitors] loadMore failed:", err);
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [baseParams, appendVisitors, setHasMore, setLoadingMore]);
+
+  /* ── IntersectionObserver-сентинел ── */
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) void loadMore();
+      },
+      { rootMargin: "120px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   /* ── debounce search ── */
   const [localSearch, setLocalSearch] = useState(search);
@@ -168,30 +302,38 @@ export function VisitorsScreen() {
     return Array.from(set).sort();
   }, [visitors]);
 
-  /* ── split online / offline ── */
+  /* ── online (живой блок) ── */
   const onlineVisitors = useMemo(
     () => visitors.filter((v) => v.is_online),
     [visitors]
   );
 
+  const onlineIds = useMemo(
+    () => new Set(onlineVisitors.map((v) => v.visitor_id)),
+    [onlineVisitors]
+  );
+
+  /* ── история (пагинируемая, исключаем тех, кто уже онлайн сверху) ── */
   const offlineVisitors = useMemo(
-    () => visitors.filter((v) => !v.is_online),
-    [visitors]
+    () => historyVisitors.filter((v) => !v.is_online && !onlineIds.has(v.visitor_id)),
+    [historyVisitors, onlineIds]
   );
 
   const offlineGrouped = useMemo(
-    () => groupByDay(offlineVisitors),
+    () => groupByDayHour(offlineVisitors),
     [offlineVisitors]
   );
 
-  /* ── selected visitor ── */
+  /* ── selected visitor (из любого блока) ── */
   const selectedVisitor = useMemo(
-    () => visitors.find((v) => v.visitor_id === selectedVisitorId) ?? null,
-    [visitors, selectedVisitorId]
+    () =>
+      visitors.find((v) => v.visitor_id === selectedVisitorId) ??
+      historyVisitors.find((v) => v.visitor_id === selectedVisitorId) ??
+      null,
+    [visitors, historyVisitors, selectedVisitorId]
   );
 
-  /* ── side panel history ── */
-  const [history, setHistory] = useState<VisitorPageEvent[]>([]);
+  /* ── side panel ── */
   const operator = useAuthStore((st) => st.operator);
   const [inviteModalVisitorId, setInviteModalVisitorId] = useState<string | null>(null);
   const [inviteMessage, setInviteMessage] = useState("Здравствуйте! Могу я вам помочь?");
@@ -228,14 +370,6 @@ export function VisitorsScreen() {
   const getInvitationStatus = (visitorId: string): ProactiveInvitation | null => {
     return invitations.find((inv) => inv.visitor_id === visitorId && inv.status === "sent") || null;
   };
-
-  useEffect(() => {
-    if (!selectedVisitorId) {
-      setHistory([]);
-      return;
-    }
-    getVisitorHistory(selectedVisitorId).then(setHistory).catch(() => setHistory([]));
-  }, [selectedVisitorId]);
 
   /* ── start chat ── */
   const handleStartChat = async (visitorId: string) => {
@@ -328,18 +462,43 @@ export function VisitorsScreen() {
                 ))}
               </select>
             )}
+
+            {/* ── Календарь: фильтр истории по дню ── */}
+            <div className={s.datePickerWrap}>
+              <Calendar className={s.datePickerIcon} style={{ width: 14, height: 14 }} />
+              <input
+                type="date"
+                className={s.datePicker}
+                value={historyDate ?? ""}
+                max={getDayKey(new Date().toISOString())}
+                onChange={(e) => setHistoryDate(e.target.value || null)}
+                title="История за выбранный день"
+              />
+              {historyDate && (
+                <button
+                  type="button"
+                  className={s.datePickerClear}
+                  onClick={() => setHistoryDate(null)}
+                  title="Сбросить день"
+                >
+                  <X style={{ width: 12, height: 12 }} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* ── Content ── */}
           <div className={s.content}>
-            {isLoading && visitors.length === 0 ? (
+            {isLoading && visitors.length === 0 && historyVisitors.length === 0 ? (
               <div className={s.loading}>Загрузка посетителей…</div>
-            ) : visitors.length === 0 ? (
+            ) : visitors.length === 0 && offlineVisitors.length === 0 ? (
               <div className={s.empty}>
                 <div className={s.emptyIcon}>
                   <UserX style={{ width: 24, height: 24 }} />
                 </div>
-                <div className={s.emptyText}>Нет посетителей</div>
+                <div className={s.emptyText}>
+                  {historyDate ? "Нет посещений за этот день" : "Нет посетителей"}
+                </div>
               </div>
             ) : (
               <div className={s.mainArea}>
@@ -380,11 +539,16 @@ export function VisitorsScreen() {
                   )}
                 </div>
 
-                {/* ── History section ── */}
-                {offlineGrouped.length > 0 && (
+                {/* ── History section (день → час, инфинит-скролл) ── */}
+                {(offlineGrouped.length > 0 || isLoadingMore) && (
                   <div className={s.historySection}>
                     <div className={s.sectionHeader}>
                       <span className={s.sectionTitle}>История посещений</span>
+                      {historyDate && (
+                        <span className={s.sectionCount}>
+                          {getDayLabel(new Date(historyDate).toISOString())}
+                        </span>
+                      )}
                     </div>
 
                     {offlineGrouped.map((group) => (
@@ -392,23 +556,39 @@ export function VisitorsScreen() {
                         <div className={s.dayHeader}>
                           <span className={s.dayLabel}>{group.label}</span>
                           <span className={s.dayLine} />
-                          <span className={s.dayCount}>{group.visitors.length}</span>
+                          <span className={s.dayCount}>{group.count}</span>
                         </div>
 
-                        {group.visitors.map((v) => (
-                          <HistoryRow
-                            key={v.visitor_id}
-                            visitor={v}
-                            isSelected={v.visitor_id === selectedVisitorId}
-                            onSelect={() =>
-                              setSelectedVisitorId(
-                                v.visitor_id === selectedVisitorId ? null : v.visitor_id
-                              )
-                            }
-                          />
+                        {group.hours.map((hour) => (
+                          <div key={`${group.key}-${hour.key}`} className={s.hourGroup}>
+                            <div className={s.hourHeader}>{hour.label}</div>
+                            {hour.visitors.map((v) => (
+                              <HistoryRow
+                                key={v.visitor_id}
+                                visitor={v}
+                                isSelected={v.visitor_id === selectedVisitorId}
+                                onSelect={() =>
+                                  setSelectedVisitorId(
+                                    v.visitor_id === selectedVisitorId ? null : v.visitor_id
+                                  )
+                                }
+                              />
+                            ))}
+                          </div>
                         ))}
                       </div>
                     ))}
+
+                    {/* IntersectionObserver-сентинел */}
+                    <div ref={sentinelRef} className={s.sentinel}>
+                      {isLoadingMore
+                        ? "Загрузка…"
+                        : hasMore
+                          ? ""
+                          : offlineGrouped.length > 0
+                            ? "Это всё"
+                            : ""}
+                    </div>
                   </div>
                 )}
               </div>
@@ -419,8 +599,14 @@ export function VisitorsScreen() {
               <aside className={s.sidePanel}>
                 <div className={s.sidePanelHeader}>
                   <div className={s.sidePanelVisitor}>
-                    <div className={s.sidePanelAvatar}>
-                      {selectedVisitor.visitor_id.slice(0, 2).toUpperCase()}
+                    <div
+                      className={s.sidePanelAvatar}
+                      style={{
+                        background: friendlyIdentity(selectedVisitor.visitor_id).avatarBg,
+                        color: friendlyIdentity(selectedVisitor.visitor_id).avatarFg,
+                      }}
+                    >
+                      {friendlyIdentity(selectedVisitor.visitor_id).initials}
                       <div
                         className={s.sidePanelOnlineDot}
                         style={{
@@ -430,8 +616,11 @@ export function VisitorsScreen() {
                         }}
                       />
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div className={s.sidePanelTitle}>
+                        {friendlyIdentity(selectedVisitor.visitor_id).name}
+                      </div>
+                      <div className={s.sidePanelIdSub} title={selectedVisitor.visitor_id}>
                         {shortVisitorId(selectedVisitor.visitor_id)}
                       </div>
                       <div
@@ -521,22 +710,12 @@ export function VisitorsScreen() {
                     <InfoRow label="Страна" value={selectedVisitor.country ?? "—"} />
                   </div>
 
-                  {/* Page history */}
-                  <div className={s.historyTitle}>История страниц</div>
-                  {history.length === 0 ? (
-                    <div style={{ fontSize: "var(--text-xs)", color: "var(--text-disabled)" }}>
-                      Нет данных
-                    </div>
-                  ) : (
-                    history.map((h, i) => (
-                      <div key={i} className={s.historyItem}>
-                        <div className={s.historyPage}>{h.title || h.page}</div>
-                        <div className={s.historyTime}>
-                          {new Date(h.visited_at).toLocaleTimeString()}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                  {/* Карта пути */}
+                  <div className={s.historyTitle}>Карта пути</div>
+                  <VisitorJourney
+                    key={selectedVisitor.visitor_id}
+                    visitor={selectedVisitor}
+                  />
                 </div>
               </aside>
             )}
@@ -560,6 +739,7 @@ export function VisitorsScreen() {
             </div>
             <div className={s.modalBody}>
               <div className={s.modalLabel}>Посетитель</div>
+              <div className={s.modalVisitorName}>{friendlyIdentity(inviteModalVisitorId).name}</div>
               <div className={s.modalVisitorId}>{inviteModalVisitorId}</div>
               <div className={s.modalLabel} style={{ marginTop: 12 }}>Сообщение</div>
               <textarea
@@ -613,25 +793,32 @@ function OnlineCard({
   onInvite,
   invitationStatus,
 }: OnlineCardProps) {
+  const identity = friendlyIdentity(visitor.visitor_id);
   return (
     <div
       className={`${s.onlineCard} ${isSelected ? s.onlineCardSelected : ""}`}
       onClick={onSelect}
     >
       <div className={s.cardAvatarWrap}>
-        <div className={s.cardAvatar}>
-          {visitor.visitor_id.slice(0, 2).toUpperCase()}
+        <div
+          className={s.cardAvatar}
+          style={{ background: identity.avatarBg, color: identity.avatarFg }}
+        >
+          {identity.initials}
         </div>
         <div className={s.cardOnlineDot} />
       </div>
 
       <div className={s.cardInfo}>
         <div className={s.cardTopRow}>
-          <span className={s.cardVisitorId}>{shortVisitorId(visitor.visitor_id)}</span>
+          <span className={s.cardVisitorId}>{identity.name}</span>
           <span className={s.cardTime} title="Последняя активность">
             <Clock style={{ width: 11, height: 11 }} />
             {timeAgo(visitor.last_seen_at)}
           </span>
+        </div>
+        <div className={s.cardIdSub} title={visitor.visitor_id}>
+          {shortVisitorId(visitor.visitor_id)}
         </div>
 
         <div className={s.cardPage}>{visitor.current_page_title || "—"}</div>
@@ -700,18 +887,25 @@ interface HistoryRowProps {
 }
 
 function HistoryRow({ visitor, isSelected, onSelect }: HistoryRowProps) {
+  const identity = friendlyIdentity(visitor.visitor_id);
   return (
     <div
       className={`${s.histRow} ${isSelected ? s.histRowSelected : ""}`}
       onClick={onSelect}
     >
-      <div className={s.histAvatar}>
-        {visitor.visitor_id.slice(0, 2).toUpperCase()}
+      <div
+        className={s.histAvatar}
+        style={{ background: identity.avatarBg, color: identity.avatarFg }}
+      >
+        {identity.initials}
       </div>
 
       <div className={s.histInfo}>
         <div className={s.histNameRow}>
-          <span className={s.histName}>{shortVisitorId(visitor.visitor_id)}</span>
+          <span className={s.histName}>{identity.name}</span>
+          <span className={s.histIdSub} title={visitor.visitor_id}>
+            {shortVisitorId(visitor.visitor_id)}
+          </span>
           <span className={`${s.chatBadge} ${visitor.has_chat ? s.chatBadgeYes : s.chatBadgeNo}`}>
             {visitor.has_chat ? "Чат" : "Нет"}
           </span>

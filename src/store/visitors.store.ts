@@ -79,7 +79,34 @@ function processAndSortVisitors(list: SiteVisitor[]): SiteVisitor[] {
     });
 }
 
+/**
+ * Лёгкая нормализация без пересортировки: применяется к подгружаемой истории.
+ * Доверяем порядку сервера (важно при offset-пагинации, иначе дубли/скачки).
+ */
+function normalizeHistory(list: SiteVisitor[]): SiteVisitor[] {
+  return list
+    .filter((v) => !v.is_blocked)
+    .map((v) => ({
+      ...v,
+      is_online: isEffectivelyOnline(v),
+      score: calculateLeadScore(v),
+    }));
+}
+
+/** Дедуп по visitor_id с сохранением порядка (первое вхождение выигрывает). */
+function dedupeByVisitorId(list: SiteVisitor[]): SiteVisitor[] {
+  const seen = new Set<string>();
+  const out: SiteVisitor[] = [];
+  for (const v of list) {
+    if (seen.has(v.visitor_id)) continue;
+    seen.add(v.visitor_id);
+    out.push(v);
+  }
+  return out;
+}
+
 interface VisitorsState {
+  /** «Живой» блок (онлайн + любые посетители из общего запроса). Сортируется по score. */
   visitors: SiteVisitor[];
   setVisitors: (v: SiteVisitor[]) => void;
 
@@ -88,6 +115,28 @@ interface VisitorsState {
   removeVisitor: (visitorId: string) => void;
   updateVisitorPage: (visitorId: string, page: string, title: string) => void;
   blockVisitorIP: (visitorId: string) => void;
+
+  /** Пагинируемая история посещений (НЕ пересортировывается — порядок от сервера). */
+  historyVisitors: SiteVisitor[];
+  /** Заменить историю (первая страница / смена дня). */
+  setHistoryVisitors: (v: SiteVisitor[]) => void;
+  /** Догрузить следующую страницу истории (append + dedupe). */
+  appendVisitors: (v: SiteVisitor[]) => void;
+  /** Сбросить историю и счётчики пагинации. */
+  resetHistory: () => void;
+
+  /** Текущий offset истории (число уже загруженных записей). */
+  historyOffset: number;
+  /** Есть ли ещё страницы истории на сервере. */
+  hasMore: boolean;
+  setHasMore: (v: boolean) => void;
+  /** Идёт ли догрузка следующей страницы. */
+  isLoadingMore: boolean;
+  setLoadingMore: (v: boolean) => void;
+
+  /** Выбранный день истории (YYYY-MM-DD) или null = все. */
+  historyDate: string | null;
+  setHistoryDate: (d: string | null) => void;
 
   filter: VisitorFilter;
   setFilter: (f: VisitorFilter) => void;
@@ -134,6 +183,8 @@ export const useVisitorsStore = create<VisitorsState>((set, get) => ({
     set({ visitors: processed, onlineCount: processed.filter((v) => v.is_online).length });
   },
 
+  // история — server-driven, но блокировку отражаем локально
+
   updateVisitorPage: (visitorId, page, title) => {
     const list = get().visitors;
     const idx = list.findIndex((v) => v.visitor_id === visitorId);
@@ -149,12 +200,37 @@ export const useVisitorsStore = create<VisitorsState>((set, get) => ({
       v.visitor_id === visitorId ? { ...v, is_blocked: true, is_online: false } : v
     );
     const processed = processAndSortVisitors(next);
+    const history = get().historyVisitors.filter((v) => v.visitor_id !== visitorId);
     set({
       visitors: processed,
+      historyVisitors: history,
+      historyOffset: history.length,
       onlineCount: processed.filter((v) => v.is_online).length,
       selectedVisitorId: get().selectedVisitorId === visitorId ? null : get().selectedVisitorId,
     });
   },
+
+  historyVisitors: [],
+  setHistoryVisitors: (list) => {
+    const normalized = dedupeByVisitorId(normalizeHistory(list));
+    set({ historyVisitors: normalized, historyOffset: normalized.length });
+  },
+  appendVisitors: (list) => {
+    const incoming = normalizeHistory(list);
+    const merged = dedupeByVisitorId([...get().historyVisitors, ...incoming]);
+    set({ historyVisitors: merged, historyOffset: merged.length });
+  },
+  resetHistory: () =>
+    set({ historyVisitors: [], historyOffset: 0, hasMore: true, isLoadingMore: false }),
+
+  historyOffset: 0,
+  hasMore: true,
+  setHasMore: (hasMore) => set({ hasMore }),
+  isLoadingMore: false,
+  setLoadingMore: (isLoadingMore) => set({ isLoadingMore }),
+
+  historyDate: null,
+  setHistoryDate: (historyDate) => set({ historyDate }),
 
   filter: "all",
   setFilter: (filter) => set({ filter }),

@@ -156,6 +156,74 @@
   box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
+/* ══ Date picker (календарь истории) ══ */
+.datePickerWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-2) 0 30px;
+  border-radius: var(--md-sys-shape-corner-medium, var(--radius-md));
+  border: 1px solid var(--border-default);
+  background: var(--surface-bg);
+  transition: border-color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.datePickerWrap:hover {
+  border-color: var(--border-strong);
+}
+
+.datePickerWrap:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.datePickerIcon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.datePicker {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: var(--text-sm);
+  font-family: inherit;
+  color: var(--text-primary);
+  color-scheme: light;
+  cursor: pointer;
+  min-width: 110px;
+}
+
+.datePicker::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.datePickerClear {
+  width: 20px;
+  height: 20px;
+  margin-left: var(--space-1);
+  border: none;
+  border-radius: var(--md-sys-shape-corner-small, var(--radius-sm));
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.datePickerClear:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
 /* ══ Content ══ */
 .content {
   flex: 1;
@@ -305,6 +373,16 @@
   gap: 3px;
 }
 
+.cardIdSub {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: 10px;
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 2px;
+}
+
 .cardPage {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
@@ -444,6 +522,30 @@
   color: var(--text-disabled);
 }
 
+/* ══ Hour sub-group ══ */
+.hourGroup {
+  margin-bottom: var(--space-2);
+}
+
+.hourHeader {
+  font-size: 10px;
+  font-weight: var(--weight-extrabold);
+  color: var(--text-disabled);
+  letter-spacing: 0.05em;
+  padding: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+}
+
+/* ══ Infinite-scroll sentinel ══ */
+.sentinel {
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  font-weight: var(--weight-semibold);
+}
+
 /* ══ History Row ══ */
 .histRow {
   display: flex;
@@ -499,6 +601,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.histIdSub {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: 10px;
+  color: var(--text-disabled);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .histPage {
@@ -616,6 +726,18 @@
   font-size: var(--text-md);
   font-weight: var(--weight-extrabold);
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidePanelIdSub {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: 10px;
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidePanelStatus {
@@ -878,10 +1000,18 @@
   letter-spacing: 0.04em;
 }
 
-.modalVisitorId {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+.modalVisitorName {
+  font-size: var(--text-md);
+  font-weight: var(--weight-extrabold);
   color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.modalVisitorId {
+  font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
   padding: 8px 12px;
   border-radius: var(--radius-md);
   background: var(--surface-2);

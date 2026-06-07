@@ -1330,7 +1330,7 @@ ${safeCss}`;
         teamW.appendChild(ta);
       });
       h.appendChild(teamW);
-    } else {
+    } else if (cfg.show_operator_avatar !== false) {
       const ava = document.createElement("div");
       ava.className = "zw-hdr-ava";
       const s = state.session;
@@ -2798,12 +2798,24 @@ ${safeCss}`;
     window.addEventListener("beforeunload", notifyLeave);
 
     let lastUrl = location.href;
-    setInterval(() => {
+    function onUrlMaybeChanged() {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
+        applyWidgetVisibility();            // прячем/показываем виджет по правилам страниц (фикс «/admin всё равно показывается» на SPA)
         if (state.session) trackPage(state.session.id);
       }
-    }, 2000);
+    }
+    setInterval(onUrlMaybeChanged, 1500);
+    // Перехват SPA-навигации для мгновенного пересчёта (Next.js/React и т.п.)
+    try {
+      ["pushState", "replaceState"].forEach((m) => {
+        const orig = history[m];
+        if (typeof orig === "function") {
+          history[m] = function () { const r = orig.apply(this, arguments); setTimeout(onUrlMaybeChanged, 0); return r; };
+        }
+      });
+      window.addEventListener("popstate", onUrlMaybeChanged);
+    } catch (e) { /* ignore */ }
   }
 
   // ═══ BUSINESS HOURS ═══
@@ -3089,6 +3101,26 @@ ${safeCss}`;
     }
   }
 
+  // ═══ ВИДИМОСТЬ ПО СТРАНИЦЕ (моб./include/exclude), пересчёт на SPA-навигации ═══
+  function isWidgetAllowedOnPage() {
+    if (window.__zsPreviewConfig) return true; // в превью настроек всегда показываем
+    const cfg = state.config || {};
+    if (cfg.hide_on_mobile && /Mobi|Android/i.test(navigator.userAgent)) return false;
+    const mode = cfg.display_pages_mode || "all";
+    const pagesStr = cfg.display_pages || "";
+    if (mode !== "all" && pagesStr.trim()) {
+      const patterns = pagesStr.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+      const url = location.href.toLowerCase();
+      const matches = patterns.some((p) => url.indexOf(p) !== -1);
+      if (mode === "include" && !matches) return false;
+      if (mode === "exclude" && matches) return false;
+    }
+    return true;
+  }
+  function applyWidgetVisibility() {
+    try { host.style.display = isWidgetAllowedOnPage() ? "" : "none"; } catch (e) { /* host ещё не готов */ }
+  }
+
   // ═══ INIT ═══
   async function init() {
     // Listen for postMessage updates for live preview
@@ -3153,18 +3185,8 @@ ${safeCss}`;
     // Check business hours
     state.isOffline = checkOffline();
 
-    if (state.config.hide_on_mobile && /Mobi|Android/i.test(navigator.userAgent)) return;
-
-    // Видимость виджета по страницам (include/exclude)
-    const mode = state.config.display_pages_mode || "all";
-    const pagesStr = state.config.display_pages || "";
-    if (mode !== "all" && pagesStr.trim()) {
-      const patterns = pagesStr.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-      const url = location.href.toLowerCase();
-      const matches = patterns.some((p) => url.indexOf(p) !== -1);
-      if (mode === "include" && !matches) return;
-      if (mode === "exclude" && matches) return;
-    }
+    // Видимость по странице (моб./include/exclude) — единая функция, пересчитывается и на SPA-навигации
+    if (!isWidgetAllowedOnPage()) return;
 
     // Load font
     loadFont(state.config);

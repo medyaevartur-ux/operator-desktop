@@ -6,16 +6,23 @@ import { showNativeNotification } from "@/lib/tauri-bridge";
 
 /**
  * SLA-эскалация: следит за диалогами без ответа оператора. Когда чат пересекает
- * порог «просрочено», проигрывает тревожный звук и шлёт нативное Windows-уведомление.
+ * порог «просрочено», проигрывает настойчивый звук и шлёт нативное
+ * Windows-уведомление.
  *
- * Анти-спам:
- *  - на первом тике запоминаем уже просроченные (бэклог), чтобы не залить уведомлениями при старте;
- *  - на каждый чат — одно оповещение за «эпизод» (пока он остаётся просроченным);
- *  - когда оператор ответил/закрыл — чат выходит из набора и может оповестить снова позже.
+ * Эскалация ПРИОРИТЕТНА (override): звук + нативный тост срабатывают даже при
+ * выключенных soundEnabled / desktopEnabled и в режиме DND — оператор не должен
+ * пропустить чат, висящий без ответа.
+ *
+ * Анти-спам (вместо подавления бэклога):
+ *  - бэклог НЕ глушится — уже-просроченные при старте тоже оповещаются;
+ *  - повторное оповещение по одному чату — не чаще раза в REALERT_MS;
+ *  - когда оператор ответил/закрыл — чат выходит из набора и анти-спам сбрасывается.
  */
+const REALERT_MS = 5 * 60 * 1000; // не чаще раза в 5 минут на сессию за сессию-аппа
+
 export function useSla() {
-  const alertedRef = useRef<Set<string>>(new Set());
-  const seededRef = useRef(false);
+  // sessionId -> время последнего оповещения (мс).
+  const lastAlertRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     const tick = () => {
@@ -23,49 +30,41 @@ export function useSla() {
       if (!notif.slaEnabled) return;
 
       const sessions = useInboxStore.getState().sessions;
+      // Не обрабатываем пустой набор при mount — дождёмся загрузки sessions.
+      if (sessions.length === 0) return;
+
       const now = Date.now();
       const overdueIds = new Set<string>();
 
       for (const session of sessions) {
         const mins = getSlaMinutes(session, now);
-        if (mins != null && mins >= notif.slaOverdueMinutes) {
-          overdueIds.add(session.id);
-        }
-      }
-
-      // Первый запуск — фиксируем текущий бэклог как «уже известный», без оповещений.
-      if (!seededRef.current) {
-        seededRef.current = true;
-        overdueIds.forEach((id) => alertedRef.current.add(id));
-        return;
-      }
-
-      for (const session of sessions) {
-        const mins = getSlaMinutes(session, now);
         if (mins == null || mins < notif.slaOverdueMinutes) continue;
-        if (alertedRef.current.has(session.id)) continue;
 
-        alertedRef.current.add(session.id);
-        if (notif.isDndNow()) continue;
+        overdueIds.add(session.id);
 
-        if (notif.soundEnabled) notif.playSound("operator_request");
-        if (notif.desktopEnabled) {
-          const name = getSessionDisplayName(session.visitor_name, session.visitor_id);
-          void showNativeNotification(
-            "⏱ Чат без ответа",
-            `${name} ждёт ответа уже ${mins} мин`,
-            session.id,
-          );
-        }
+        // Анти-спам по времени: одно оповещение на чат не чаще REALERT_MS.
+        const last = lastAlertRef.current.get(session.id) ?? 0;
+        if (now - last < REALERT_MS) continue;
+        lastAlertRef.current.set(session.id, now);
+
+        // Эскалация — критический сигнал: поверх настроек/DND.
+        notif.playSound("operator_request", true);
+        const name = getSessionDisplayName(session.visitor_name, session.visitor_id);
+        void showNativeNotification(
+          "⏱ Чат без ответа",
+          `${name} ждёт ответа уже ${mins} мин`,
+          session.id,
+        );
       }
 
-      // Сброс оповещения для чатов, которые перестали быть просроченными (оператор ответил/закрыл).
-      for (const id of Array.from(alertedRef.current)) {
-        if (!overdueIds.has(id)) alertedRef.current.delete(id);
+      // Чат перестал быть просроченным (оператор ответил/закрыл) — сбросить
+      // анти-спам, чтобы при новом эпизоде он снова мог оповестить сразу.
+      for (const id of Array.from(lastAlertRef.current.keys())) {
+        if (!overdueIds.has(id)) lastAlertRef.current.delete(id);
       }
     };
 
-    tick(); // сразу зафиксировать бэклог
+    tick();
     const timer = setInterval(tick, 20000);
     return () => clearInterval(timer);
   }, []);

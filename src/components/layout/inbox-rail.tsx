@@ -25,15 +25,13 @@ import { getInitials } from "@/utils/avatar";
 import { env } from "@/lib/env";
 import s from "./InboxRail.module.css";
 
+// Рейл разгружен до 5 пунктов (больше воздуха). Очередь/Виджет/Логи доступны из «Настроек».
 const ALL_NAV_ITEMS = [
   { icon: MessageSquareText, label: "Чаты", screen: "inbox" as const, roles: ["admin", "supervisor", "operator"] },
-  { icon: ListOrdered, label: "Очередь", screen: "queue" as const, roles: ["admin", "supervisor", "operator"] },
   { icon: Eye, label: "Посетители", screen: "visitors" as const, roles: ["admin", "supervisor"] },
   { icon: Sparkles, label: "Шаблоны", screen: "templates" as const, roles: ["admin", "supervisor", "operator"] },
   { icon: Users, label: "Операторы", screen: "operators" as const, roles: ["admin"] },
   { icon: Settings, label: "Настройки", screen: "settings" as const, roles: ["admin", "supervisor"] },
-  { icon: Palette, label: "Виджет", screen: "widget_settings" as const, roles: ["admin"] },
-  { icon: ScrollText, label: "Логи", screen: "logs" as const, roles: ["admin", "supervisor", "operator"] },
 ];
 
 const STATUS_OPTIONS: Array<{

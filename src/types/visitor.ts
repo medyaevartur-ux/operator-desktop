@@ -27,3 +27,29 @@ export interface VisitorPageEvent {
   title: string;
   visited_at: string;
 }
+
+/**
+ * Шаг в карте пути посетителя (реферер → страницы → текущая).
+ * Используется компонентом VisitorJourney и эндпоинтом /api/visitors/:id/path.
+ */
+export interface VisitorPathStep {
+  /** URL страницы (или реферера для первого шага). */
+  page: string;
+  /** Заголовок страницы (может отсутствовать). */
+  title?: string;
+  /** Когда посетитель был на этой странице. */
+  visited_at?: string;
+  /** Является ли шаг реферером (точкой входа извне). */
+  is_referrer?: boolean;
+  /** Является ли шаг текущей страницей («сейчас здесь»). */
+  is_current?: boolean;
+}
+
+/**
+ * Ответ пагинируемого списка посетителей. Сервер постепенно перейдёт на этот
+ * формат; пока getVisitors оборачивает «сырой» массив в { items, has_more:false }.
+ */
+export interface PagedVisitors {
+  items: SiteVisitor[];
+  has_more: boolean;
+}

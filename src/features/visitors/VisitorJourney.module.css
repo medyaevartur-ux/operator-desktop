@@ -1,0 +1,113 @@
+.journey {
+  display: flex;
+  flex-direction: column;
+}
+
+.step {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* ── Rail (node + connector) ── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.node {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--md-sys-shape-corner-full, var(--radius-full));
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border-default);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.nodeReferrer {
+  background: var(--surface-3);
+  color: var(--text-secondary);
+}
+
+.nodeCurrent {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--md-sys-elevation-level1, var(--shadow-glow-sm));
+}
+
+.connector {
+  flex: 1;
+  width: 2px;
+  min-height: 18px;
+  background: var(--border-subtle);
+  margin: 2px 0;
+}
+
+/* ── Body ── */
+.body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: var(--space-3);
+}
+
+.topLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.labelCurrent {
+  font-weight: var(--weight-extrabold);
+}
+
+.nowBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--md-sys-shape-corner-full, var(--radius-full));
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-disabled);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.sub {
+  font-size: 11px;
+  color: var(--text-disabled);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.loading {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  padding: var(--space-2) 0;
+}

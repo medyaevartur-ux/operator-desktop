@@ -24,9 +24,39 @@ function playTone(freq: number, duration: number, vol: number, type: OscillatorT
   osc.stop(ctx.currentTime + startTime + duration);
 }
 
+/**
+ * Мягкая нота с плавной огибающей: короткий attack (linearRamp вверх),
+ * затем экспоненциальный decay. Приятнее «щелчка» от мгновенного gain.
+ */
+function playSoftNote(
+  freq: number,
+  duration: number,
+  vol: number,
+  type: OscillatorType = "sine",
+  startTime = 0,
+) {
+  const ctx = getAudioCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  const t0 = ctx.currentTime + startTime;
+  const attack = Math.min(0.02, duration * 0.25);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(vol, t0 + attack);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + duration);
+}
+
 const SYNTH_SOUNDS = {
   new_message: (vol: number) => {
-    playTone(880, 0.12, vol * 0.4, "sine");
+    // Приятный перезвон C5 → E5 → G5 (мажорное трезвучие) с мягкой огибающей.
+    playSoftNote(523.25, 0.28, vol * 0.32, "sine", 0);
+    playSoftNote(659.25, 0.28, vol * 0.3, "sine", 0.1);
+    playSoftNote(783.99, 0.42, vol * 0.34, "triangle", 0.2);
   },
   new_chat: (vol: number) => {
     playTone(523, 0.15, vol * 0.35, "sine", 0);
@@ -46,15 +76,24 @@ const SYNTH_SOUNDS = {
     playTone(659.25, 0.12, vol * 0.25, "sine", 0.06);
   },
   operator_request: (vol: number) => {
-    playTone(587, 0.15, vol * 0.5, "sine", 0);
-    playTone(784, 0.15, vol * 0.5, "sine", 0.15);
-    playTone(988, 0.15, vol * 0.5, "sine", 0.30);
-    playTone(784, 0.15, vol * 0.5, "sine", 0.45);
-    playTone(988, 0.25, vol * 0.5, "sine", 0.60);
+    // Эскалация: настойчивый, заметный паттерн (восходящая сирена с повтором).
+    playSoftNote(659.25, 0.16, vol * 0.55, "triangle", 0);
+    playSoftNote(880.0, 0.16, vol * 0.55, "triangle", 0.16);
+    playSoftNote(1046.5, 0.2, vol * 0.6, "triangle", 0.32);
+    playSoftNote(880.0, 0.16, vol * 0.55, "triangle", 0.56);
+    playSoftNote(1046.5, 0.16, vol * 0.55, "triangle", 0.72);
+    playSoftNote(1318.5, 0.32, vol * 0.62, "triangle", 0.88);
   },
 };
 
 type SoundType = keyof typeof SYNTH_SOUNDS;
+
+/* ═══ Повторяющийся звук-напоминание ═══
+ * Пока есть непрочитанные/pending — каждые REPEAT_MS повторяем мягкий
+ * перезвон new_message, чтобы оператор не пропустил ожидающие чаты.
+ * Уважает DND/настройки (через обычный playSound, не critical). */
+const REPEAT_MS = 18000;
+let repeatTimer: ReturnType<typeof setInterval> | null = null;
 
 /* ═══ localStorage persistence ═══ */
 
@@ -134,7 +173,16 @@ interface NotificationState {
   clearNotifications: (sessionId: string) => void;
   clearAll: () => void;
 
-  playSound: (type?: SoundType) => void;
+  // Повторяющийся звук-напоминание, пока есть pending.
+  startRepeatLoop: () => void;
+  stopRepeatLoop: () => void;
+
+  /**
+   * @param type  Тип звука.
+   * @param critical  Критический звук (эскалация) — играет ПОВЕРХ
+   *   soundEnabled/per-sound toggles/DND. Обычные звуки уважают настройки.
+   */
+  playSound: (type?: SoundType, critical?: boolean) => void;
   previewSound: (type: SoundType) => void;
   showDesktopNotification: (sessionId: string) => void;
   closeToTray: boolean;
@@ -163,8 +211,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   closeToTray: loadBool("notif_close_tray", true),
   showMessagePreview: loadBool("notif_msg_preview", true),
   slaEnabled: loadBool("notif_sla", true),
-  slaWarnMinutes: loadNumber("notif_sla_warn", 2),
-  slaOverdueMinutes: loadNumber("notif_sla_overdue", 5),
+  slaWarnMinutes: loadNumber("notif_sla_warn", 0),
+  slaOverdueMinutes: loadNumber("notif_sla_overdue", 1),
   customSound: localStorage.getItem("notif_custom_sound") || null,
   customSoundName: localStorage.getItem("notif_custom_sound_name") || null,
   pending: {},
@@ -259,6 +307,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     if (get().desktopEnabled) {
       get().showDesktopNotification(sessionId);
     }
+
+    get().startRepeatLoop();
   },
 
   clearNotifications: (sessionId) => {
@@ -269,6 +319,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       document.title = totalUnread > 0 ? `(${totalUnread}) Живая Сказка` : "Живая Сказка — Оператор";
     });
     set({ pending, totalUnread });
+    if (Object.keys(pending).length === 0) get().stopRepeatLoop();
   },
 
   clearAll: () => {
@@ -276,19 +327,45 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       document.title = "Живая Сказка — Оператор";
     });
     set({ pending: {}, totalUnread: 0 });
+    get().stopRepeatLoop();
   },
 
-  playSound: (type = "new_message") => {
-    const st = get();
-    if (!st.soundEnabled) return;
-    if (get().isDndNow()) return;
-    // Check per-sound toggle
-    if (type === "new_message" && !st.soundNewMessage) return;
-    if (type === "new_chat" && !st.soundNewChat) return;
-    if (type === "mention" && !st.soundMention) return;
-    if (type === "chat_closed" && !st.soundChatClosed) return;
+  startRepeatLoop: () => {
+    if (repeatTimer) return; // уже запущен
+    repeatTimer = setInterval(() => {
+      const st = get();
+      if (Object.keys(st.pending).length === 0) {
+        st.stopRepeatLoop();
+        return;
+      }
+      // Обычный (не critical) звук — уважает DND и настройки.
+      st.playSound("new_message");
+    }, REPEAT_MS);
+  },
 
-    if (st.customSound) {
+  stopRepeatLoop: () => {
+    if (repeatTimer) {
+      clearInterval(repeatTimer);
+      repeatTimer = null;
+    }
+  },
+
+  playSound: (type = "new_message", critical = false) => {
+    const st = get();
+    // Критический звук (эскалация) игнорирует soundEnabled / per-sound toggles / DND.
+    if (!critical) {
+      if (!st.soundEnabled) return;
+      if (st.isDndNow()) return;
+      // Check per-sound toggle
+      if (type === "new_message" && !st.soundNewMessage) return;
+      if (type === "new_chat" && !st.soundNewChat) return;
+      if (type === "mention" && !st.soundMention) return;
+      if (type === "chat_closed" && !st.soundChatClosed) return;
+    }
+
+    // Кастомный звук уместен только для обычных уведомлений; эскалация
+    // должна звучать настойчивым синт-паттерном operator_request.
+    if (st.customSound && !critical) {
       try {
         const audio = new Audio(st.customSound);
         audio.volume = st.soundVolume;
