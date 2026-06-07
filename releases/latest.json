@@ -1,11 +1,11 @@
 {
-  "version": "5.1.9",
-  "notes": "Главная 2.0: три вкладки (Входящие/Мои/Все), разгруженные карточки и чёткий индикатор «Пропущенное обращение». В меню чата добавлены «Уйти из диалога» (вернуть в очередь) и «В спам» (заблокировать посетителя). Исправлена ошибка проверки обновлений.",
-  "pub_date": "2026-06-07T15:05:00Z",
+  "version": "6.1.0",
+  "notes": "Версия 6.1: разгруженный рейл (5 разделов, больше воздуха), хаб разделов в Настройках, рабочий тумблер аватара оператора в виджете, счётчик непрочитанных в заголовке окна. Плюс 6.0: исправлено сохранение настроек виджета и скрытие на нужных страницах (SPA), умные уведомления с эскалацией и звуком до ответа, Шаблоны 2.0 с вставкой по «/», карта пути посетителя и бесконечная прокрутка. Все функции и поведения сохранены.",
+  "pub_date": "2026-06-07T16:10:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcW02bWZ1aVJsRHVRSUNuYWZpNXVuZlp6dG5HUEt4aTBFZkNwRTlnMkU2QWhzSVJVSmNhU2R1MTJYZXloMHFBeEd0S0VHaC8xMHczSTVTSGpwYXRVMkF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODI2NDg0CWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNS4xLjlfeDY0LXNldHVwLm5zaXMuemlwCjZIVHVGVnhPWVVqQVhtYmRZNTFnL0JDN280a091Q0MraHZyWXZzd3B5TDVQLzZvM1pPSGVLV2Z4VitDdDhndVZZMlVSczBXZ1pDWnEvNFVWeS9VUUFRPT0K",
-      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_5.1.9_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcWl1dTY2dXMrSW1XcjY0K0p5bVZjNGhTN1lEZ2I3SWozS09udlhSc01TalZGTzNDOUJGN21aZGx3Rmg0WWpWcGlCZFQ1eUtJVVRvN2JPMjA3dS9DcmdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODMwNDY3CWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNi4xLjBfeDY0LXNldHVwLm5zaXMuemlwCjJNeS9aNXFqdjdrdy9MSEQyUXlGUWVzOUxCSzNnOEUwV0dDenhOY1hhWHZkYU9zaWN1eTlxN2Fsa21lSnYyLzRCY2F0ZndJdTJSQU0xUEFKcDV4RkRRPT0K",
+      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_6.1.0_x64-setup.nsis.zip"
     }
   }
 }
