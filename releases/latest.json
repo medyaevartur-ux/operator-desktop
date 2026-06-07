@@ -1,11 +1,11 @@
 {
-  "version": "5.1.7",
-  "notes": "Полный редизайн интерфейса в стиле Material Design 3 (тема «Глубокий индиго»): новая цветовая система (светлая/тёмная), типографика Roboto Flex, иконки Material Symbols, обновлённые кнопки и поля. Плюс защита загрузок и точность статусов оператора.",
-  "pub_date": "2026-06-06T23:00:00Z",
+  "version": "5.1.8",
+  "notes": "Полный новый дизайн «Тёплый крем + бирюза» (soft UI): мягкие объёмные поверхности, скруглённые формы, обновлённые кнопки, поля, списки, карточки, модалки и навигация. Светлая и тёмная темы. Все функции и поведения сохранены.",
+  "pub_date": "2026-06-07T09:25:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcWgwUk92QW5XUnhvZnRmRzdlMHMwcHVhbU12QUtRRTFmd056bUg2Vyt0V09sVDZ4Vlp0OGMvdFhDM1N2clR3Q29FZG96OHBndlBNTk1DWkdtZ2tYM0FrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzg2NzgyCWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNS4xLjdfeDY0LXNldHVwLm5zaXMuemlwCkpJNTF0VkpIYitWc21KVFF6OVlqdkJhK3ZKRXpQUWV5QlNqOXB4VDIxT2tHdTFnSWFWcXdsTkRQZkdrVHVwL3MyWWJ3VVRELytMbEFVVnJ6aWM3ckJ3PT0K",
-      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_5.1.7_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcXFuQVRVRk9nMkdoZnlXYTFwMmwyQ1Z2OTBueGJ5R2VWbUNUZklNRGQyQmdQYm5MeDN1TDRSb3NYbFgyZ0NOQWpxWVRpNDVWY3BNM1kwdDZWbW9FRWdJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODI0MjAzCWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNS4xLjhfeDY0LXNldHVwLm5zaXMuemlwCnZTNUI5dDduREhIZmR2cDZNck5ldUNXcU1idjhGbjIzd2QrWUdrUVF3QWFlN2dIWmVwOEdhSWVvc3B1L3p6emhySXlsSTRTbGVDZFczWHl0TEloekNRPT0K",
+      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_5.1.8_x64-setup.nsis.zip"
     }
   }
 }
