@@ -12,7 +12,9 @@
   border-radius: var(--radius-xl);
   padding: var(--space-4) var(--space-5);
   overflow: hidden;
+  box-shadow: var(--shadow-xs);
   transition: transform var(--duration-fast) var(--ease-default),
+              border-color var(--duration-fast) var(--ease-default),
               box-shadow var(--duration-fast) var(--ease-default);
 }
 .kpi::before {
@@ -27,6 +29,7 @@
 .kpi:hover {
   border-color: var(--accent-muted);
   box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 .kpi:hover::before { opacity: 1; }
 
@@ -82,6 +85,7 @@
   background: var(--surface-1);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
 }
 .funnelTitle {
   font-size: var(--text-md);
@@ -140,6 +144,7 @@
   background: var(--surface-1);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
 }
 .heatmapTitle {
   font-size: var(--text-md);

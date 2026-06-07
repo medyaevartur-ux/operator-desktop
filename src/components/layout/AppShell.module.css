@@ -16,10 +16,10 @@
 
 .detailsPanel {
   overflow: hidden;
-  border-left: 1px solid var(--border-default);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .visitorsPanel {
   overflow: hidden;
-  border-left: 1px solid var(--border-default);
+  border-left: 1px solid var(--border-subtle);
 }

@@ -15,6 +15,7 @@
   background-position: center;
   overflow: hidden;
   user-select: none;
+  box-shadow: var(--md-sys-elevation-level1);
 }
 
 /* ── Sizes ── */

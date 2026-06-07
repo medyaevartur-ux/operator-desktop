@@ -19,9 +19,10 @@
   height: 44px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-lg);
+  border-radius: var(--md-sys-shape-corner-medium);
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: var(--md-sys-elevation-level1);
 }
 
 .title {
@@ -45,17 +46,31 @@
   background: var(--gradient-accent);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--md-sys-shape-corner-full);
   font-weight: var(--weight-semibold);
   font-size: var(--text-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  box-shadow: var(--shadow-glow-sm);
-  transition: transform var(--duration-fast) var(--ease-default);
+  box-shadow: var(--md-sys-elevation-level2);
+  transition: transform var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default),
+              filter var(--duration-fast) var(--ease-default);
 }
-.addBtn:hover { box-shadow: var(--shadow-glow); filter: brightness(1.05); }
+.addBtn:hover {
+  box-shadow: var(--md-sys-elevation-level3);
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+.addBtn:active {
+  transform: translateY(0);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+.addBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--md-sys-elevation-level2), 0 0 0 3px var(--accent-muted);
+}
 
 .grid {
   flex: 1;
@@ -70,16 +85,18 @@
 .card {
   position: relative;
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--md-sys-shape-corner-large);
   padding: var(--space-5);
+  box-shadow: var(--md-sys-elevation-level1);
   transition: transform var(--duration-fast) var(--ease-default),
               box-shadow var(--duration-fast) var(--ease-default),
               border-color var(--duration-fast) var(--ease-default);
 }
 .card:hover {
   border-color: var(--accent-muted);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--md-sys-elevation-level3);
+  transform: translateY(-2px);
 }
 
 .cardHead {
@@ -97,13 +114,14 @@
 
 .cardShortcut {
   margin-top: 4px;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   padding: 2px 8px;
-  background: var(--accent-muted);
+  background: var(--accent-soft);
   color: var(--accent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--md-sys-shape-corner-full);
   font-weight: var(--weight-semibold);
 }
 
@@ -115,7 +133,7 @@
 .cardActions button {
   width: 28px;
   height: 28px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--md-sys-shape-corner-full);
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -123,8 +141,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default);
 }
 .cardActions button:hover { background: var(--surface-2); color: var(--text-primary); }
+.cardActions button:active { background: var(--surface-3); box-shadow: var(--soft-pressed); }
 
 .cardBody {
   font-size: var(--text-sm);
@@ -173,11 +194,11 @@
   transform: translateX(-50%);
   width: min(540px, calc(100vw - 32px));
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  box-shadow: var(--md-sys-elevation-level5);
   z-index: 201;
-  padding: var(--space-5);
+  padding: var(--space-6);
   animation: pop var(--duration-normal) var(--ease-spring);
 }
 @keyframes pop {
@@ -207,23 +228,25 @@
 }
 .field input, .field textarea {
   width: 100%;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--md-sys-shape-corner-medium);
   padding: 10px 14px;
   font-size: var(--text-sm);
   font-family: inherit;
-  background: var(--surface-1);
+  background: var(--surface-2);
   color: var(--text-primary);
   outline: none;
-  transition: border-color var(--duration-fast);
+  box-shadow: var(--soft-inset);
+  transition: border-color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
 }
 .field textarea {
   min-height: 90px;
   resize: vertical;
 }
 .field input:focus, .field textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-muted);
+  border-color: var(--border-focus);
+  box-shadow: var(--soft-inset), 0 0 0 3px var(--accent-muted);
 }
 .hint {
   font-size: var(--text-xs);
@@ -238,14 +261,34 @@
 }
 .btnPrimary, .btnGhost {
   padding: 10px 18px;
-  border-radius: var(--radius-md);
+  border-radius: var(--md-sys-shape-corner-full);
   font-weight: var(--weight-semibold);
   font-size: var(--text-sm);
   cursor: pointer;
   border: none;
-  transition: transform var(--duration-fast);
+  transition: transform var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default),
+              filter var(--duration-fast) var(--ease-default),
+              background var(--duration-fast) var(--ease-default);
 }
-.btnPrimary { background: var(--gradient-accent); color: white; }
-.btnPrimary:hover { filter: brightness(1.05); }
+.btnPrimary {
+  background: var(--gradient-accent);
+  color: white;
+  box-shadow: var(--md-sys-elevation-level2);
+}
+.btnPrimary:hover {
+  filter: brightness(1.05);
+  box-shadow: var(--md-sys-elevation-level3);
+  transform: translateY(-1px);
+}
+.btnPrimary:active {
+  transform: translateY(0);
+  box-shadow: var(--md-sys-elevation-level1);
+}
 .btnGhost { background: transparent; color: var(--text-secondary); }
-.btnGhost:hover { background: var(--surface-2); }
+.btnGhost:hover { background: var(--surface-2); color: var(--text-primary); }
+.btnGhost:active { background: var(--surface-3); box-shadow: var(--soft-pressed); }
+.btnPrimary:focus-visible, .btnGhost:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}

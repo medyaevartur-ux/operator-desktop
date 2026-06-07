@@ -13,6 +13,7 @@
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   cursor: pointer;
+  box-shadow: var(--md-sys-elevation-level1);
   transition:
     border-color var(--duration-fast) var(--ease-default),
     box-shadow var(--duration-fast) var(--ease-default);
@@ -20,11 +21,12 @@
 
 .trigger:hover {
   border-color: var(--border-strong);
+  box-shadow: var(--md-sys-elevation-level2);
 }
 
 .trigger:focus-visible {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--accent-muted);
+  box-shadow: 0 0 0 3px var(--accent-muted), var(--md-sys-elevation-level2);
 }
 
 .trigger[data-placeholder] {
@@ -38,9 +40,9 @@
 
 .content {
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--md-sys-elevation-level5);
   overflow: hidden;
   z-index: 300;
   animation: scaleIn var(--duration-fast) var(--ease-spring);

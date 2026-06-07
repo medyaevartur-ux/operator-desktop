@@ -54,6 +54,13 @@
 .searchBtn:hover {
   border-color: var(--border-strong);
   color: var(--text-secondary);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.searchBtn:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--md-sys-elevation-level1);
 }
 
 .searchBtn kbd {
@@ -94,6 +101,16 @@
 .iconBtn:hover {
   background: var(--surface-2);
   color: var(--text-primary);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.iconBtn:active {
+  box-shadow: var(--soft-pressed);
+}
+
+.iconBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-focus);
 }
 
 .themeMenuItem {
@@ -106,23 +123,25 @@
   cursor: pointer;
   outline: none;
   color: var(--text-primary);
+  transition: background var(--duration-instant) var(--ease-default);
 }
 .themeMenuItem:hover, .themeMenuItem[data-highlighted] {
   background: var(--accent-muted);
+  color: var(--accent);
 }
 .themeSwatch {
   width: 16px;
   height: 16px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   border: 1px solid var(--border-default);
 }
 
 .menuContent {
   min-width: 200px;
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--md-sys-elevation-level5);
   padding: var(--space-2);
   z-index: 100;
 }
@@ -144,7 +163,7 @@
   height: 14px;
   padding: 0 4px;
   border-radius: var(--radius-full);
-  background: var(--badge-unread, #ff6b35);
+  background: var(--badge-unread);
   color: white;
   font-size: 8px;
   font-weight: var(--weight-bold);

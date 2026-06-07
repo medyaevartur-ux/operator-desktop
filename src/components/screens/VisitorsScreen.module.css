@@ -93,11 +93,13 @@
   font-size: var(--text-sm);
   color: var(--text-primary);
   outline: none;
-  transition: border-color var(--duration-fast) var(--ease-default);
+  transition: border-color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .searchInput:focus {
-  border-color: var(--accent);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 .filterGroup {
@@ -141,6 +143,17 @@
   color: var(--text-primary);
   cursor: pointer;
   outline: none;
+  transition: border-color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.countrySelect:hover {
+  border-color: var(--border-strong);
+}
+
+.countrySelect:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 /* ══ Content ══ */
@@ -347,7 +360,13 @@
   place-items: center;
   transition:
     background var(--duration-fast) var(--ease-default),
-    color var(--duration-fast) var(--ease-default);
+    color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.cardActionBtn:active {
+  transform: translateY(1px);
 }
 
 .cardActionPrimary {
@@ -438,7 +457,7 @@
 }
 
 .histRow:hover {
-  background: var(--surface-hover);
+  background: var(--surface-2);
 }
 
 .histRowSelected {
@@ -658,10 +677,19 @@
   background: var(--gradient-accent);
   color: white;
   box-shadow: var(--shadow-glow-sm);
+  transition:
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
 }
 
 .sidePanelActionPrimary:hover {
   box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.sidePanelActionPrimary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-glow-sm);
 }
 
 .sidePanelActionSecondary {
@@ -786,8 +814,8 @@
   border-radius: var(--radius-full);
   font-size: 10px;
   font-weight: var(--weight-bold);
-  background: var(--warning-soft, #fef3c7);
-  color: var(--status-away, #d97706);
+  background: var(--warning-soft);
+  color: var(--status-away);
 }
 
 /* ══ Modal ══ */
@@ -871,11 +899,13 @@
   color: var(--text-primary);
   resize: none;
   outline: none;
-  transition: border-color var(--duration-fast) var(--ease-default);
+  transition: border-color var(--duration-fast) var(--ease-default),
+              box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .modalTextarea:focus {
-  border-color: var(--accent);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 .modalFooter {
@@ -919,11 +949,19 @@
   cursor: pointer;
   font-family: inherit;
   box-shadow: var(--shadow-glow-sm);
-  transition: opacity var(--duration-fast) var(--ease-default);
+  transition: box-shadow var(--duration-fast) var(--ease-default),
+              transform var(--duration-fast) var(--ease-default),
+              opacity var(--duration-fast) var(--ease-default);
 }
 
 .modalSendBtn:hover {
-  opacity: 0.9;
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.modalSendBtn:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-glow-sm);
 }
 
 .modalSendBtn:disabled {

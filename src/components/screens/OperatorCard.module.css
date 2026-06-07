@@ -4,33 +4,38 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 18px;
-  border-radius: var(--radius-xl);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--md-sys-shape-corner-large);
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--md-sys-elevation-level1);
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-default),
     border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
     transform var(--duration-fast) var(--ease-default);
   outline: none;
 }
 
 .card:hover {
   background: var(--surface-2);
+  box-shadow: var(--md-sys-elevation-level2);
 }
 
 .card:focus-visible {
-  box-shadow: 0 0 0 3px var(--accent-muted);
+  box-shadow: var(--md-sys-elevation-level2), 0 0 0 3px var(--accent-muted);
 }
 
 .cardSelected {
   background: var(--accent-soft);
   border-color: var(--accent);
+  box-shadow: var(--md-sys-elevation-level2);
 }
 
 .cardSelected:hover {
   background: var(--accent-soft);
+  box-shadow: var(--md-sys-elevation-level3);
 }
 
 .cardInactive {
@@ -47,7 +52,7 @@
 .avatar {
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-xl);
+  border-radius: var(--md-sys-shape-corner-large);
   background: var(--gradient-accent);
   color: white;
   display: grid;
@@ -56,6 +61,7 @@
   font-weight: var(--weight-extrabold);
   background-size: cover;
   background-position: center;
+  box-shadow: var(--md-sys-elevation-level1);
 }
 
 .statusDot {
@@ -103,7 +109,7 @@
   color: var(--accent);
   background: var(--accent-soft);
   padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--md-sys-shape-corner-full);
 }
 
 .roleBadge {
@@ -112,7 +118,7 @@
   color: var(--text-muted);
   background: var(--surface-2);
   padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--md-sys-shape-corner-full);
 }
 
 .email {
@@ -178,21 +184,28 @@
 .deleteBtn {
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid var(--border-subtle);
   background: var(--surface-2);
+  box-shadow: var(--md-sys-elevation-level1);
   cursor: pointer;
   display: grid;
   place-items: center;
   color: var(--text-disabled);
   transition:
     background var(--duration-fast) var(--ease-default),
-    color var(--duration-fast) var(--ease-default);
+    color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .deleteBtn:hover {
   background: rgba(239, 68, 68, 0.06);
   color: var(--status-dnd);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+
+.deleteBtn:active {
+  box-shadow: var(--soft-pressed);
 }
 
 /* ── Checkbox ── */

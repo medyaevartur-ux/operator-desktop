@@ -73,12 +73,18 @@
   transition:
     background var(--duration-fast) var(--ease-default),
     color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default),
     box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .navBtn:hover {
   background: var(--surface-2);
   color: var(--text-secondary);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.navBtn:active {
+  box-shadow: var(--soft-pressed);
 }
 
 .navBtnActive {
@@ -135,7 +141,16 @@
   transition:
     background var(--duration-fast) var(--ease-default),
     color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
     border-color var(--duration-fast) var(--ease-default);
+}
+
+.notifBtn:hover {
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.notifBtn:active {
+  box-shadow: var(--soft-pressed);
 }
 
 .notifBtnActive {
@@ -171,7 +186,10 @@
   cursor: pointer;
   margin-top: var(--space-2);
   border: none;
-  transition: background var(--duration-fast) var(--ease-default);
+  box-shadow: var(--soft-inset);
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .statusThumb {
@@ -192,10 +210,10 @@
 .dropdownContent {
   min-width: 180px;
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-1);
+  box-shadow: var(--md-sys-elevation-level5);
+  padding: var(--space-2);
   z-index: 100;
   animation: scaleIn var(--duration-fast) var(--ease-spring);
 }
@@ -256,7 +274,8 @@
   font-weight: 700;
   color: var(--md-sys-color-on-primary);
   background: var(--md-sys-color-primary);
-  border-radius: 8px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--md-sys-elevation-level1);
   display: flex;
   align-items: center;
   justify-content: center;
