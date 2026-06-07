@@ -1,4 +1,4 @@
-import { Search, Inbox, Flame, Clock, User, Bot, CheckCircle2 } from "lucide-react";
+import { Search, Inbox, Flame, Clock, User, Bot, CheckCircle2, XCircle } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
@@ -20,7 +20,6 @@ const URGENT_THRESHOLD_MS = 60 * 1000; // > 60 сек без ответа = ср
 const FILTERS: Array<{ key: InboxFilter; label: string }> = [
   { key: "all", label: "Входящие" },
   { key: "with_operator", label: "Мои" },
-  { key: "ai", label: "AI" },
   { key: "closed", label: "Все" },
 ];
 
@@ -60,6 +59,13 @@ function SessionCard({
   const totalVisits = session.total_visitor_sessions ?? session.visit_count ?? 1;
   const priority = session.priority || "normal";
   const isVip = session.is_vip === true;
+  // «Пропущено» — посетитель ждёт оператора и его ещё не взяли, либо есть неотвеченные сообщения без оператора
+  const isMissed =
+    session.status === "waiting_operator" ||
+    (!session.operator_id &&
+      (session.unread_count ?? 0) > 0 &&
+      session.last_message_sender === "visitor" &&
+      session.status !== "closed");
 
   const slaEnabled = useNotificationStore((n) => n.slaEnabled);
   const slaWarnMin = useNotificationStore((n) => n.slaWarnMinutes);
@@ -104,11 +110,19 @@ function SessionCard({
           </div>
         </div>
 
-        {/* Preview + repeat/SLA badges */}
+        {/* «Пропущено» — чёткий красный индикатор для неотвеченных */}
+        {isMissed && (
+          <div className={s.missedBadge}>
+            <XCircle style={{ width: 13, height: 13 }} />
+            Пропущенное обращение
+          </div>
+        )}
+
+        {/* Превью последнего сообщения (одна строка) */}
         <div className={s.cardPreview}>
-          {slaState !== "none" && (
+          {!isMissed && slaState === "overdue" && (
             <span
-              className={`${s.slaBadge} ${slaState === "overdue" ? s.slaOverdue : s.slaWarn}`}
+              className={`${s.slaBadge} ${s.slaOverdue}`}
               title={`Без ответа оператора ${slaMin} мин`}
             >
               <Clock style={{ width: 10, height: 10 }} />
@@ -116,7 +130,7 @@ function SessionCard({
             </span>
           )}
           {totalVisits > 1 && (
-            <span className={s.repeatBadge}>×{totalVisits}</span>
+            <span className={s.repeatBadge} title={`Повторных визитов: ${totalVisits}`}>×{totalVisits}</span>
           )}
           {preview}
         </div>
