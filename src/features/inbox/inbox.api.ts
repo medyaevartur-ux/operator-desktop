@@ -17,6 +17,20 @@ export async function assignOperatorToSession(sessionId: string, operatorId: str
 }
 
 export const assignSession = assignOperatorToSession;
+
+/** Уйти из диалога — снять с себя, вернуть в очередь. */
+export async function leaveChatSession(sessionId: string) {
+  return api(`/api/sessions/${sessionId}/leave`, { method: "PATCH" });
+}
+
+/** Заблокировать посетителя («В спам») — он больше не сможет писать. */
+export async function blockVisitorBySession(visitorId: string) {
+  return api(`/api/visitors/${visitorId}/block`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export async function transferOperatorToSession(sessionId: string, operatorId: string, fromOperatorId?: string) {
   return api(`/api/sessions/${sessionId}/transfer`, {
     method: "PATCH",

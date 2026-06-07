@@ -3,10 +3,10 @@ import { useInboxStore } from "@/store/inbox.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useInboxHotkeys } from "@/features/inbox/use-hotkeys";
-import { toggleReaction, editMessage, deleteMessage } from "@/features/inbox/inbox.api";
+import { toggleReaction, editMessage, deleteMessage, leaveChatSession, blockVisitorBySession } from "@/features/inbox/inbox.api";
 import { ChatComposer } from "@/components/layout/chat-composer";
 import { TypingPreview } from "@/components/layout/typing-preview";
-import { Avatar, Button, Tooltip } from "@/components/ui";
+import { Avatar, Button, Tooltip, toast } from "@/components/ui";
 import { SkeletonMessage } from "@/components/ui";
 import { useConfirm } from "@/components/ui";
 import { getSessionDisplayName, getAvatarGradient } from "@/utils/avatar";
@@ -30,6 +30,9 @@ import {
   Flag,
   Eye,
   Clock,
+  MoreHorizontal,
+  LogOut,
+  Ban,
 } from "lucide-react";
 import s from "./ChatMain.module.css";
 
@@ -430,6 +433,62 @@ export function ChatMain() {
               <XCircle style={{ width: 16, height: 16 }} />
             </button>
           </Tooltip>
+
+          <DropdownMenu.Root>
+            <Tooltip content="Ещё" side="bottom">
+              <DropdownMenu.Trigger asChild>
+                <button type="button" className={s.ghostBtn}>
+                  <MoreHorizontal style={{ width: 16, height: 16 }} />
+                </button>
+              </DropdownMenu.Trigger>
+            </Tooltip>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content className={s.dropdownContent} side="bottom" align="end" sideOffset={6}>
+                <DropdownMenu.Item
+                  className={s.dropdownItem}
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "Уйти из диалога?",
+                      message: "Чат вернётся в очередь и станет доступен другим операторам.",
+                      confirmText: "Уйти",
+                    });
+                    if (!ok) return;
+                    try {
+                      await leaveChatSession(activeSession.id);
+                      toast.success("Вы вышли из диалога");
+                      await useInboxStore.getState().loadSessions();
+                    } catch (e: any) {
+                      toast.error("Не удалось выйти из диалога", e?.message || "");
+                    }
+                  }}
+                >
+                  <LogOut style={{ width: 15, height: 15, marginRight: 8 }} /> Уйти из диалога
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className={s.dropdownItem}
+                  style={{ color: "var(--md-sys-color-error)" }}
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "Отправить в спам?",
+                      message: "Посетитель будет заблокирован и больше не сможет писать. Диалог закроется.",
+                      confirmText: "В спам",
+                      danger: true,
+                    });
+                    if (!ok) return;
+                    try {
+                      await blockVisitorBySession(activeSession.visitor_id);
+                      toast.success("Посетитель заблокирован");
+                      await useInboxStore.getState().loadSessions();
+                    } catch (e: any) {
+                      toast.error("Не удалось заблокировать", e?.message || "");
+                    }
+                  }}
+                >
+                  <Ban style={{ width: 15, height: 15, marginRight: 8 }} /> В спам
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
 
           <div className={s.headerSearch}>
             <input
