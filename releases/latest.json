@@ -1,11 +1,11 @@
 {
-  "version": "5.1.8",
-  "notes": "Полный новый дизайн «Тёплый крем + бирюза» (soft UI): мягкие объёмные поверхности, скруглённые формы, обновлённые кнопки, поля, списки, карточки, модалки и навигация. Светлая и тёмная темы. Все функции и поведения сохранены.",
-  "pub_date": "2026-06-07T09:25:00Z",
+  "version": "5.1.9",
+  "notes": "Главная 2.0: три вкладки (Входящие/Мои/Все), разгруженные карточки и чёткий индикатор «Пропущенное обращение». В меню чата добавлены «Уйти из диалога» (вернуть в очередь) и «В спам» (заблокировать посетителя). Исправлена ошибка проверки обновлений.",
+  "pub_date": "2026-06-07T15:05:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcW9zNkhOYlhoN1QySjF5bkZZRWZINkQza2dWakRDTmJ2TWg0bUlYUDEyNlVXUHc3aHk5cldFdU4rcFBvMHJwbmVScG1Bclh6NEhMRjE1V0s4MTNwU2dZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODI0NzI3CWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNS4xLjhfeDY0LXNldHVwLm5zaXMuemlwCkswTThJc3B0NmpBR0FrVjRjU05NY1loMlR6UVp1NXpCa3ovaFJpSmdwamJNb1JlQ291VUxicjA0Sk5FNmRkdERqcS9pUVkxRGhGTjJpQlA4MFVDNUNRPT0K",
-      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_5.1.8_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcW02bWZ1aVJsRHVRSUNuYWZpNXVuZlp6dG5HUEt4aTBFZkNwRTlnMkU2QWhzSVJVSmNhU2R1MTJYZXloMHFBeEd0S0VHaC8xMHczSTVTSGpwYXRVMkF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwODI2NDg0CWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNS4xLjlfeDY0LXNldHVwLm5zaXMuemlwCjZIVHVGVnhPWVVqQVhtYmRZNTFnL0JDN280a091Q0MraHZyWXZzd3B5TDVQLzZvM1pPSGVLV2Z4VitDdDhndVZZMlVSczBXZ1pDWnEvNFVWeS9VUUFRPT0K",
+      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_5.1.9_x64-setup.nsis.zip"
     }
   }
 }
