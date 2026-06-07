@@ -1,6 +1,6 @@
 [package]
 name = "operator-desktop"
-version = "5.1.8"
+version = "5.1.9"
 description = "Живая Сказка — Десктоп оператора чата"
 authors = ["Zhivaya Skazka"]
 edition = "2021"
