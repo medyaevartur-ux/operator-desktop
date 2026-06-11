@@ -391,11 +391,15 @@
   --sys-text: ${tv.sysText};
   --fab-bg: ${fabBg};
   --send-bg: ${(() => {
-    // Кнопка отправки/лончера: акцентный градиент. Уважает кастомный цвет оператора.
+    // Кнопка отправки: тот же акцент, что у лончера — уважает gradient_type.
+    // solid/glass → сплошной cfg.color; gradient/animated → градиент from→to.
     const sc = cfg.color || "#e8530e";
-    const sto = cfg.gradient_to || "#f5a623";
-    const sga = cfg.gradient_angle || 135;
-    return "linear-gradient(" + sga + "deg," + (cfg.gradient_from || sc) + "," + sto + ")";
+    const gt = cfg.gradient_type || "solid";
+    if (gt === "gradient" || gt === "animated") {
+      const sga = cfg.gradient_angle || 135;
+      return "linear-gradient(" + sga + "deg," + (cfg.gradient_from || sc) + "," + (cfg.gradient_to || "#f5a623") + ")";
+    }
+    return sc;
   })()};
   --fab-size: ${fabSize};
   --fab-radius: ${fabRadius};
