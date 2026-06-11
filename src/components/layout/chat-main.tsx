@@ -33,6 +33,7 @@ import {
   MoreHorizontal,
   LogOut,
   Ban,
+  MessagesSquare,
 } from "lucide-react";
 import s from "./ChatMain.module.css";
 
@@ -557,8 +558,14 @@ export function ChatMain() {
         )}
 
         {!isMessagesLoading && messages.length === 0 && (
-          <div className={s.placeholder} style={{ height: "auto", padding: 40 }}>
-            <div className={s.placeholderDesc}>Нет сообщений</div>
+          <div className={s.emptyMessages}>
+            <div className={s.emptyMessagesIcon}>
+              <MessagesSquare style={{ width: 26, height: 26 }} />
+            </div>
+            <div className={s.emptyMessagesTitle}>Пока нет сообщений</div>
+            <div className={s.emptyMessagesDesc}>
+              Напишите первым — клиент получит ваше сообщение в виджете на сайте
+            </div>
           </div>
         )}
 

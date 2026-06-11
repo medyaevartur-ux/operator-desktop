@@ -42,6 +42,42 @@
   line-height: 1.6;
 }
 
+/* ── Empty messages state ── */
+.emptyMessages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-6);
+  margin: auto;
+  max-width: 340px;
+}
+
+.emptyMessagesIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--accent-soft);
+  box-shadow: var(--soft-raised);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.emptyMessagesTitle {
+  font-size: 16px;
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+}
+
+.emptyMessagesDesc {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
 /* ── Main layout ── */
 
 .main {

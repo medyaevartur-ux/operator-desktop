@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Globe, MapPin, ArrowDownRight } from "lucide-react";
 import { getVisitorPath } from "./visitors.api";
+import { useVisitorsStore } from "@/store/visitors.store";
 import type { SiteVisitor, VisitorPathStep } from "@/types/visitor";
 import s from "./VisitorJourney.module.css";
 
@@ -60,8 +61,12 @@ function fallbackSteps(visitor: SiteVisitor): VisitorPathStep[] {
  * fallback на current_page.
  */
 export function VisitorJourney({ visitor }: VisitorJourneyProps) {
-  const [steps, setSteps] = useState<VisitorPathStep[]>(() => fallbackSteps(visitor));
   const [loading, setLoading] = useState(true);
+
+  // Живая карта пути из стора: засевается REST-загрузкой ниже, а сокет-слушатель
+  // (use-visitors-realtime → appendVisitorPathStep) дополняет её при переходах.
+  const livePath = useVisitorsStore((st) => st.livePaths[visitor.visitor_id]);
+  const setVisitorPath = useVisitorsStore((st) => st.setVisitorPath);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,13 +80,13 @@ export function VisitorJourney({ visitor }: VisitorJourneyProps) {
           const normalized = hasCurrent
             ? path
             : path.map((p, i) => (i === path.length - 1 ? { ...p, is_current: true } : p));
-          setSteps(normalized);
+          setVisitorPath(visitor.visitor_id, normalized);
         } else {
-          setSteps(fallbackSteps(visitor));
+          setVisitorPath(visitor.visitor_id, fallbackSteps(visitor));
         }
       })
       .catch(() => {
-        if (!cancelled) setSteps(fallbackSteps(visitor));
+        if (!cancelled) setVisitorPath(visitor.visitor_id, fallbackSteps(visitor));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -91,6 +96,9 @@ export function VisitorJourney({ visitor }: VisitorJourneyProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitor.visitor_id]);
+
+  // Пока кэш не засеян (первый рендер до REST) — показываем локальный fallback.
+  const steps = livePath && livePath.length > 0 ? livePath : fallbackSteps(visitor);
 
   return (
     <div className={s.journey}>

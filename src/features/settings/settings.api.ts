@@ -376,5 +376,5 @@ export async function getOfflineLeads(): Promise<OfflineLead[]> {
 /* ── Embed code ── */
 
 export function getWidgetEmbedCode(apiBase: string): string {
-  return `<script src="${apiBase}/widget.js" async></script>`;
+  return `<script src="${apiBase}/widget/widget.min.js" async></script>`;
 }

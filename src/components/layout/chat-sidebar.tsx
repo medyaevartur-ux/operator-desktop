@@ -146,9 +146,9 @@ function EmptyState({ hasSearch }: { hasSearch: boolean }) {
     <div className={s.empty}>
       <div className={s.emptyIcon}>
         {hasSearch ? (
-          <Search style={{ width: 24, height: 24 }} />
+          <Search style={{ width: 26, height: 26 }} />
         ) : (
-          <Inbox style={{ width: 24, height: 24 }} />
+          <Inbox style={{ width: 26, height: 26 }} />
         )}
       </div>
       <div className={s.emptyTitle}>

@@ -568,6 +568,40 @@
   box-shadow: var(--soft-pressed);
 }
 
+/* ── «Проверить обновления» — полноценная текстовая кнопка ── */
+.updateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: 10px 16px;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.updateBtn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+
+.updateBtn:active {
+  transform: scale(0.98);
+  box-shadow: var(--soft-pressed);
+}
+
 .volumeRow {
   display: flex;
   align-items: center;

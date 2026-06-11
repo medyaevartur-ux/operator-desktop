@@ -1314,7 +1314,7 @@ export function WidgetSettingsScreen() {
     }
   };
 </script>
-<script src="${API_BASE}/widget.js" async></script>`}
+<script src="${API_BASE}/widget/widget.min.js" async></script>`}
                       </pre>
                     </div>
                   )}

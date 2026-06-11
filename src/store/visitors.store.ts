@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SiteVisitor } from "@/types/visitor";
+import type { SiteVisitor, VisitorPathStep } from "@/types/visitor";
 
 type VisitorFilter = "all" | "with_chat" | "without_chat";
 
@@ -154,6 +154,17 @@ interface VisitorsState {
   setLoading: (v: boolean) => void;
 
   onlineCount: number;
+
+  /**
+   * Живые карты пути по visitor_id. Наполняются по сокету 'visitor_path_step'
+   * (каждый переход посетителя). VisitorJourney мёржит их поверх загруженного
+   * по REST пути, чтобы карта обновлялась без перезапроса.
+   */
+  livePaths: Record<string, VisitorPathStep[]>;
+  /** Засеять/перезаписать кэш пути (после REST-загрузки в VisitorJourney). */
+  setVisitorPath: (visitorId: string, steps: VisitorPathStep[]) => void;
+  /** Добавить шаг пути (по сокету). Дедуп подряд одинаковых страниц, перенос is_current. */
+  appendVisitorPathStep: (visitorId: string, step: VisitorPathStep) => void;
 }
 
 export const useVisitorsStore = create<VisitorsState>((set, get) => ({
@@ -248,4 +259,39 @@ export const useVisitorsStore = create<VisitorsState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
 
   onlineCount: 0,
+
+  livePaths: {},
+
+  setVisitorPath: (visitorId, steps) =>
+    set((state) => ({
+      livePaths: { ...state.livePaths, [visitorId]: steps },
+    })),
+
+  appendVisitorPathStep: (visitorId, step) =>
+    set((state) => {
+      const prev = state.livePaths[visitorId] ?? [];
+      const last = prev[prev.length - 1];
+
+      // Дедуп: тот же URL подряд — не плодим шаг, лишь обновляем время/флаг.
+      if (last && last.page === step.page) {
+        const merged = [...prev];
+        merged[merged.length - 1] = {
+          ...last,
+          title: step.title ?? last.title,
+          visited_at: step.visited_at ?? last.visited_at,
+          is_current: step.is_current ?? true,
+        };
+        return { livePaths: { ...state.livePaths, [visitorId]: merged } };
+      }
+
+      // Снимаем «сейчас здесь» с прежних шагов, помечаем новый текущим.
+      const cleared = prev.map((s) =>
+        s.is_current ? { ...s, is_current: false } : s
+      );
+      const next: VisitorPathStep[] = [
+        ...cleared,
+        { ...step, is_current: step.is_current ?? true },
+      ];
+      return { livePaths: { ...state.livePaths, [visitorId]: next } };
+    }),
 }));

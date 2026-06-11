@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Clock, UserPlus, AlertTriangle, Inbox, Volume2 } from "lucide-react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
+import { getSocket } from "@/lib/socket";
 import { getQueueSessions, assignSession } from "@/features/inbox/inbox.api";
 import { Avatar } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
@@ -177,18 +178,28 @@ export function QueueScreen() {
     return () => clearInterval(interval);
   }, [loadQueue]);
 
-  // Слушаем WebSocket queue_updated
+  // ─ Live-обновление очереди по сокету ─
+  // Сервер эмитит 'queue_updated' (sessions.ts) при любом изменении очереди
+  // (новый чат в очереди / забор / закрытие). Раньше клиент его не слушал и
+  // очередь обновлялась только поллингом раз в 5с. Теперь — мгновенно.
+  // Если в payload пришёл готовый список — применяем его; иначе ре-фетчим.
   useEffect(() => {
-    const handleQueueUpdate = () => {
-      loadQueue();
+    const socket = getSocket();
+
+    const handleQueueUpdate = (payload?: { queue?: ChatSession[] } | ChatSession[]) => {
+      const list = Array.isArray(payload) ? payload : payload?.queue;
+      if (Array.isArray(list)) {
+        setQueue(list);
+        prevCountRef.current = list.length;
+      } else {
+        void loadQueue();
+      }
     };
 
-    // Подписка через глобальный сокет inbox store
-    const sessions = useInboxStore.getState().sessions;
-    // Просто делаем polling, сокет уже триггерит session_updated
-    // который вызывает loadSessions в use-inbox-realtime
-
-    return () => {};
+    socket.on("queue_updated", handleQueueUpdate);
+    return () => {
+      socket.off("queue_updated", handleQueueUpdate);
+    };
   }, [loadQueue]);
 
   const handleAssign = async (sessionId: string) => {
@@ -234,7 +245,9 @@ export function QueueScreen() {
       <div className={s.list}>
         {queue.length === 0 ? (
           <div className={s.empty}>
-            <Inbox style={{ width: 40, height: 40, opacity: 0.3 }} />
+            <div className={s.emptyIcon}>
+              <Inbox style={{ width: 28, height: 28 }} />
+            </div>
             <div className={s.emptyTitle}>Очередь пуста</div>
             <div className={s.emptyDesc}>Все клиенты обслужены 🎉</div>
           </div>

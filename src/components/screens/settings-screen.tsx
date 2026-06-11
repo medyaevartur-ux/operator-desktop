@@ -5,7 +5,7 @@ import { useNavigationStore } from "@/store/navigation.store";
 import { useThemeStore } from "@/store/theme.store";
 import { uploadAvatar, updateOperator } from "@/features/operators/operators.api";
 import { API_BASE } from "@/lib/api";
-import { ArrowLeft, Camera, Save, LogOut, Zap, Plus, Pencil, Trash2, Power } from "lucide-react";
+import { ArrowLeft, Camera, Save, LogOut, Zap, Plus, Pencil, Trash2, Power, RefreshCw } from "lucide-react";
 import { Toggle, toast, useConfirm } from "@/components/ui";
 import { checkForUpdatesManually } from "@/components/updater";
 import {
@@ -553,8 +553,7 @@ export function SettingsScreen() {
             </div>
             <button
               type="button"
-              className={s.previewBtn}
-              style={{ marginTop: 12 }}
+              className={s.updateBtn}
               onClick={async () => {
                 try {
                   toast.info("Проверяем обновления…");
@@ -565,6 +564,7 @@ export function SettingsScreen() {
                 }
               }}
             >
+              <RefreshCw style={{ width: 16, height: 16 }} />
               Проверить обновления
             </button>
           </div>

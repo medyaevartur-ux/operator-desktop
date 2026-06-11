@@ -47,6 +47,13 @@
 
   // ═══ UTIL ═══
   function genId() {
+    // Новым посетителям выдаём непредсказуемый UUID (crypto.randomUUID), с фолбэком
+    // на старый способ для окружений без Web Crypto. Существующий id из localStorage не трогаем.
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return "v_" + crypto.randomUUID();
+      }
+    } catch (e) { /* ignore */ }
     return "v_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
   }
 
@@ -142,6 +149,13 @@
       headers["Content-Type"] = "application/json";
       sendBody = JSON.stringify(body);
     }
+    // Контракт с сервером: на все запросы к сессиям шлём идентификатор посетителя.
+    // Покрывает /api/widget/sessions/:id (GET/POST/PATCH messages, status, page, deliver, read, rate, bot-event).
+    try {
+      if (path.indexOf("/api/widget/sessions") === 0 && typeof state !== "undefined" && state.visitorId) {
+        headers["X-Visitor-Id"] = state.visitorId;
+      }
+    } catch (e) { /* ignore */ }
     try {
       const res = await fetch(API_BASE + path, { method, headers, body: sendBody });
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -155,9 +169,9 @@
   // ═══ GRADIENT HELPERS ═══
   function getFabBg(cfg) {
     const gt = cfg.gradient_type || "solid";
-    const c = cfg.color || "#d97706";
+    const c = cfg.color || "#e8530e";
     const gf = cfg.gradient_from || c;
-    const gto = cfg.gradient_to || "#fbbf24";
+    const gto = cfg.gradient_to || "#f5a623";
     const ga = cfg.gradient_angle || 135;
     if (gt === "gradient") return "linear-gradient(" + ga + "deg," + gf + "," + gto + ")";
     if (gt === "glass") return "rgba(255,255,255,0.15)";
@@ -167,9 +181,9 @@
 
   function getHdrBg(cfg) {
     const gt = cfg.gradient_type || "solid";
-    const c = cfg.color || "#d97706";
+    const c = cfg.color || "#e8530e";
     const gf = cfg.gradient_from || c;
-    const gto = cfg.gradient_to || "#fbbf24";
+    const gto = cfg.gradient_to || "#f5a623";
     const ga = cfg.gradient_angle || 135;
     if (gt === "gradient") return "linear-gradient(" + ga + "deg," + gf + "," + gto + ")";
     if (gt === "animated") return "linear-gradient(270deg," + gf + "," + gto + "," + gf + ")";
@@ -185,18 +199,23 @@
       const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
       if (prefersDark) return { bg:"#1e1e2e", text:"#e2e8f0", bubble:"#2a2a3e", border:"#3a3a5e", msgsBg:"linear-gradient(180deg,#1a1a2e 0%,#1e1e2e 100%)", inputBg:"#2a2a3e", inputBorder:"#3a3a5e", sysBg:"#2a2a3e", sysText:"#9ca3af" };
     }
-    return { bg:"#fff", text:"#1f2937", bubble:"#f3f4f6", border:"#e5e7eb", msgsBg:"linear-gradient(180deg,#f8f9fa 0%,#fff 100%)", inputBg:"#fff", inputBorder:"#d1d5db", sysBg:"#f3f4f6", sysText:"#6b7280" };
+    // Тёплый «warm»-пресет под палитру сайта (крем + земляные тона) — дефолт и light-тема.
+    return { bg:"#fffdf9", text:"#1a1206", bubble:"#f5ede3", border:"#e5ddd3", msgsBg:"linear-gradient(180deg,#faf5ee 0%,#fffdf9 100%)", inputBg:"#fff", inputBorder:"#e5ddd3", sysBg:"#ede6dc", sysText:"#8c8072" };
   }
 
   // ═══ FONT HELPER ═══
+  // Дефолт — наследуем шрифт сайта (zhivaya-skazka.ru использует Inter, self-hosted с кириллицей).
+  // Системный стек выбран так, чтобы Inter с сайта подхватывался, а без него — нативный шрифт ОС.
+  const SITE_FONT_STACK = "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
   function getFontFamily(cfg) {
-    const f = cfg.font_family || "onest";
+    const f = cfg.font_family || "";
+    if (!f || f === "system" || f === "inherit-site") return SITE_FONT_STACK;
     if (f === "onest") return '"Onest","Inter",-apple-system,BlinkMacSystemFont,sans-serif';
     if (f === "inter") return '"Inter",sans-serif';
     if (f === "roboto") return '"Roboto",sans-serif';
     if (f === "montserrat") return '"Montserrat",sans-serif';
     if (f === "custom" && cfg.custom_font_url) return '"CustomWidgetFont",sans-serif';
-    return '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    return SITE_FONT_STACK;
   }
 
   const _fontLoaded = {};
@@ -209,7 +228,9 @@
   }
 
   function loadFont(cfg) {
-    const f = cfg.font_family || "onest";
+    const f = cfg.font_family || "";
+    // Пустой/system/inherit-site — НЕ грузим Google Fonts: наследуем шрифт сайта, экономим запрос.
+    if (!f || f === "system" || f === "inherit-site") return;
     if (f === "onest") loadFontUrl("https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap");
     else if (f === "inter") loadFontUrl("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");
     else if (f === "roboto") loadFontUrl("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
@@ -235,9 +256,14 @@
     isOffline: false,
     pendingInvitation: null,
     teamOperators: null,
-    // triggers
-    exitShown: false, scrollShown: false,
-    idleTimer: null, idleShown: false,
+    // greeting / mobile invite persistence (один раз на вкладку)
+    greetDismissed: !!sessionStorage.getItem("zs_greet_dismissed"),
+    mobileInviteDismissed: !!sessionStorage.getItem("zs_mobinvite_dismissed"),
+    mobileInviteShown: false,
+    // triggers — подавление дублей в рамках вкладки (sessionStorage)
+    exitShown: !!sessionStorage.getItem("zw_exit_trigger"),
+    scrollShown: !!sessionStorage.getItem("zw_scroll_trigger"),
+    idleTimer: null, idleShown: !!sessionStorage.getItem("zw_idle_trigger"),
     // auto messages
     autoMsgShown: {}, autoMsgTimers: [],
     // offline form
@@ -283,15 +309,23 @@
     checkDbl: '<svg viewBox="0 0 24 24"><path d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"/></svg>',
     star: '<svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
     help: '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>',
+    // Sparkles/искра — для button_icon:"custom" (третий вариант в UI настроек).
+    custom: '<svg viewBox="0 0 24 24"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2zm6 12l.95 2.55L21.5 17.5l-2.55.95L18 21l-.95-2.55L14.5 17.5l2.55-.95L18 14zM6 15l.8 2.2L9 18l-2.2.8L6 21l-.8-2.2L3 18l2.2-.8L6 15z"/></svg>',
   };
   // ═══ CSS ═══
   function getCSS(cfg) {
-    const c = cfg?.color || "#d97706";
+    const c = cfg?.color || "#e8530e";
     const pos = cfg?.position || "bottom-right";
     const isR = pos.indexOf("right") !== -1;
     const side = isR ? "right" : "left";
     const safeCss = sanitizeCSS(cfg.custom_css);
     const tv = getThemeVars(cfg);
+    // Пузырь оператора/карточки: в светлой/warm-теме — белый с тёплым бордером (как на сайте),
+    // в тёмной/кастомной — наследуют theme-цвета, чтобы не было белых пятен на тёмном фоне.
+    // Тёмную тему распознаём по факту (auto мог разрешиться в dark) — через tv.bg.
+    const isDarkTheme = (cfg.theme === "dark") || (cfg.theme === "custom") || (tv.bg === "#1e1e2e");
+    const opBubbleBg = isDarkTheme ? tv.bubble : "#fff";
+    const opBubbleBorder = isDarkTheme ? tv.border : "#ede6dc";
     const fabBg = getFabBg(cfg);
     const hdrBg = getHdrBg(cfg);
     const ff = getFontFamily(cfg);
@@ -315,30 +349,40 @@
     const bubbleR = cfg.bubble_radius === "soft" ? "12px" : cfg.bubble_radius === "sharp" ? "6px" : "18px";
     const fontSize = (cfg.font_size_base || 14) + "px";
     const shadowI = cfg.shadow_intensity || "medium";
+    // Тени тонированы тёплым #1a1206 (НЕ чистый чёрный) — под палитру сайта.
     const winShadow =
-      shadowI === "subtle" ? "0 4px 16px rgba(0,0,0,0.08)" :
-      shadowI === "strong" ? "0 24px 60px rgba(0,0,0,0.28)" :
-      "0 12px 48px rgba(0,0,0,0.18)";
+      shadowI === "subtle" ? "0 4px 16px rgba(26,18,6,0.08)" :
+      shadowI === "strong" ? "0 24px 60px rgba(26,18,6,0.28)" :
+      "0 12px 48px rgba(26,18,6,0.18)";
     const fabShadow =
       shadowI === "subtle" ? "0 2px 8px var(--accent-30)" :
       shadowI === "strong" ? "0 8px 28px var(--accent-60)" :
-      "0 4px 16px var(--accent-50)";
+      "0 4px 20px var(--accent-25)";
+    const hdrStyle = cfg.header_style || "light";
 
     return `
 :host {
   all: initial;
   isolation: isolate;
+  --ez-expo: cubic-bezier(.16,1,.3,1);
+  --ez-back: cubic-bezier(.34,1.56,.64,1);
   --accent: ${c};
-  --accent-50: ${c}50;
-  --accent-60: ${c}60;
-  --accent-40: ${c}40;
-  --accent-35: ${c}35;
-  --accent-18: ${c}18;
-  --accent-08: ${c}08;
-  --accent-30: ${c}30;
+  /* Альфа-варианты акцента через color-mix — работают при любом формате цвета оператора (hex/rgb/hsl) */
+  --accent-80: color-mix(in srgb, var(--accent) 80%, transparent);
+  --accent-60: color-mix(in srgb, var(--accent) 60%, transparent);
+  --accent-50: color-mix(in srgb, var(--accent) 50%, transparent);
+  --accent-40: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-35: color-mix(in srgb, var(--accent) 35%, transparent);
+  --accent-30: color-mix(in srgb, var(--accent) 30%, transparent);
+  --accent-25: color-mix(in srgb, var(--accent) 25%, transparent);
+  --accent-20: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-18: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-08: color-mix(in srgb, var(--accent) 8%, transparent);
   --bg: ${tv.bg};
   --text: ${tv.text};
   --bubble: ${tv.bubble};
+  --op-bubble-bg: ${opBubbleBg};
+  --op-bubble-border: ${opBubbleBorder};
   --border: ${tv.border};
   --msgs-bg: ${tv.msgsBg};
   --input-bg: ${tv.inputBg};
@@ -346,6 +390,13 @@
   --sys-bg: ${tv.sysBg};
   --sys-text: ${tv.sysText};
   --fab-bg: ${fabBg};
+  --send-bg: ${(() => {
+    // Кнопка отправки/лончера: акцентный градиент. Уважает кастомный цвет оператора.
+    const sc = cfg.color || "#e8530e";
+    const sto = cfg.gradient_to || "#f5a623";
+    const sga = cfg.gradient_angle || 135;
+    return "linear-gradient(" + sga + "deg," + (cfg.gradient_from || sc) + "," + sto + ")";
+  })()};
   --fab-size: ${fabSize};
   --fab-radius: ${fabRadius};
   --pulse-radius: ${pulseRadius};
@@ -362,29 +413,31 @@
 .zw.zw-open .zw-launcher-card{display:none!important;}
 
 /* FAB */
-.zw-fab{width:var(--fab-size);height:var(--fab-size);border-radius:var(--fab-radius);background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:${fabShadow},0 0 0 1px rgba(255,255,255,0.15) inset;transition:transform .2s var(--ez,cubic-bezier(.16,1,.3,1)),box-shadow .25s;position:relative;${gt === "glass" ? "backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.3);" : ""}${gt === "animated" ? "background-size:400% 400%;animation:zw-gradient-shift 3s ease infinite;" : ""}}
-.zw-fab:hover{transform:scale(1.06) translateY(-1px);box-shadow:0 10px 28px var(--accent-60),0 0 0 1px rgba(255,255,255,0.2) inset;}
-.zw-fab:active{transform:scale(0.96);}
-.zw-fab svg{width:26px;height:26px;fill:#fff;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.18));}
+.zw-fab{width:var(--fab-size);height:var(--fab-size);border-radius:var(--fab-radius);background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:${fabShadow},0 0 0 1px rgba(255,255,255,0.15) inset;transition:transform .25s var(--ez-expo),box-shadow .25s var(--ez-expo);position:relative;${gt === "glass" ? "backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.3);" : ""}${gt === "animated" ? "background-size:400% 400%;animation:zw-gradient-shift 3s ease infinite;" : ""}}
+.zw-fab:hover{transform:translateY(-2px);box-shadow:0 8px 30px var(--accent-40),0 0 0 1px rgba(255,255,255,0.2) inset;}
+.zw-fab:active{transform:scale(0.97);}
+.zw-fab svg{width:26px;height:26px;fill:#fff;filter:drop-shadow(0 1px 2px rgba(26,18,6,0.18));}
 ${gt === "animated" ? "@keyframes zw-gradient-shift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}" : ""}
-.zw-fab-pulse{position:absolute;inset:-4px;border-radius:var(--pulse-radius);background:var(--accent-30);animation:zw-ping 2s ease infinite;pointer-events:none;}
+/* Пульс показываем ТОЛЬКО при непрочитанных (класс .has-unread ставит JS) */
+.zw-fab-pulse{position:absolute;inset:-4px;border-radius:var(--pulse-radius);background:var(--accent-30);pointer-events:none;opacity:0;}
+.zw-fab.has-unread .zw-fab-pulse{animation:zw-ping 2s ease infinite;}
 ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
-@keyframes zw-ping{75%,100%{transform:scale(1.4);opacity:0}}
-.zw-badge{position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff;animation:zw-pop .3s ease;}
+@keyframes zw-ping{0%{opacity:.5}75%,100%{transform:scale(1.4);opacity:0}}
+.zw-badge{position:absolute;top:-6px;right:-6px;background:#c0392b;color:#fff;font-size:11px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fffdf9;animation:zw-pop .3s var(--ez-back);}
 @keyframes zw-pop{0%{transform:scale(0)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
 
 /* Launcher card */
 .zw-launcher{position:absolute;bottom:0;${side}:0;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .2s;}
-.zw-launcher-card{background:rgba(255,255,255,0.9);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:20px;padding:12px 18px 12px 14px;box-shadow:0 12px 32px rgba(0,0,0,0.12),0 1px 2px rgba(0,0,0,0.04);display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,0.5);max-width:320px;margin-${side}:68px;transition:all .3s cubic-bezier(.16,1,.3,1);position:relative;}
-.zw-launcher-card:hover{box-shadow:0 16px 40px rgba(0,0,0,0.16);transform:translateY(-2px);}
+.zw-launcher-card{background:rgba(250,245,238,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:20px;padding:12px 18px 12px 14px;box-shadow:0 12px 32px rgba(26,18,6,0.12),0 1px 2px rgba(26,18,6,0.04);display:flex;align-items:center;gap:14px;border:1px solid #ede6dc;max-width:320px;margin-${side}:68px;transition:all .3s var(--ez-expo);position:relative;}
+.zw-launcher-card:hover{box-shadow:0 16px 40px rgba(26,18,6,0.16);transform:translateY(-2px);}
 .zw-launcher-ava{width:44px;height:44px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;box-shadow:0 2px 8px var(--accent-30);}
 .zw-launcher-ava img{width:100%;height:100%;object-fit:cover;}
 .zw-launcher-ava svg{width:22px;height:22px;fill:#fff;}
 .zw-launcher-info{flex:1;min-width:0;padding-right:6px;}
-.zw-launcher-text{font-size:14px;font-weight:700;color:#1c1917;line-height:1.3;}
-.zw-launcher-sub{font-size:12px;color:#78716c;margin-top:2px;line-height:1.2;}
-.zw-launcher-close{width:22px;height:22px;border-radius:50%;background:#f5f5f4;display:flex;align-items:center;justify-content:center;font-size:14px;color:#a8a29e;cursor:pointer;flex-shrink:0;transition:all .15s;font-weight:bold;margin-left:auto;}
-.zw-launcher-close:hover{background:#e7e5e4;color:#44403c;}
+.zw-launcher-text{font-size:14px;font-weight:700;color:#1a1206;line-height:1.3;}
+.zw-launcher-sub{font-size:12px;color:#8c8072;margin-top:2px;line-height:1.2;}
+.zw-launcher-close{width:22px;height:22px;border-radius:50%;background:#ede6dc;display:flex;align-items:center;justify-content:center;font-size:14px;color:#b5a99a;cursor:pointer;flex-shrink:0;transition:all .15s;font-weight:bold;margin-left:auto;}
+.zw-launcher-close:hover{background:#e5ddd3;color:#5c5347;}
 
 /* Icon+text launcher */
 .zw-fab-text{display:flex;align-items:center;gap:8px;padding:0 20px 0 16px;width:auto;border-radius:28px;height:var(--fab-size);}
@@ -392,31 +445,53 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-fab-label{font-size:14px;font-weight:600;white-space:nowrap;color:#fff;}
 
 /* Window */
-.zw-win{position:absolute;bottom:68px;${side}:0;width:${winWidth};max-width:calc(100vw - 32px);height:560px;max-height:calc(100vh - 100px);background:var(--bg);border-radius:20px;box-shadow:${winShadow};display:flex;flex-direction:column;overflow:hidden;${winHidden}transition:all .3s cubic-bezier(.4,0,.2,1);pointer-events:none;}
+.zw-win{position:absolute;bottom:68px;${side}:0;width:${winWidth};max-width:calc(100vw - 32px);height:560px;max-height:calc(100vh - 100px);background:var(--bg);border-radius:20px;box-shadow:${winShadow};display:flex;flex-direction:column;overflow:hidden;${winHidden}transition:opacity .3s var(--ez-expo),transform .42s var(--ez-back);pointer-events:none;}
 .zw-win.open{${winVisible}pointer-events:all;}
 
-/* Header */
+/* Header — по умолчанию светлый кремовый с блюром (header_style:"light"); акцентный — опция header_style:"accent" */
+${hdrStyle === "accent" ? `
 .zw-hdr{background:var(--hdr-bg);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;position:relative;overflow:hidden;${gt === "animated" ? "background-size:400% 400%;animation:zw-gradient-shift 3s ease infinite;" : ""}}
 .zw-hdr::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.1) 0%,transparent 50%);pointer-events:none;}
-.zw-hdr-ava{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;backdrop-filter:blur(8px);}
+.zw-hdr-ava{background:rgba(255,255,255,0.2);}
+.zw-hdr-ava svg{fill:#fff;}
+.zw-hdr-name{color:#fff;text-shadow:0 1px 2px rgba(26,18,6,0.12);}
+.zw-hdr-st{color:#fff;opacity:0.9;}
+.zw-hdr-resp{color:#fff;opacity:0.8;}
+.zw-hdr-btn{background:rgba(255,255,255,0.15);}
+.zw-hdr-btn:hover{background:rgba(255,255,255,0.25);}
+.zw-hdr-btn svg{fill:#fff;}
+` : `
+.zw-hdr{background:rgba(250,245,238,0.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:#1a1206;padding:16px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;position:relative;border-bottom:1px solid #ede6dc;}
+.zw-hdr-ava{background:#ede6dc;}
+.zw-hdr-ava svg{fill:#8c8072;}
+.zw-hdr-name{color:#1a1206;}
+.zw-hdr-st{color:#8c8072;opacity:1;}
+.zw-hdr-resp{color:#8c8072;opacity:1;}
+.zw-hdr-btn{background:transparent;}
+.zw-hdr-btn:hover{background:#ede6dc;}
+.zw-hdr-btn svg{fill:#8c8072;}
+`}
+.zw-hdr-ava{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
 .zw-hdr-ava img{width:100%;height:100%;object-fit:cover;}
-.zw-hdr-ava svg{width:22px;height:22px;fill:#fff;}
+.zw-hdr-ava svg{width:22px;height:22px;}
 .zw-hdr-info{flex:1;min-width:0;}
-.zw-hdr-name{font-weight:700;font-size:15px;text-shadow:0 1px 2px rgba(0,0,0,0.1);}
-.zw-hdr-st{font-size:12px;opacity:0.9;display:flex;align-items:center;gap:6px;}
-.zw-hdr-resp{font-size:11px;opacity:0.8;margin-top:2px;}
-.zw-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;flex-shrink:0;}
-.zw-dot.wait{background:#facc15;animation:zw-blink 1.5s infinite;}
-.zw-dot.offline{background:#9ca3af;}
+.zw-hdr-name{font-weight:700;font-size:15px;}
+.zw-hdr-st{font-size:12px;display:flex;align-items:center;gap:6px;}
+.zw-hdr-resp{font-size:11px;margin-top:2px;}
+.zw-dot{width:7px;height:7px;border-radius:50%;background:#5b8c5a;flex-shrink:0;}
+.zw-dot.wait{background:#e8960e;animation:zw-blink 1.5s infinite;}
+.zw-dot.offline{background:#b5a99a;}
 @keyframes zw-blink{0%,100%{opacity:1}50%{opacity:0.3}}
 .zw-hdr-acts{display:flex;gap:6px;z-index:1;}
-.zw-hdr-btn{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
-.zw-hdr-btn:hover{background:rgba(255,255,255,0.25);}
-.zw-hdr-btn svg{width:16px;height:16px;fill:#fff;}
+.zw-hdr-btn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+.zw-hdr-btn svg{width:16px;height:16px;}
 
 /* Team avatars */
 .zw-team{display:flex;align-items:center;}
-.zw-team-ava{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;background:rgba(255,255,255,0.2);font-size:13px;font-weight:700;color:#fff;}
+${hdrStyle === "accent"
+  ? ".zw-team-ava{border:2px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.2);color:#fff;}"
+  : ".zw-team-ava{border:2px solid #faf5ee;background:#ede6dc;color:#7a4e32;}"}
+.zw-team-ava{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:13px;font-weight:700;}
 .zw-team-ava img{width:100%;height:100%;object-fit:cover;}
 .zw-team-count{font-size:11px;opacity:0.85;margin-left:8px;}
 
@@ -424,24 +499,25 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:2px;background:var(--msgs-bg);}
 .zw-date{text-align:center;padding:12px 0 8px;}
 .zw-date span{background:var(--sys-bg);color:var(--sys-text);font-size:11px;font-weight:500;padding:4px 12px;border-radius:10px;}
-.zw-row{display:flex;margin-bottom:6px;animation:zw-in .2s ease;}
+.zw-row{display:flex;margin-bottom:6px;animation:zw-in .28s var(--ez-expo);}
 .zw-row.v{justify-content:flex-end;}
 .zw-row.o{justify-content:flex-start;}
-@keyframes zw-in{from{opacity:0;transform:translateY(6px)}}
+@keyframes zw-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 .zw-wrap{display:flex;align-items:flex-end;gap:8px;max-width:80%;}
 .zw-row.v .zw-wrap{flex-direction:row-reverse;}
 .zw-ava{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;}
-.zw-ava.vv{background:linear-gradient(135deg,var(--accent),${c}cc);}
-.zw-ava.op{background:linear-gradient(135deg,#22c55e,#10b981);}
-.zw-ava.ai{background:linear-gradient(135deg,#3b82f6,#06b6d4);}
+.zw-ava.vv{background:linear-gradient(135deg,#e8530e,#f07b1f);}
+.zw-ava.op{background:#ede6dc;color:#7a4e32;font-weight:700;}
+.zw-ava.ai{background:linear-gradient(135deg,#b8860b,#d4a853);}
 .zw-ava img{width:100%;height:100%;object-fit:cover;}
 .zw-ava svg{width:14px;height:14px;fill:#fff;}
+.zw-ava.op svg{fill:#7a4e32;}
 .zw-bbl{border-radius:${bubbleR};overflow:hidden;max-width:100%;}
-.zw-row.v .zw-bbl{background:var(--accent);color:#fff;border-bottom-right-radius:6px;}
-.zw-row.o .zw-bbl{background:var(--bg);color:var(--text);border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,0.06);border-bottom-left-radius:6px;}
+.zw-row.v .zw-bbl{background:linear-gradient(135deg,#e8530e,#f07b1f);color:#fff;border-bottom-right-radius:6px;}
+.zw-row.o .zw-bbl{background:var(--op-bubble-bg);color:var(--text);border:1px solid var(--op-bubble-border);box-shadow:0 1px 2px rgba(26,18,6,0.05);border-bottom-left-radius:6px;}
 .zw-sender{font-size:11px;font-weight:600;padding:8px 14px 0;}
-.zw-sender.sop{color:#16a34a;}
-.zw-sender.sai{color:#3b82f6;}
+.zw-sender.sop{color:#5b8c5a;}
+.zw-sender.sai{color:#b8860b;}
 .zw-txt{padding:6px 14px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
 .zw-bbl.has-img .zw-txt{padding:4px 10px;}
 .zw-img{padding:4px;cursor:pointer;}
@@ -453,7 +529,7 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-time{font-size:10px;opacity:0.55;}
 .zw-st svg{width:13px;height:13px;}
 .zw-row.v .zw-st svg{fill:rgba(255,255,255,0.55);}
-.zw-row.v .zw-st.rd svg{fill:#93c5fd;}
+.zw-row.v .zw-st.rd svg{fill:rgba(255,255,255,0.9);}
 .zw-sys{text-align:center;padding:8px 0;}
 .zw-sys span{background:var(--sys-bg);color:var(--sys-text);font-size:12px;padding:6px 14px;border-radius:12px;display:inline-block;}
 
@@ -468,18 +544,19 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 
 /* Quick replies */
 .zw-qr{display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 12px;}
-.zw-qr-btn{padding:8px 14px;border-radius:18px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
-.zw-qr-btn:hover{background:var(--accent);color:#fff;}
+.zw-qr-btn{padding:8px 14px;border-radius:999px;border:1px solid var(--op-bubble-border);background:var(--op-bubble-bg);color:#7a4e32;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+.zw-qr-btn:hover{border-color:var(--accent);background:var(--accent-08);color:var(--accent);}
 .zw-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-.zw-cbtn{padding:9px 14px;border-radius:14px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
-.zw-cbtn:hover{background:var(--accent);color:#fff;}
+.zw-cbtn{padding:9px 14px;border-radius:999px;border:1px solid var(--op-bubble-border);background:var(--op-bubble-bg);color:#7a4e32;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+.zw-cbtn:hover{border-color:var(--accent);background:var(--accent-08);color:var(--accent);}
 .zw-cbtn:disabled{opacity:.55;cursor:default;}
-.zw-cbtn.pos{border-color:#16a34a;color:#16a34a;}
-.zw-cbtn.pos:hover{background:#16a34a;color:#fff;}
-.zw-cbtn.neg{border-color:#e64646;color:#e64646;}
-.zw-cbtn.neg:hover{background:#e64646;color:#fff;}
+.zw-cbtn.pos{border-color:#5b8c5a;color:#5b8c5a;}
+.zw-cbtn.pos:hover{background:rgba(91,140,90,0.1);color:#5b8c5a;}
+.zw-cbtn.neg{border-color:#c0392b;color:#c0392b;}
+.zw-cbtn.neg:hover{background:rgba(192,57,43,0.1);color:#c0392b;}
 .zw-cards{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
-.zw-card{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--bg);box-shadow:0 2px 10px rgba(0,0,0,.06);}
+.zw-card{border:1px solid var(--op-bubble-border);border-radius:16px;overflow:hidden;background:var(--op-bubble-bg);box-shadow:0 1px 2px rgba(26,18,6,.04);transition:transform .2s var(--ez-expo),box-shadow .2s var(--ez-expo);}
+.zw-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(26,18,6,.08);}
 .zw-card-img{width:100%;height:130px;object-fit:cover;display:block;}
 .zw-card-body{padding:11px 13px;}
 .zw-card-title{font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;}
@@ -490,13 +567,13 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 /* Typing */
 .zw-typ{display:none;align-items:flex-end;gap:8px;margin-bottom:6px;}
 .zw-typ.show{display:flex;}
-.zw-typ-bbl{padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:18px;border-bottom-left-radius:6px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+.zw-typ-bbl{padding:12px 16px;background:var(--op-bubble-bg);border:1px solid var(--op-bubble-border);border-radius:18px;border-bottom-left-radius:6px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 2px rgba(26,18,6,0.05);}
 .zw-typ-dots{display:flex;gap:3px;}
-.zw-typ-dots span{width:6px;height:6px;border-radius:50%;background:#9ca3af;animation:zw-bounce 1.2s infinite;}
+.zw-typ-dots span{width:6px;height:6px;border-radius:50%;background:#b5a99a;animation:zw-bounce 1.2s infinite;}
 .zw-typ-dots span:nth-child(2){animation-delay:.15s;}
 .zw-typ-dots span:nth-child(3){animation-delay:.3s;}
 @keyframes zw-bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-.zw-typ-lbl{font-size:11px;color:#9ca3af;}
+.zw-typ-lbl{font-size:11px;color:#8c8072;}
 
 /* Operator bar */
 .zw-opbar{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg);text-align:center;flex-shrink:0;}
@@ -506,16 +583,17 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 
 /* Composer */
 .zw-comp{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;background:var(--input-bg);flex-shrink:0;min-width:0;}
-.zw-att{width:36px;height:36px;border-radius:10px;background:var(--bubble);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
-.zw-att:hover{background:var(--border);}
+.zw-att{width:36px;height:36px;border-radius:10px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.zw-att:hover{background:#ede6dc;}
 .zw-att:disabled{opacity:0.4;cursor:default;}
-.zw-att svg{width:18px;height:18px;fill:#6b7280;}
-.zw-inp{flex:1;border:1.5px solid var(--input-border);border-radius:20px;padding:9px 16px;font-size:14px;font-family:inherit;resize:none;max-height:100px;outline:none;line-height:1.4;transition:all .15s;background:var(--input-bg);color:var(--text);}
-.zw-inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-18);}
-.zw-snd-btn{width:36px;height:36px;border-radius:10px;background:var(--bubble);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
-.zw-snd-btn:hover{background:var(--border);}
-.zw-snd-btn svg{width:17px;height:17px;fill:#6b7280;}
-.zw-send{width:40px;height:40px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;box-shadow:0 2px 8px var(--accent-40);}
+.zw-att svg{width:18px;height:18px;fill:#8c8072;}
+.zw-inp{flex:1;border:1px solid var(--input-border);border-radius:22px;padding:9px 16px;font-size:14px;font-family:inherit;resize:none;max-height:100px;outline:none;line-height:1.4;transition:all .15s;background:var(--input-bg);color:var(--text);box-shadow:0 2px 10px rgba(26,18,6,0.06);}
+.zw-inp:focus{border-color:var(--accent-80);box-shadow:0 0 0 3px var(--accent-20);}
+.zw-inp::placeholder{color:#b5a99a;}
+.zw-snd-btn{width:36px;height:36px;border-radius:10px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.zw-snd-btn:hover{background:#ede6dc;}
+.zw-snd-btn svg{width:17px;height:17px;fill:#8c8072;}
+.zw-send{width:40px;height:40px;border-radius:50%;background:var(--send-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;box-shadow:0 2px 8px var(--accent-40);}
 .zw-send:hover{box-shadow:0 4px 12px var(--accent-50);}
 .zw-send:disabled{opacity:0.35;cursor:default;box-shadow:none;}
 .zw-send{flex-shrink:0;}
@@ -531,12 +609,12 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-pre-fields{width:100%;display:flex;flex-direction:column;gap:14px;position:relative;z-index:1;}
 .zw-field{width:100%;}
 .zw-field label{font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:6px;text-transform:none;letter-spacing:0.01em;}
-.zw-field .req{color:#ef4444;margin-left:3px;}
+.zw-field .req{color:#c0392b;margin-left:3px;}
 .zw-field input,.zw-field select,.zw-field textarea{width:100%;border:1.5px solid var(--border);border-radius:14px;padding:12px 16px;font-size:14px;font-family:inherit;outline:none;transition:border-color .18s,box-shadow .18s,background .18s;background:var(--input-bg);color:var(--text);}
 .zw-field input:hover,.zw-field select:hover,.zw-field textarea:hover{border-color:var(--accent-50);}
 .zw-field input:focus,.zw-field select:focus,.zw-field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-18);}
-.zw-field .err{border-color:#ef4444!important;box-shadow:0 0 0 4px rgba(239,68,68,0.12)!important;}
-.zw-field .err-txt{color:#ef4444;font-size:11px;margin-top:6px;font-weight:600;}
+.zw-field .err{border-color:#c0392b!important;box-shadow:0 0 0 4px rgba(192,57,43,0.12)!important;}
+.zw-field .err-txt{color:#c0392b;font-size:11px;margin-top:6px;font-weight:600;}
 .zw-pre-go{width:100%;background:var(--accent);color:#fff;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s,box-shadow .25s,filter .15s;font-family:inherit;box-shadow:0 6px 20px var(--accent-40),0 0 0 1px rgba(255,255,255,0.18) inset;position:relative;z-index:1;}
 .zw-pre-go:hover:not(:disabled){box-shadow:0 10px 30px var(--accent-50),0 0 0 1px rgba(255,255,255,0.25) inset;filter:brightness(1.06);}
 .zw-pre-go:active:not(:disabled){transform:scale(0.98);}
@@ -549,26 +627,26 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 .zw-rate-sub{font-size:13px;color:var(--sys-text);text-align:center;margin-top:-8px;}
 .zw-stars{display:flex;gap:6px;}
 .zw-star{width:44px;height:44px;border:none;border-radius:12px;background:var(--bubble);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
-.zw-star:hover,.zw-star.active{background:#fef3c7;transform:scale(1.1);}
-.zw-star svg{width:24px;height:24px;fill:#d1d5db;transition:fill .15s;}
-.zw-star:hover svg,.zw-star.active svg{fill:#f59e0b;}
+.zw-star:hover,.zw-star.active{background:#f5e6d3;transform:scale(1.1);}
+.zw-star svg{width:24px;height:24px;fill:#d8cdbf;transition:fill .15s;}
+.zw-star:hover svg,.zw-star.active svg{fill:#b8860b;}
 .zw-rate-comment{width:100%;}
 .zw-rate-comment textarea{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;resize:none;height:80px;transition:all .15s;background:var(--input-bg);color:var(--text);}
 .zw-rate-comment textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-18);}
 .zw-rate-send{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;}
 .zw-rate-send:hover{opacity:0.9;}
-.zw-rate-skip{background:none;border:none;color:#9ca3af;font-size:13px;cursor:pointer;margin-top:-4px;font-family:inherit;}
-.zw-rate-skip:hover{color:#6b7280;}
+.zw-rate-skip{background:none;border:none;color:#b5a99a;font-size:13px;cursor:pointer;margin-top:-4px;font-family:inherit;}
+.zw-rate-skip:hover{color:#8c8072;}
 .zw-rate-ok{text-align:center;}
 .zw-rate-ok .emoji{font-size:48px;margin-bottom:12px;}
 .zw-rate-ok .txt{font-size:16px;font-weight:600;color:var(--text);}
-.zw-rate-ok .sub{font-size:13px;color:#9ca3af;margin-top:4px;}
+.zw-rate-ok .sub{font-size:13px;color:#8c8072;margin-top:4px;}
 
 /* Greeting bubble */
-.zw-greet{position:absolute;bottom:68px;${side}:0;background:var(--bg);border-radius:16px;padding:14px 18px;box-shadow:0 4px 24px rgba(0,0,0,0.12);max-width:260px;font-size:14px;color:var(--text);white-space:pre-wrap;cursor:pointer;opacity:0;transform:translateY(10px);transition:all .3s cubic-bezier(.4,0,.2,1);pointer-events:none;line-height:1.5;border:1px solid var(--border);}
+.zw-greet{position:absolute;bottom:68px;${side}:0;background:var(--bg);border-radius:16px;padding:14px 18px;box-shadow:0 4px 24px rgba(26,18,6,0.12);max-width:260px;font-size:14px;color:var(--text);white-space:pre-wrap;cursor:pointer;opacity:0;transform:translateY(10px);transition:all .3s var(--ez-expo);pointer-events:none;line-height:1.5;border:1px solid var(--border);}
 .zw-greet.show{opacity:1;transform:translateY(0);pointer-events:all;}
-.zw-greet-x{position:absolute;top:6px;right:10px;background:none;border:none;cursor:pointer;font-size:16px;color:#ccc;line-height:1;}
-.zw-greet-x:hover{color:#999;}
+.zw-greet-x{position:absolute;top:6px;right:10px;background:none;border:none;cursor:pointer;font-size:16px;color:#b5a99a;line-height:1;}
+.zw-greet-x:hover{color:#8c8072;}
 
 /* Lightbox */
 .zw-lb{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px;animation:zw-fade .2s ease;pointer-events:auto;}
@@ -582,11 +660,11 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 @keyframes zw-sp{to{transform:rotate(360deg)}}
 
 /* Offline banner */
-.zw-offline{padding:12px 16px;background:linear-gradient(135deg,#fef3c7,#fde68a);text-align:center;flex-shrink:0;border-top:1px solid #fcd34d;}
-.zw-offline-txt{font-size:13px;color:#92400e;font-weight:600;line-height:1.4;}
+.zw-offline{padding:12px 16px;background:#f5e6d3;text-align:center;flex-shrink:0;border-top:1px solid #e8d5a8;}
+.zw-offline-txt{font-size:13px;color:#7a4e32;font-weight:600;line-height:1.4;}
 
 /* Invitation popup */
-.zw-inv{position:absolute;bottom:68px;${side}:0;background:var(--bg);border-radius:20px;padding:0;box-shadow:0 8px 32px rgba(0,0,0,0.16);max-width:320px;width:calc(100vw - 48px);overflow:hidden;opacity:0;transform:translateY(12px);transition:all .3s cubic-bezier(.4,0,.2,1);pointer-events:none;border:1px solid var(--border);}
+.zw-inv{position:absolute;bottom:68px;${side}:0;background:var(--bg);border-radius:20px;padding:0;box-shadow:0 8px 32px rgba(26,18,6,0.16);max-width:320px;width:calc(100vw - 48px);overflow:hidden;opacity:0;transform:translateY(12px);transition:all .3s var(--ez-expo);pointer-events:none;border:1px solid var(--border);}
 .zw-inv.show{opacity:1;transform:translateY(0);pointer-events:all;}
 .zw-inv-hdr{background:var(--hdr-bg);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:10px;${gt === "animated" ? "background-size:400% 400%;animation:zw-gradient-shift 3s ease infinite;" : ""}}
 .zw-inv-ava{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
@@ -603,11 +681,11 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
 
 /* Toasts (внутри виджета) */
 .zw-toasts{position:absolute;left:0;right:0;top:74px;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;z-index:5;}
-.zw-toast{max-width:88%;padding:8px 14px;border-radius:14px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 22px rgba(0,0,0,0.18);opacity:0;transform:translateY(-8px);transition:all .25s cubic-bezier(.16,1,.3,1);}
+.zw-toast{max-width:88%;padding:8px 14px;border-radius:14px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 22px rgba(26,18,6,0.18);opacity:0;transform:translateY(-8px);transition:all .25s var(--ez-expo);}
 .zw-toast.show{opacity:1;transform:translateY(0);}
-.zw-toast-success{background:linear-gradient(135deg,#16a34a,#65a30d);}
-.zw-toast-info{background:linear-gradient(135deg,#d97706,#fbbf24);color:#1c1917;}
-.zw-toast-error{background:linear-gradient(135deg,#dc2626,#ef4444);}
+.zw-toast-success{background:#5b8c5a;}
+.zw-toast-info{background:#8c7051;color:#fff;}
+.zw-toast-error{background:#c0392b;}
 
 /* Mobile (.zw-mobile) */
 .zw.zw-mobile {
@@ -661,14 +739,14 @@ ${cfg.launcher_pulse === false ? ".zw-fab-pulse{display:none;}" : ""}
   content: "" !important;
   position: fixed !important;
   inset: 0 !important;
-  background: rgba(0, 0, 0, 0.45) !important;
+  background: rgba(26, 18, 6, 0.45) !important;
   z-index: 2147483646 !important;
   animation: zw-bd-in 0.25s ease !important;
   pointer-events: auto !important;
 }
 @keyframes zw-bd-in { from { opacity: 0; } to { opacity: 1; } }
 ${(() => {
-  const mode = cfg.mobile_window_mode || "fullscreen";
+  const mode = cfg.mobile_window_mode || "bottom_sheet";
   if (mode === "fullscreen") {
     return `
       .zw.zw-mobile .zw-win {
@@ -707,16 +785,15 @@ ${(() => {
         top: auto !important;
         width: 100vw !important;
         max-width: 100vw !important;
-        height: 80vh !important;
-        height: 80svh !important;
-        height: 80dvh !important;
-        max-height: 80dvh !important;
-        border-radius: 22px 22px 0 0 !important;
-        box-shadow: 0 -10px 40px rgba(0,0,0,0.30) !important;
+        /* Высота шторки. При открытой клавиатуре JS подставляет --zw-vvh (visualViewport). */
+        height: var(--zw-vvh, 92dvh) !important;
+        max-height: 92dvh !important;
+        border-radius: 28px 28px 0 0 !important;
+        box-shadow: 0 -10px 40px rgba(26,18,6,0.30) !important;
         z-index: 2147483647 !important;
         transform: translate3d(0, 100%, 0) !important;
         opacity: 0 !important;
-        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease !important;
+        transition: transform 0.32s var(--ez-expo), opacity 0.2s ease !important;
         pointer-events: none !important;
         will-change: transform !important;
         backface-visibility: hidden !important;
@@ -727,16 +804,20 @@ ${(() => {
         opacity: 1 !important;
         pointer-events: auto !important;
       }
-      /* Маленький handle сверху шторки — визуальная подсказка */
+      /* Во время свайпа по handle отключаем transition (JS ставит .zw-dragging) */
+      .zw.zw-mobile .zw-win.zw-dragging {
+        transition: none !important;
+      }
+      /* Handle сверху шторки — визуальная подсказка + зона свайпа-закрытия */
       .zw.zw-mobile .zw-win.open::after {
         content: "" !important;
         position: absolute !important;
         top: 8px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        width: 40px !important;
+        width: 36px !important;
         height: 4px !important;
-        background: rgba(0,0,0,0.18) !important;
+        background: rgba(26,18,6,0.15) !important;
         border-radius: 2px !important;
         z-index: 11 !important;
       }
@@ -807,16 +888,17 @@ ${(() => {
   bottom: calc(var(--fab-size) + 20px) !important;
   ${side}: 16px !important;
   background: #fff !important;
-  color: #1c1917 !important;
+  color: #1a1206 !important;
   padding: 10px 14px !important;
   border-radius: 14px !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important;
+  box-shadow: 0 8px 24px rgba(26,18,6,0.18) !important;
+  border: 1px solid #ede6dc !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   max-width: 220px !important;
   white-space: normal !important;
   cursor: pointer !important;
-  animation: zw-mob-pop .35s cubic-bezier(.16,1,.3,1) !important;
+  animation: zw-mob-pop .35s var(--ez-expo) !important;
 }
 .zw.zw-mobile .zw-mob-invite::after {
   content: "" !important;
@@ -827,7 +909,7 @@ ${(() => {
   height: 12px !important;
   background: #fff !important;
   transform: rotate(45deg) !important;
-  box-shadow: 2px 2px 4px rgba(0,0,0,0.06) !important;
+  box-shadow: 2px 2px 4px rgba(26,18,6,0.06) !important;
 }
 .zw.zw-mobile .zw-mob-invite-x {
   position: absolute !important;
@@ -836,7 +918,7 @@ ${(() => {
   width: 22px !important;
   height: 22px !important;
   border-radius: 50% !important;
-  background: #1c1917 !important;
+  background: #1a1206 !important;
   color: #fff !important;
   border: none !important;
   cursor: pointer !important;
@@ -845,11 +927,19 @@ ${(() => {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+  box-shadow: 0 2px 6px rgba(26,18,6,0.2) !important;
 }
 @keyframes zw-mob-pop {
   from { opacity: 0; transform: scale(0.7) translateY(10px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+/* Уважаем системную настройку «уменьшить движение» — отключаем декоративные анимации */
+@media (prefers-reduced-motion: reduce) {
+  .zw-fab.has-unread .zw-fab-pulse{animation:none!important;}
+  .zw-fab{animation:none!important;}
+  .zw-typ-dots span{animation:none!important;}
+  ${gt === "animated" ? ".zw-fab,.zw-hdr,.zw-inv-hdr{animation:none!important;background-size:auto!important;}" : ""}
+  .zw-row{animation:none!important;}
 }
 ${safeCss}`;
   }
@@ -920,11 +1010,10 @@ ${safeCss}`;
     const lt = (isMobileViewport && mobileLT && mobileLT !== "inherit")
       ? mobileLT
       : (cfg.launcher_type || "icon_only");
+    // greet_once: флаг zs_greet_seen теперь ставится при закрытии/открытии (dismissGreet), а НЕ при показе.
     const greetSeen = cfg.greet_once === true && !window.__zsPreviewConfig && localStorage.getItem("zs_greet_seen") === "1";
-    if (!state.open && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen) {
-      if (cfg.greet_once === true && !window.__zsPreviewConfig) {
-        try { localStorage.setItem("zs_greet_seen", "1"); } catch (e) { /* ignore */ }
-      }
+    // greetDismissed персистится в sessionStorage — поллинг/сокеты больше не «перепоказывают» пузырь.
+    if (!state.open && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen && !state.greetDismissed) {
       const g = document.createElement("div");
       g.className = "zw-greet show";
       g.textContent = cfg.greeting;
@@ -932,9 +1021,9 @@ ${safeCss}`;
       gx.className = "zw-greet-x";
       gx.textContent = "\u00d7";
       gx.setAttribute("aria-label", "Закрыть приветствие");
-      gx.onclick = (e) => { e.stopPropagation(); g.classList.remove("show"); };
+      gx.onclick = (e) => { e.stopPropagation(); g.classList.remove("show"); dismissGreet(); };
       g.appendChild(gx);
-      g.onclick = () => { openChat(); };
+      g.onclick = () => { dismissGreet(); openChat(); scheduleRender(); };
       root.appendChild(g);
     }
 
@@ -1087,15 +1176,17 @@ ${safeCss}`;
       fab.style.display = "none";
     } else {
       fab.style.display = "flex";
+      // .has-unread включает пульс только при наличии непрочитанных (см. CSS)
+      const unreadCls = (state.unread > 0 && !state.open) ? " has-unread" : "";
       if (!state.open && (lt === "icon_text" || lt === "text_only")) {
-        fab.className = "zw-fab zw-fab-text";
+        fab.className = "zw-fab zw-fab-text" + unreadCls;
         if (lt !== "text_only") fab.innerHTML = icon;
         const lbl = document.createElement("span");
         lbl.className = "zw-fab-label";
         lbl.textContent = cfg.launcher_text || cfg.button_text || "Помощь";
         fab.appendChild(lbl);
       } else {
-        fab.className = "zw-fab";
+        fab.className = "zw-fab" + unreadCls;
         fab.innerHTML = state.open ? IC.close : icon;
       }
     }
@@ -1149,13 +1240,13 @@ ${safeCss}`;
       x.textContent = "×";
       x.onclick = (e) => {
         e.stopPropagation();
-        state.mobileInviteDismissed = true;
+        dismissMobInvite();
         scheduleRender();
       };
       inv.appendChild(x);
       inv.onclick = (e) => {
         if (e.target === x) return;
-        state.mobileInviteDismissed = true;
+        dismissMobInvite();
         openChat();
         scheduleRender();
       };
@@ -1240,14 +1331,37 @@ ${safeCss}`;
       }
     } catch (e) { /* ignore */ }
   }
+  // Помечаем приветственный пузырь закрытым (память + sessionStorage), один раз на вкладку.
+  // Здесь же фиксируем greet_once (zs_greet_seen) — теперь только при закрытии/открытии, а не при показе.
+  function dismissGreet() {
+    state.greetDismissed = true;
+    if (!window.__zsPreviewConfig) {
+      try { sessionStorage.setItem("zs_greet_dismissed", "1"); } catch (e) { /* ignore */ }
+      const cfg = state.config || {};
+      if (cfg.greet_once === true) {
+        try { localStorage.setItem("zs_greet_seen", "1"); } catch (e) { /* ignore */ }
+      }
+    }
+  }
+
+  // Мобильный тизер: закрытие персистим в sessionStorage — один раз на вкладку.
+  function dismissMobInvite() {
+    state.mobileInviteDismissed = true;
+    if (!window.__zsPreviewConfig) {
+      try { sessionStorage.setItem("zs_mobinvite_dismissed", "1"); } catch (e) { /* ignore */ }
+    }
+  }
+
   function closeChat() {
     state.open = false;
     unlockBodyScroll();
+    if (typeof state._applyVVH === "function") { try { state._applyVVH(); } catch (e) {} }
   }
 
   function openChat() {
     state.open = true;
     state.unread = 0;
+    dismissGreet();
     markVisibleAsRead();
 
     // Перемещаем хост на самый верх дерева DOM, чтобы z-index работал безотказно
@@ -1272,6 +1386,11 @@ ${safeCss}`;
     if (cfg._ab_variant && !state._abTrackedOpen) {
       state._abTrackedOpen = true;
       api("POST", "/api/widget/ab-track", { variant: cfg._ab_variant, event: "opened", visitor_id: state.visitorId });
+    }
+
+    // Пересчёт высоты мобильной шторки под текущую видимую область (клавиатура и т.п.)
+    if (typeof state._applyVVH === "function") {
+      requestAnimationFrame(() => { try { state._applyVVH(); } catch (e) {} });
     }
 
     // При открытии чата с историей — гарантированно проскроллить вниз к последнему сообщению.
@@ -1775,7 +1894,7 @@ ${safeCss}`;
 
       const formBbl = document.createElement("div");
       formBbl.className = "zw-bbl";
-      formBbl.style.cssText = "background:var(--bg);border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,0.08);border-bottom-left-radius:6px;width:100%;";
+      formBbl.style.cssText = "background:var(--bg);border:1px solid var(--border);box-shadow:0 4px 12px rgba(26,18,6,0.08);border-bottom-left-radius:6px;width:100%;";
 
       const formHeader = document.createElement("div");
       formHeader.className = "zw-sender sai";
@@ -1807,7 +1926,7 @@ ${safeCss}`;
         const contactVal = contactInp.value.trim();
         if (!nameVal || !contactVal) {
           submitBtn.textContent = "Заполните все поля!";
-          submitBtn.style.background = "#ef4444";
+          submitBtn.style.background = "#c0392b";
           setTimeout(() => {
             submitBtn.textContent = "Отправить контакты";
             submitBtn.style.background = "var(--accent)";
@@ -1911,7 +2030,7 @@ ${safeCss}`;
       link.href = cfg.offline_redirect_url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.style.cssText = "color:#92400e;font-weight:700;font-size:13px;text-decoration:underline;";
+      link.style.cssText = "color:#7a4e32;font-weight:700;font-size:13px;text-decoration:underline;";
       link.textContent = "Перейти на страницу контактов →";
       bar2.appendChild(link);
       return bar2;
@@ -1922,22 +2041,22 @@ ${safeCss}`;
 
   function mkOfflineForm(mode) {
     const cfg = state.config || {};
-    const c = cfg.color || "#d97706";
+    const c = cfg.color || "#e8530e";
     const wrap = document.createElement("div");
-    wrap.style.cssText = "padding:16px;border-top:1px solid #fcd34d;background:linear-gradient(135deg,#fffbeb,#fef3c7);";
+    wrap.style.cssText = "padding:16px;border-top:1px solid #e8d5a8;background:#f5e6d3;";
 
     if (state.offlineFormSent) {
-      wrap.innerHTML = '<div style="text-align:center;padding:12px;"><div style="font-size:24px;margin-bottom:6px;">✅</div><div style="font-size:14px;font-weight:700;color:#065f46;">Спасибо! Мы свяжемся с вами.</div></div>';
+      wrap.innerHTML = '<div style="text-align:center;padding:12px;"><div style="font-size:24px;margin-bottom:6px;">✅</div><div style="font-size:14px;font-weight:700;color:#5b8c5a;">Спасибо! Мы свяжемся с вами.</div></div>';
       return wrap;
     }
 
     const title = document.createElement("div");
-    title.style.cssText = "font-size:14px;font-weight:700;color:#92400e;margin-bottom:10px;text-align:center;";
+    title.style.cssText = "font-size:14px;font-weight:700;color:#7a4e32;margin-bottom:10px;text-align:center;";
     title.textContent = mode === "callback_request" ? "Заказать обратный звонок" : "Оставьте email — мы ответим";
     wrap.appendChild(title);
 
     const fields = {};
-    const inputStyle = "width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;margin-bottom:8px;outline:none;font-family:inherit;";
+    const inputStyle = "width:100%;padding:8px 12px;border:1.5px solid #e5ddd3;border-radius:10px;font-size:13px;margin-bottom:8px;outline:none;font-family:inherit;background:#fff;color:#1a1206;";
 
     const nameInp = document.createElement("input");
     nameInp.placeholder = "Ваше имя";
@@ -1978,7 +2097,7 @@ ${safeCss}`;
     msgInp.placeholder = "Ваш вопрос...";
     msgInp.setAttribute("aria-label", "Ваш вопрос");
     msgInp.rows = 2;
-    msgInp.style.cssText = "width:100%;padding:8px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;margin-bottom:8px;outline:none;font-family:inherit;resize:none;";
+    msgInp.style.cssText = "width:100%;padding:8px 12px;border:1.5px solid #e5ddd3;border-radius:10px;font-size:13px;margin-bottom:8px;outline:none;font-family:inherit;resize:none;background:#fff;color:#1a1206;";
     wrap.appendChild(msgInp);
     fields.message = msgInp;
 
@@ -1998,7 +2117,7 @@ ${safeCss}`;
 
       if (!data.name && !data.email && !data.phone) {
         btn.textContent = "Заполните хотя бы имя!";
-        btn.style.background = "#ef4444";
+        btn.style.background = "#c0392b";
         setTimeout(() => { btn.textContent = mode === "callback_request" ? "Заказать звонок" : "Отправить"; btn.style.background = c; }, 2000);
         return;
       }
@@ -2012,7 +2131,7 @@ ${safeCss}`;
       } else {
         btn.disabled = false;
         btn.textContent = "Ошибка, попробуйте снова";
-        btn.style.background = "#ef4444";
+        btn.style.background = "#c0392b";
       }
     };
     wrap.appendChild(btn);
@@ -2032,7 +2151,7 @@ ${safeCss}`;
 
     const att = document.createElement("button");
     att.className = "zw-att";
-    att.innerHTML = state.uploading ? '<svg class="zw-spin" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z" fill="#6b7280"/></svg>' : IC.image;
+    att.innerHTML = state.uploading ? '<svg class="zw-spin" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z" fill="#8c8072"/></svg>' : IC.image;
     att.disabled = state.uploading;
     att.onclick = () => { fInp.click(); };
     att.title = "Прикрепить изображение";
@@ -2348,15 +2467,18 @@ ${safeCss}`;
       state.socket.emit("typing_content", { sessionId: state.session.id, text: "", isTyping: false });
     }
 
-    // Offline AI Auto-response & Lead form capture (Task 30)
-    const hasOnlineOperator = state.teamOperators && state.teamOperators.some(op => op.status === "online");
-    const isOfflineMode = state.isOffline || !hasOnlineOperator;
+    // Offline AI Auto-response & Lead form capture (Task 30).
+    // Включаем ТОЛЬКО при реальном офлайне (business hours/checkOffline === true)
+    // и если cfg.offline_mode НЕ "message_only" (для message_only работает только баннер-форма).
+    // Раньше блок срабатывал по teamOperators (мог быть ещё null) — это давало ложные срабатывания.
+    const cfgOff = state.config || {};
+    const offModeAuto = cfgOff.offline_mode || "message_only";
     const isAiSession = !state.session || state.session.status === "ai";
 
-    if (isAiSession && isOfflineMode && !state.showOfflineLeadForm && !state.offlineFormSent) {
+    if (state.isOffline === true && offModeAuto !== "message_only" && isAiSession && !state.showOfflineLeadForm && !state.offlineFormSent) {
       setTimeout(async () => {
-        const botMsgText = "Я сейчас оффлайн, но подключусь в ближайшее время. Оставьте ваши контакты, и я сразу свяжусь с вами!";
-        
+        const botMsgText = cfgOff.offline_message || (state.businessHours && state.businessHours.offline_message) || "Мы сейчас офлайн. Оставьте ваши контакты, и мы свяжемся с вами!";
+
         const botMsg = {
           id: "bot_" + Date.now(),
           session_id: state.session.id,
@@ -2585,7 +2707,7 @@ ${safeCss}`;
       }
       if (state.socket.connected && state.socket._joinedSessionId !== sid) {
         state.socket._joinedSessionId = sid;
-        state.socket.emit("join_session", sid);
+        state.socket.emit("join_session", { sessionId: sid, visitorId: state.visitorId });
       }
       // Гарантируем, что таймеры пингов запущены: light-сокет мог не стартовать их
       if (state.socket.connected && !state.socket._visitorPingTimer) {
@@ -2609,7 +2731,7 @@ ${safeCss}`;
         const currentSid = state.session?.id || sid;
         if (socket._joinedSessionId !== currentSid) {
           socket._joinedSessionId = currentSid;
-          socket.emit("join_session", currentSid);
+          socket.emit("join_session", { sessionId: currentSid, visitorId: state.visitorId });
         }
         startVisitorPingTimers(socket);
         scheduleRender();
@@ -2802,6 +2924,12 @@ ${safeCss}`;
       if (location.href !== lastUrl) {
         lastUrl = location.href;
         applyWidgetVisibility();            // прячем/показываем виджет по правилам страниц (фикс «/admin всё равно показывается» на SPA)
+        // SPA: перешли со скрытой страницы на разрешённую, а виджет ещё ни разу не отрендерился
+        // (init вышел рано на !isWidgetAllowedOnPage). Доинициализируем полностью.
+        if (!window.__zsPreviewConfig && !state._rendered && isWidgetAllowedOnPage()) {
+          try { host.style.display = ""; } catch (e) {}
+          init();
+        }
         if (state.session) trackPage(state.session.id);
       }
     }
@@ -2815,6 +2943,79 @@ ${safeCss}`;
         }
       });
       window.addEventListener("popstate", onUrlMaybeChanged);
+    } catch (e) { /* ignore */ }
+
+    // ═══ МОБИЛЬНАЯ ШТОРКА: высота под клавиатуру (visualViewport) + свайп-вниз для закрытия ═══
+    setupMobileSheet();
+  }
+
+  // Подгоняем высоту bottom_sheet под видимую область (visualViewport) — composer не уезжает
+  // под клавиатуру в iOS. Свайп вниз по верхней зоне/handle закрывает шторку.
+  function setupMobileSheet() {
+    function applyVVH() {
+      const root = state.refs.root;
+      if (!root) return;
+      const vv = window.visualViewport;
+      const mode = (state.config && state.config.mobile_window_mode) || "bottom_sheet";
+      const isMobile = root.classList.contains("zw-mobile");
+      if (vv && state.open && isMobile && mode === "bottom_sheet") {
+        // Высота шторки = min(92% видимой области, видимая высота) — учитывает клавиатуру.
+        root.style.setProperty("--zw-vvh", Math.round(vv.height * 0.92) + "px");
+      } else {
+        root.style.removeProperty("--zw-vvh");
+      }
+    }
+    try {
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", applyVVH);
+        window.visualViewport.addEventListener("scroll", applyVVH);
+      }
+    } catch (e) { /* ignore */ }
+    state._applyVVH = applyVVH;
+
+    // Свайп-вниз по верхней области окна (где handle) для закрытия шторки.
+    let startY = 0, curY = 0, dragging = false, winEl = null;
+    function onTouchStart(e) {
+      const root = state.refs.root;
+      if (!root || !state.open || !root.classList.contains("zw-mobile")) return;
+      const mode = (state.config && state.config.mobile_window_mode) || "bottom_sheet";
+      if (mode !== "bottom_sheet") return;
+      winEl = shadow.querySelector(".zw-win.open");
+      if (!winEl) return;
+      // Реагируем только если палец стартовал в верхних 56px окна (зона handle).
+      const rect = winEl.getBoundingClientRect();
+      const t = e.touches[0];
+      if (t.clientY - rect.top > 56) { winEl = null; return; }
+      startY = t.clientY; curY = startY; dragging = true;
+      winEl.classList.add("zw-dragging");
+    }
+    function onTouchMove(e) {
+      if (!dragging || !winEl) return;
+      curY = e.touches[0].clientY;
+      const dy = Math.max(0, curY - startY);
+      winEl.style.transform = "translate3d(0," + dy + "px,0)";
+    }
+    function onTouchEnd() {
+      if (!dragging || !winEl) return;
+      dragging = false;
+      const dy = Math.max(0, curY - startY);
+      const el = winEl;
+      el.classList.remove("zw-dragging");
+      el.style.transition = "transform .32s var(--ez-expo)";
+      el.style.transform = "";
+      // Порог закрытия — 120px.
+      if (dy > 120) {
+        closeChat();
+        scheduleRender();
+      }
+      setTimeout(() => { try { el.style.transition = ""; } catch (e) {} }, 340);
+      winEl = null;
+    }
+    try {
+      shadow.addEventListener("touchstart", onTouchStart, { passive: true });
+      shadow.addEventListener("touchmove", onTouchMove, { passive: true });
+      shadow.addEventListener("touchend", onTouchEnd, { passive: true });
+      shadow.addEventListener("touchcancel", onTouchEnd, { passive: true });
     } catch (e) { /* ignore */ }
   }
 
@@ -2844,19 +3045,20 @@ ${safeCss}`;
     const tr = cfg.triggers;
     if (!tr) return;
 
-    // Exit intent
-    if (tr.exit_intent) {
+    // Exit intent — один раз на вкладку (persist в sessionStorage 'zw_exit_trigger')
+    if (tr.exit_intent && !sessionStorage.getItem("zw_exit_trigger")) {
       document.addEventListener("mouseleave", (e) => {
         if (e.clientY <= 0 && !state.open && !state.exitShown) {
           state.exitShown = true;
+          try { sessionStorage.setItem("zw_exit_trigger", "1"); } catch (err) {}
           openChat();
           scheduleRender();
         }
       });
     }
 
-    // Scroll percent
-    if (tr.scroll_percent > 0) {
+    // Scroll percent — один раз на вкладку (persist в sessionStorage 'zw_scroll_trigger')
+    if (tr.scroll_percent > 0 && !sessionStorage.getItem("zw_scroll_trigger")) {
       const scrollHandler = () => {
         if (state.scrollShown || state.open) return;
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -2868,6 +3070,7 @@ ${safeCss}`;
         const scrolled = (scrollTop / (docHeight - winHeight)) * 100;
         if (scrolled >= tr.scroll_percent) {
           state.scrollShown = true;
+          try { sessionStorage.setItem("zw_scroll_trigger", "1"); } catch (err) {}
           openChat();
           scheduleRender();
           window.removeEventListener("scroll", scrollHandler);
@@ -2890,14 +3093,15 @@ ${safeCss}`;
       }
     }
 
-    // Inactivity
-    if (tr.inactivity_seconds > 0) {
+    // Inactivity — один раз на вкладку (persist в sessionStorage 'zw_idle_trigger')
+    if (tr.inactivity_seconds > 0 && !sessionStorage.getItem("zw_idle_trigger")) {
       const resetIdle = () => {
         clearTimeout(state.idleTimer);
         if (state.idleShown || state.open) return;
         state.idleTimer = setTimeout(() => {
           if (!state.open && !state.idleShown) {
             state.idleShown = true;
+            try { sessionStorage.setItem("zw_idle_trigger", "1"); } catch (err) {}
             openChat();
             scheduleRender();
           }
@@ -3059,6 +3263,8 @@ ${safeCss}`;
 
   // ═══ IDENTITY ═══
   function readIdentity() {
+    // Читаем window.ZSConfig.user только если оператор включил верификацию личности.
+    if (!state.config || !state.config.identity_verification) return;
     if (window.ZSConfig?.user) {
       state.identityUser = window.ZSConfig.user;
       if (state.identityUser.name) {
@@ -3166,8 +3372,8 @@ ${safeCss}`;
     if (!data) return;
 
     const rawConfig = data.widget_config || {};
-    readIdentity();
     state.config = applyPageRules(rawConfig);
+    readIdentity(); // после установки config — гейт по cfg.identity_verification
     state.prechat = data.prechat_form || { enabled: false };
     state.businessHours = data.business_hours || null;
     state.domainSettings = data.domain_settings || null;
@@ -3209,6 +3415,7 @@ ${safeCss}`;
     }
 
     render();
+    state._rendered = true; // отмечаем, что виджет реально отрисован (используется в SPA-доинициализации)
 
     // Light socket for invitations (only in normal mode, skip in preview)
     if (!window.__zsPreviewConfig && !state.socket) {
@@ -3246,8 +3453,9 @@ ${safeCss}`;
 
     if (!window.__zsPreviewConfig && state.prechatDone) resumeSession();
 
-    // Мобильное приглашение «Нажми на меня» — показать после задержки
-    if (!window.__zsPreviewConfig && window.innerWidth <= 480 && state.config.mobile_invitation_enabled !== false) {
+    // Мобильное приглашение «Нажми на меня» — показать после задержки.
+    // Не планируем заново, если посетитель уже закрыл тизер в этой вкладке (persist).
+    if (!window.__zsPreviewConfig && window.innerWidth <= 480 && state.config.mobile_invitation_enabled !== false && !state.mobileInviteDismissed) {
       const delay = Math.max(0, state.config.mobile_invitation_delay ?? 5) * 1000;
       setTimeout(() => {
         if (!state.open && !state.mobileInviteDismissed) {

@@ -356,14 +356,15 @@
 }
 
 .emptyIcon {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--md-sys-shape-corner-full);
   background: var(--accent-soft);
   box-shadow: var(--soft-raised);
   display: grid;
   place-items: center;
   color: var(--accent);
+  margin-bottom: var(--space-1);
 }
 
 .emptyTitle {

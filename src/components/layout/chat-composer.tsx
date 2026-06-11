@@ -684,7 +684,15 @@ export function ChatComposer() {
                   <Popover.Content side="top" sideOffset={8} className={s.popoverContent}>
                     <div className={s.quickReplies}>
                       {templates.length === 0 && (
-                        <div className={s.quickReplyEmpty}>Создайте шаблон в разделе «Шаблоны»</div>
+                        <div className={s.quickReplyEmpty}>
+                          <div className={s.quickReplyEmptyIcon}>
+                            <MessageSquareQuote style={{ width: 20, height: 20 }} />
+                          </div>
+                          <div className={s.quickReplyEmptyTitle}>Нет быстрых ответов</div>
+                          <div className={s.quickReplyEmptyDesc}>
+                            Создайте шаблон в разделе «Шаблоны», чтобы вставлять его одним кликом
+                          </div>
+                        </div>
                       )}
                       {[...templates].sort((a, b) => b.uses - a.uses).map((tpl) => {
                         const resolved = previewTpl(tpl);
