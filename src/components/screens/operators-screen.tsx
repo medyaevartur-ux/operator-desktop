@@ -7,7 +7,7 @@ import {
   ArrowLeft, Plus, Search, X, Filter,
   CheckSquare, UserX,
 } from "lucide-react";
-import { Select, useConfirm, toast } from "@/components/ui";
+import { Select, useConfirm, toast, Skeleton } from "@/components/ui";
 import { OperatorCard } from "./OperatorCard";
 import { OperatorModal } from "./OperatorModal";
 import s from "./OperatorsScreen.module.css";
@@ -228,13 +228,33 @@ export function OperatorsScreen() {
 
       {/* ── List ── */}
       <div className={`${s.list} scrollbar-thin`}>
-        {loading && <div className={s.emptyText}>Загрузка...</div>}
+        {loading &&
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className={s.skeletonCard}>
+              <Skeleton circle height={44} />
+              <div className={s.skeletonBody}>
+                <Skeleton text height={14} width="45%" />
+                <Skeleton text height={12} width="70%" />
+                <Skeleton text height={10} width="30%" />
+              </div>
+            </div>
+          ))}
 
         {!loading && filtered.length === 0 && (
-          <div className={s.emptyText}>
-            {searchQuery || statusFilter !== "all" || roleFilter !== "all"
-              ? "Ничего не найдено"
-              : "Нет операторов"}
+          <div className={s.empty}>
+            <div className={s.emptyIcon}>
+              <UserX style={{ width: 26, height: 26 }} />
+            </div>
+            <div className={s.emptyTitle}>
+              {searchQuery || statusFilter !== "all" || roleFilter !== "all"
+                ? "Ничего не найдено"
+                : "Нет операторов"}
+            </div>
+            <div className={s.emptyDesc}>
+              {searchQuery || statusFilter !== "all" || roleFilter !== "all"
+                ? "Измените фильтры или поисковый запрос"
+                : "Добавьте первого оператора кнопкой выше"}
+            </div>
           </div>
         )}
 

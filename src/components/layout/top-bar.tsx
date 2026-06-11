@@ -4,6 +4,7 @@ import { Search, Sun, Moon, Sparkles, Palette, Monitor, Bell } from "lucide-reac
 import { useThemeStore, type Theme } from "@/store/theme.store";
 import { useNotificationStore } from "@/store/notification.store";
 import { useNavigationStore } from "@/store/navigation.store";
+import { useAuthStore } from "@/store/auth.store";
 import { Tooltip } from "@/components/ui";
 import { CommandPalette } from "./command-palette";
 import s from "./TopBar.module.css";
@@ -15,12 +16,28 @@ const THEMES: Array<{ value: Theme; label: string; icon: typeof Sun; swatch: str
   { value: "system", label: "Системная", icon: Monitor, swatch: "linear-gradient(135deg,#fafaf9 50%,#1c1917 50%)" },
 ];
 
+const STATUS_OPTIONS: Array<{
+  value: "online" | "away" | "dnd" | "offline";
+  label: string;
+  color: string;
+}> = [
+  { value: "online", label: "Онлайн", color: "var(--status-online)" },
+  { value: "away", label: "Отошёл", color: "var(--status-away)" },
+  { value: "dnd", label: "Не беспокоить", color: "var(--status-dnd)" },
+  { value: "offline", label: "Офлайн", color: "var(--status-offline)" },
+];
+
 export function TopBar() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const theme = useThemeStore((st) => st.theme);
   const setTheme = useThemeStore((st) => st.setTheme);
 
   const setScreen = useNavigationStore((st) => st.setScreen);
+  const operator = useAuthStore((st) => st.operator);
+  const updateOperatorStatus = useAuthStore((st) => st.updateOperatorStatus);
+  const currentStatus = operator?.status ?? "online";
+  const currentStatusOption =
+    STATUS_OPTIONS.find((o) => o.value === currentStatus) ?? STATUS_OPTIONS[0];
   const totalUnread = useNotificationStore((st) => st.totalUnread);
   const [prevUnread, setPrevUnread] = useState(totalUnread);
   const [isSwinging, setIsSwinging] = useState(false);
@@ -55,10 +72,50 @@ export function TopBar() {
         Живая Сказка
       </div>
 
+      <DropdownMenu.Root>
+        <Tooltip content="Статус оператора" side="bottom">
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className={s.statusPill}
+              data-status={currentStatus}
+              aria-label={`Статус: ${currentStatusOption.label}`}
+            >
+              <span
+                className={s.statusPillDot}
+                style={{ background: currentStatusOption.color }}
+              />
+              <span className={s.statusPillLabel}>{currentStatusOption.label}</span>
+            </button>
+          </DropdownMenu.Trigger>
+        </Tooltip>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className={s.menuContent} sideOffset={8} align="start">
+            <div className={s.menuLabel}>Мой статус</div>
+            {STATUS_OPTIONS.map((opt) => (
+              <DropdownMenu.Item
+                key={opt.value}
+                className={s.statusMenuItem}
+                onSelect={() => void updateOperatorStatus(opt.value)}
+              >
+                <span className={s.statusMenuDot} style={{ background: opt.color }} />
+                {opt.label}
+                {currentStatus === opt.value && (
+                  <span style={{ marginLeft: "auto", color: "var(--accent)" }}>✓</span>
+                )}
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
       <button type="button" className={s.searchBtn} onClick={() => setPaletteOpen(true)}>
         <Search style={{ width: 14, height: 14 }} />
-        Поиск чатов, операторов, команд…
-        <kbd>Ctrl K</kbd>
+        <span className={s.searchLabel}>Поиск чатов, операторов, команд…</span>
+        <span className={s.kbdGroup}>
+          <kbd>Ctrl</kbd>
+          <kbd>K</kbd>
+        </span>
       </button>
 
       <div className={s.spacer} />

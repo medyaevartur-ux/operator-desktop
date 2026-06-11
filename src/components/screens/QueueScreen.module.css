@@ -102,7 +102,7 @@
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--md-sys-shape-corner-large);
-  box-shadow: var(--md-sys-elevation-level1);
+  box-shadow: var(--soft-raised);
   transition: border-color var(--duration-fast) var(--ease-default),
     box-shadow var(--duration-fast) var(--ease-default),
     transform var(--duration-fast) var(--ease-default);
@@ -111,6 +111,7 @@
 .card:hover {
   box-shadow: var(--md-sys-elevation-level3);
   border-color: var(--border-default);
+  transform: translateY(-1px);
 }
 
 .cardGreen {

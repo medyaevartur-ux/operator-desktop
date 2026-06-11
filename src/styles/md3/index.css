@@ -2,8 +2,8 @@
    Безопасно: задаёт только токены/шрифты, НЕ переопределяет старые экраны.
    Старые экраны мигрируют на MD3 по одному (Трек C). */
 
-/* Шрифты (бандлятся, offline-safe для Tauri) */
-@import "@fontsource-variable/roboto-flex/index.css";
+/* Шрифты (бандлятся, offline-safe для Tauri). Inter — единый шрифт с сайтом/виджетом. */
+@import "@fontsource-variable/inter/index.css";
 @import "material-symbols/rounded.css";
 
 /* Токены */

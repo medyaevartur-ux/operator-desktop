@@ -163,7 +163,7 @@
   --radius-full: 9999px;
 
   /* Typography */
-  --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans:  'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
   --font-serif: 'Source Serif 4', 'Tiempos', Georgia, serif;  /* à la Claude.ai */
   --font-display: 'Source Serif 4', 'Tiempos', Georgia, serif;
   --font-mono:  'JetBrains Mono', 'Fira Code', monospace;

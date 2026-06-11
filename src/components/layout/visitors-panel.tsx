@@ -197,7 +197,9 @@ export function VisitorsPanel() {
       <div className={`${s.list} scrollbar-thin`}>
         {filteredVisitors.length === 0 ? (
           <div className={s.emptyState}>
-            <Eye style={{ width: 24, height: 24, opacity: 0.4 }} />
+            <div className={s.emptyIcon}>
+              <Eye style={{ width: 24, height: 24 }} />
+            </div>
             <div className={s.emptyTitle}>Посетители не найдены</div>
             <div className={s.emptyDesc}>Никто на сайте не удовлетворяет условиям фильтра.</div>
           </div>

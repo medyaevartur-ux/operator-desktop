@@ -8,11 +8,11 @@
 .kpi {
   position: relative;
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
   overflow: hidden;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--soft-raised);
   transition: transform var(--duration-fast) var(--ease-default),
               border-color var(--duration-fast) var(--ease-default),
               box-shadow var(--duration-fast) var(--ease-default);
@@ -28,7 +28,7 @@
 }
 .kpi:hover {
   border-color: var(--accent-muted);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--md-sys-elevation-level3);
   transform: translateY(-1px);
 }
 .kpi:hover::before { opacity: 1; }
@@ -83,9 +83,9 @@
   margin: var(--space-5) var(--space-6) 0;
   padding: var(--space-5);
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--soft-raised);
 }
 .funnelTitle {
   font-size: var(--text-md);
@@ -142,9 +142,9 @@
   margin: var(--space-5) var(--space-6) var(--space-6);
   padding: var(--space-5);
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--soft-raised);
 }
 .heatmapTitle {
   font-size: var(--text-md);

@@ -106,7 +106,15 @@ export function SessionHistoryList({
   const pastSessions = sessions.filter((ses) => ses.id !== currentSessionId);
 
   if (pastSessions.length === 0) {
-    return <div className={s.emptyHistory}>Первое обращение клиента</div>;
+    return (
+      <div className={s.emptyHistory}>
+        <div className={s.emptyHistoryIcon}>
+          <History style={{ width: 22, height: 22 }} />
+        </div>
+        <div className={s.emptyHistoryTitle}>Первое обращение клиента</div>
+        <div className={s.emptyHistoryDesc}>Прошлых диалогов пока нет</div>
+      </div>
+    );
   }
 
   return (

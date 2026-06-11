@@ -5,30 +5,64 @@
   gap: 6px;
 }
 
+/* ── Unified empty state ── */
 .emptyHistory {
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--md-sys-spacing-2);
+  padding: var(--md-sys-spacing-6) var(--md-sys-spacing-4);
   text-align: center;
+}
+
+.emptyHistoryIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  box-shadow: var(--soft-raised);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  margin-bottom: var(--md-sys-spacing-1);
+}
+
+.emptyHistoryTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.emptyHistoryDesc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .historyCard {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px;
+  padding: var(--md-sys-spacing-3);
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--soft-raised);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    border-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
   text-align: left;
   width: 100%;
 }
 
 .historyCard:hover {
-  background: var(--surface-hover);
+  background: var(--surface-2);
   border-color: var(--accent);
+  box-shadow: var(--md-sys-elevation-level3);
+  transform: translateY(-1px);
 }
 
 .historyCardTop {
@@ -47,7 +81,7 @@
   font-size: 10px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -95,13 +129,14 @@
 
 .modal {
   background: var(--surface-1);
-  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
   width: 100%;
   max-width: 560px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--md-sys-elevation-level5);
 }
 
 .modalHeader {
@@ -126,16 +161,19 @@
 
 .modalClose {
   padding: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s;
+  transition:
+    background var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
   background: none;
   border: none;
 }
 
 .modalClose:hover {
-  background: var(--surface-hover);
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 .modalBody {
@@ -161,7 +199,7 @@
   color: var(--text-muted);
   padding: 4px 12px;
   background: var(--surface-2);
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   align-self: center;
 }
 
@@ -196,7 +234,7 @@
 
 .previewBubble {
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 13px;
   line-height: 1.4;
   word-break: break-word;
@@ -205,17 +243,17 @@
 .previewBubbleOp {
   background: var(--accent-soft);
   color: var(--text-primary);
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: var(--radius-xs);
 }
 
 .previewBubbleVisitor {
   background: var(--surface-2);
   color: var(--text-primary);
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: var(--radius-xs);
 }
 
 .previewBubbleAi {
-  background: var(--status-info-soft, #e8f4fd);
+  background: var(--status-info-soft, var(--info-soft));
   color: var(--text-primary);
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: var(--radius-xs);
 }

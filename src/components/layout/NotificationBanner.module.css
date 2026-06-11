@@ -14,10 +14,10 @@
   width: min(560px, calc(100vw - var(--space-6)));
   padding: var(--space-3) var(--space-4);
 
-  background: var(--surface-2);
-  border: 1px solid var(--border-default);
-  border-radius: var(--md-sys-shape-corner-large);
-  box-shadow: var(--md-sys-elevation-level4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--soft-raised);
 }
 
 .badge {
@@ -28,11 +28,12 @@
   min-width: 28px;
   height: 28px;
   padding: 0 var(--space-2);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--accent);
-  color: var(--surface-1);
+  color: var(--text-on-accent);
   font-size: var(--text-sm);
   font-weight: var(--weight-extrabold);
+  box-shadow: 0 0 0 4px var(--accent-muted);
 }
 
 .body {
@@ -76,29 +77,51 @@
   cursor: pointer;
   font-size: var(--text-sm);
   font-weight: var(--weight-extrabold);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--md-sys-shape-corner-medium, 12px);
-  transition: filter 0.15s ease, background 0.15s ease;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  transition:
+    filter var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
 }
 
 .openBtn {
   background: var(--accent);
-  color: var(--surface-1);
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-xs);
 }
 
 .openBtn:hover {
-  filter: brightness(1.05);
+  background: var(--accent-hover);
+  box-shadow: var(--md-sys-elevation-level1);
+  transform: translateY(-1px);
+}
+
+.openBtn:active {
+  transform: translateY(0);
+  box-shadow: var(--soft-pressed);
+}
+
+.openBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-focus);
 }
 
 .dismissBtn {
-  background: var(--surface-3);
+  background: var(--surface-2);
   color: var(--text-secondary);
-  border: 1px solid var(--border-subtle, var(--border-default));
+  border: 1px solid var(--border-subtle);
 }
 
 .dismissBtn:hover {
-  background: var(--surface-1);
+  background: var(--surface-3);
   color: var(--text-primary);
+}
+
+.dismissBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--border-focus);
 }
 
 @media (max-width: 640px) {

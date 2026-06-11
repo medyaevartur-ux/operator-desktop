@@ -26,6 +26,18 @@
   height: 100%;
 }
 
+.emptyIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  box-shadow: var(--soft-raised);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  margin: 0 auto var(--space-3);
+}
+
 .emptyTitle {
   font-size: 18px;
   font-weight: var(--weight-extrabold);
@@ -370,8 +382,8 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--surface-1);
-  padding: 12px;
-  box-shadow: var(--md-sys-elevation-level1);
+  padding: var(--md-sys-spacing-3);
+  box-shadow: var(--soft-raised);
 }
 
 .cardOverflow {
@@ -522,13 +534,13 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--surface-1);
-  padding: 12px;
-  box-shadow: var(--md-sys-elevation-level1);
+  padding: var(--md-sys-spacing-3);
+  box-shadow: var(--soft-raised);
   transition: box-shadow var(--duration-fast) var(--ease-default);
 }
 
 .noteCard:hover {
-  box-shadow: var(--md-sys-elevation-level2);
+  box-shadow: var(--md-sys-elevation-level3);
 }
 
 .noteText {

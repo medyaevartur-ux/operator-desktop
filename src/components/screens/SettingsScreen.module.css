@@ -84,10 +84,10 @@
 
 .sectionCard {
   padding: var(--space-5);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
-  box-shadow: var(--md-sys-elevation-level2);
+  box-shadow: var(--soft-raised);
 }
 
 /* ── Avatar ── */

@@ -127,9 +127,23 @@
 }
 
 .headerStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
+
+.headerStatusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.headerStatusDotOnline { background: var(--status-online); }
+.headerStatusDotAi { background: var(--info); }
+.headerStatusDotClosed { background: var(--status-offline); }
 
 .headerActions {
   display: flex;
@@ -157,7 +171,26 @@
 
 .ghostBtn:hover {
   background: var(--surface-2);
-  color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.ghostBtn:active {
+  box-shadow: var(--soft-pressed);
+}
+
+.ghostBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.activeBtn {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.activeBtn:hover {
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 
 /* ── Header search ── */
@@ -286,23 +319,28 @@
 .dateSep {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
   margin: 20px 0 16px;
 }
 
 .dateLine {
-  flex: 1;
-  height: 1px;
-  background: var(--border-subtle);
+  display: none;
 }
 
 .dateLabel {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--bubble-system-bg);
   font-size: 11px;
-  font-weight: var(--weight-extrabold);
-  color: var(--text-disabled);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   flex-shrink: 0;
+  box-shadow: var(--md-sys-elevation-level1);
 }
 
 /* ── Message row ── */
@@ -365,14 +403,14 @@
 .systemBubble {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px;
   padding: 6px 14px;
   border-radius: var(--radius-full);
   background: var(--bubble-system-bg);
-  border: 1px solid var(--border-subtle);
   font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-semibold);
   color: var(--bubble-system-text);
+  box-shadow: var(--md-sys-elevation-level1);
 }
 
 /* ── Deleted message ── */

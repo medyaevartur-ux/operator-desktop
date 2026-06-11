@@ -64,12 +64,14 @@
   overflow: hidden;
   position: relative;
   box-shadow: var(--soft-raised);
-  transition: box-shadow var(--duration-normal) var(--ease-default);
+  transition:
+    border-color var(--md-sys-motion-duration-short4) var(--ease-default),
+    box-shadow var(--md-sys-motion-duration-short4) var(--ease-default);
 }
 
 .form:focus-within {
-  border-color: var(--border-focus);
-  box-shadow: var(--md-sys-elevation-level3);
+  border-color: var(--border-default);
+  box-shadow: var(--md-sys-elevation-level2);
 }
 
 /* ── Tab bar ── */
@@ -456,13 +458,24 @@
   width: 100%;
   min-height: 80px;
   resize: none;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--surface-2);
+  box-shadow: var(--soft-inset);
+  padding: 10px 14px;
   font-size: 15px;
   line-height: 1.6;
   color: var(--text-primary);
   outline: none;
   font-family: inherit;
+  transition:
+    border-color var(--md-sys-motion-duration-short4) var(--ease-default),
+    box-shadow var(--md-sys-motion-duration-short4) var(--ease-default);
+}
+
+.textarea:focus {
+  border-color: var(--border-focus);
+  box-shadow: var(--soft-inset), 0 0 0 3px var(--accent-muted);
 }
 
 .textarea::placeholder {
@@ -474,7 +487,11 @@
   font-size: 15px;
   line-height: 1.6;
   color: var(--text-primary);
-  padding: 0 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--surface-2);
+  box-shadow: var(--soft-inset);
+  padding: 10px 14px;
   white-space: pre-wrap;
   word-break: break-word;
 }

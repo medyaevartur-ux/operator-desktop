@@ -222,7 +222,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--md-sys-shape-corner-large);
   padding: var(--space-5);
-  box-shadow: var(--md-sys-elevation-level1);
+  box-shadow: var(--soft-raised);
   transition: transform var(--duration-fast) var(--ease-default),
               box-shadow var(--duration-fast) var(--ease-default),
               border-color var(--duration-fast) var(--ease-default);
@@ -305,10 +305,33 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-12);
-  gap: var(--space-3);
+  padding: var(--md-sys-spacing-12);
+  gap: var(--md-sys-spacing-2);
   color: var(--text-muted);
   text-align: center;
+}
+
+.emptyIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--accent-soft);
+  box-shadow: var(--soft-raised);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  margin-bottom: var(--md-sys-spacing-1);
+}
+
+.emptyTitle {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+}
+
+.emptyDesc {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .modalOverlay {

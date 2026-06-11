@@ -141,6 +141,9 @@ export function ChatDetails() {
     return (
       <aside className={s.empty}>
         <div className={s.textCenter}>
+          <div className={s.emptyIcon}>
+            <User style={{ width: 26, height: 26 }} />
+          </div>
           <div className={s.emptyTitle}>Нет клиента</div>
           <div className={s.emptyDesc}>Открой диалог слева, чтобы увидеть информацию о клиенте.</div>
         </div>

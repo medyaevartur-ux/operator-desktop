@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  background: var(--surface-bg);
 }
 
 .shell {
@@ -12,6 +13,7 @@
   grid-template-columns: var(--shell-columns);
   transition: grid-template-columns var(--duration-normal) var(--ease-spring);
   overflow: hidden;
+  background: var(--surface-bg);
 }
 
 .detailsPanel {

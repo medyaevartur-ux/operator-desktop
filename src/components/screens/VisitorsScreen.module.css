@@ -283,9 +283,10 @@
   display: flex;
   gap: var(--space-3);
   padding: var(--space-4);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--soft-raised);
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-default),
@@ -297,7 +298,7 @@
 .onlineCard:hover {
   background: var(--surface-2);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--md-sys-elevation-level3);
 }
 
 .onlineCardSelected {
@@ -644,7 +645,7 @@
 
 /* ══ No online visitors ══ */
 .noOnline {
-  padding: var(--space-6);
+  padding: var(--space-8) var(--space-6);
   text-align: center;
   border-radius: var(--radius-xl);
   background: var(--surface-1);
@@ -652,14 +653,15 @@
 }
 
 .noOnlineIcon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-lg);
-  background: var(--surface-2);
-  color: var(--text-disabled);
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  box-shadow: var(--soft-raised);
+  color: var(--accent);
   display: grid;
   place-items: center;
-  margin: 0 auto var(--space-2);
+  margin: 0 auto var(--space-3);
 }
 
 .noOnlineText {
@@ -900,22 +902,26 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: var(--space-3);
-  color: var(--text-disabled);
+  gap: var(--space-2);
+  color: var(--text-muted);
 }
 
 .emptyIcon {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-lg);
-  background: var(--surface-2);
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  box-shadow: var(--soft-raised);
+  color: var(--accent);
   display: grid;
   place-items: center;
+  margin-bottom: var(--space-1);
 }
 
 .emptyText {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
+  color: var(--text-primary);
 }
 
 /* ══ Loading ══ */

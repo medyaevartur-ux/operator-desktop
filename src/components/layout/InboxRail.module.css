@@ -26,11 +26,18 @@
   place-items: center;
   box-shadow: var(--shadow-glow-sm);
   margin-bottom: var(--space-3);
-  transition: box-shadow var(--duration-fast) var(--ease-default);
+  transition:
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
 }
 
 .avatarBtn:hover {
   box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+.avatarBtn:active {
+  transform: translateY(0);
 }
 
 .avatarImg {
@@ -81,9 +88,11 @@
   background: var(--surface-2);
   color: var(--text-secondary);
   box-shadow: var(--md-sys-elevation-level1);
+  transform: translateY(-1px);
 }
 
 .navBtn:active {
+  transform: translateY(0);
   box-shadow: var(--soft-pressed);
 }
 
@@ -91,6 +100,26 @@
   background: var(--gradient-accent);
   color: white;
   box-shadow: var(--shadow-glow-sm);
+}
+
+/* Accent indicator rail on the active item */
+.navBtnActive::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--text-on-accent);
+  opacity: 0.85;
+  animation: navIndicatorIn var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+@keyframes navIndicatorIn {
+  from { opacity: 0; height: 4px; }
+  to { opacity: 1; height: 22px; }
 }
 
 .navBtnActive:hover {
@@ -189,7 +218,17 @@
   box-shadow: var(--soft-inset);
   transition:
     background var(--duration-fast) var(--ease-default),
-    box-shadow var(--duration-fast) var(--ease-default);
+    box-shadow var(--duration-fast) var(--ease-default),
+    filter var(--duration-fast) var(--ease-default);
+}
+
+.statusToggle:hover {
+  filter: brightness(1.05);
+}
+
+.statusToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--soft-inset), 0 0 0 2px var(--border-focus);
 }
 
 .statusThumb {

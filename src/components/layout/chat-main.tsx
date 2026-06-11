@@ -112,6 +112,12 @@ function statusLabel(status: string) {
   return status;
 }
 
+function statusDotClass(status: string) {
+  if (status === "closed") return s.headerStatusDotClosed;
+  if (status === "ai") return s.headerStatusDotAi;
+  return s.headerStatusDotOnline;
+}
+
 const QUICK_REACTIONS = ["👍", "❤️", "🥇", "🔥", "✅", "👀"];
 
 const bubbleVariants = {
@@ -368,7 +374,10 @@ export function ChatMain() {
                 <span className={s.hoverName}>{displayName}</span>
               </Tooltip>
             </div>
-            <div className={s.headerStatus}>{statusLabel(activeSession.status)}</div>
+            <div className={s.headerStatus}>
+              <span className={`${s.headerStatusDot} ${statusDotClass(activeSession.status)}`} />
+              {statusLabel(activeSession.status)}
+            </div>
             {activeSession.current_page && (
               <div className={s.headerPageBadge} title={activeSession.current_page}>
                 📄 {activeSession.current_page_title || activeSession.current_page}

@@ -116,11 +116,16 @@ export function TemplatesScreen() {
       <div className={s.scroll}>
         {grouped.length === 0 && (
           <div className={s.empty}>
-            <ScrollText style={{ width: 36, height: 36, opacity: 0.5 }} />
-            <div>
+            <div className={s.emptyIcon}>
+              <ScrollText style={{ width: 26, height: 26 }} />
+            </div>
+            <div className={s.emptyTitle}>
+              {query || activeCategory ? "Ничего не найдено" : "Шаблонов пока нет"}
+            </div>
+            <div className={s.emptyDesc}>
               {query || activeCategory
-                ? "Ничего не найдено"
-                : "Шаблонов пока нет — нажмите «Новый шаблон»"}
+                ? "Измените запрос или категорию"
+                : "Нажмите «Новый шаблон», чтобы создать первый"}
             </div>
           </div>
         )}

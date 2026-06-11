@@ -1,11 +1,11 @@
 {
-  "version": "7.0.0",
-  "notes": "Версия 7.0 — «Своё Jivo». Виджет на сайте полностью перерисован в фирменном тёплом стиле (крем + огненный акцент, светлая шапка с блюром, шрифт сайта, мягкие тёплые тени) — теперь он выглядит как родная часть zhivaya-skazka.ru. Исправлены раздражавшие баги: приветствие, тизер и триггеры больше не «вылетают» при каждом переходе/перезагрузке; офлайн-режим сведён к одному понятному сценарию; на мобильном корректная нижняя шторка с учётом клавиатуры. Настройки виджета теперь применяются 1:1 (добавлено ~20 ранее терявшихся параметров, исправлен код вставки на сайт). Безопасность: чужие чаты и контакты больше нельзя прочитать по ссылке (привязка к посетителю), закрыта дыра в загрузке обновлений, проверка прав администратора. В приложении: живая очередь и живая карта пути посетителя по сокету, аккуратные пустые состояния, опрятная кнопка проверки обновлений. Все прежние функции и поведения сохранены.",
-  "pub_date": "2026-06-11T17:40:00Z",
+  "version": "7.1.0",
+  "notes": "Версия 7.1 — дизайн-полировка приложения оператора. Единый шрифт Inter (как на сайте и в виджете). Список диалогов с чёткой иерархией (аватар со статусом, имя, превью, время, индикатор непрочитанных), разделители дней и системные сообщения как мягкие пилюли, аккуратные хвостики сообщений. Премиальная статус-пилюля оператора (онлайн/занят/не беспокоить) в верхней панели, подсказка Ctrl+K, отполированные рейл, командная палитра и плашка уведомлений. Все экраны приведены к единому стилю карточек, добавлены аккуратные пустые состояния и скелетоны загрузки. Бирюзовый акцент рабочего пространства сохранён. Все функции и поведения прежние.",
+  "pub_date": "2026-06-11T18:10:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcWd5Y1QvVlorZFU2RXFVQWJnWWRrNGJMN2tWajZmd0xhcmNoeXVFOVpTcndkM04xOUtTWktKOHZQekVBbWVvSys4RlRybVRSRlN5Vk5vY3gwTVo4d2dZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxMTgxMTg1CWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNy4wLjBfeDY0LXNldHVwLm5zaXMuemlwCkxjczlzYzlNMHhSNjhpMnNDbFpNdW5RaXNTNFFnbml6eW13dC9obEFlYVl5Um92TjQwM2I4Z0ZScVlqK1U0dHhtd01UUGNQTGYzV3c0UWk4emlNNkRBPT0K",
-      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_7.0.0_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTdzJLUytUYU9pcXVIam9wdTY4UURRckVrMWhScktiY3RDMGlBZkF0RVNiRU92TnVwbWZTTnVFR211c2JxL2V2blZYRHBBaTJBUkZSVWV3emlXVE1BWHl4b203Q3p4ZGd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxMTgzMjA4CWZpbGU6WmhpdmF5YS1Ta2F6a2EtT3BlcmF0b3JfNy4xLjBfeDY0LXNldHVwLm5zaXMuemlwCjV5Y0h5SmU2dUhodmgxQzRyZ3kvZlczM0dTVkxvUTI3YVJkVFFyKzBpU1hHUHp3NENCMytuVXk0UDhJZlgydTZUM3dCamF3QVp4UWJQMFpha3RKWUFnPT0K",
+      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/Zhivaya-Skazka-Operator_7.1.0_x64-setup.nsis.zip"
     }
   }
 }

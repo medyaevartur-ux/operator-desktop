@@ -8,7 +8,7 @@
   border-radius: var(--md-sys-shape-corner-large);
   background: var(--surface-1);
   border: 1px solid var(--border-subtle);
-  box-shadow: var(--md-sys-elevation-level1);
+  box-shadow: var(--soft-raised);
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-default),
@@ -20,7 +20,8 @@
 
 .card:hover {
   background: var(--surface-2);
-  box-shadow: var(--md-sys-elevation-level2);
+  box-shadow: var(--md-sys-elevation-level3);
+  transform: translateY(-1px);
 }
 
 .card:focus-visible {

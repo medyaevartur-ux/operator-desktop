@@ -50,7 +50,7 @@
   --bubble-system-text:   var(--md-sys-color-on-surface-variant);
 
   /* ── Шрифт MD3 ── */
-  --font-sans: "Roboto Flex Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   /* ── Радиусы (шкала референса 4/8/12/16/24) ── */
   --radius-md:  var(--md-sys-shape-corner-medium);
