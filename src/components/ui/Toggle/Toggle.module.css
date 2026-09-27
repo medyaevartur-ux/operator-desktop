@@ -2,57 +2,36 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 16px;
+  min-height: 44px;
   cursor: pointer;
   user-select: none;
 }
-
-.label {
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-}
-
-.description {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  margin-top: var(--space-1);
-}
+.label { font-size: 14px; font-weight: var(--weight-medium); color: var(--text-primary); }
+.description { margin-top: 2px; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
 
 .track {
   position: relative;
-  width: 44px;
-  height: 24px;
-  border-radius: var(--radius-full);
-  background: var(--neutral-300);
   flex-shrink: 0;
-  transition: background var(--duration-fast) var(--ease-default);
-  border: none;
+  width: 36px;
+  height: 20px;
   padding: 0;
-  cursor: pointer;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  transition: background var(--duration-fast) var(--ease-default);
 }
-
-.track:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
-}
-
-.trackActive {
-  background: var(--accent);
-}
-
+.track:active:not(:disabled) { transform: none; }
+.track:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+.trackActive { background: var(--accent); }
 .thumb {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: var(--radius-full);
-  background: white;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--duration-fast) var(--ease-spring);
+  background: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform var(--duration-fast) var(--ease-default);
 }
-
-.thumbActive {
-  transform: translateX(20px);
-}
+.thumbActive { transform: translateX(16px); }

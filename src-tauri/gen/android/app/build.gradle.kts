@@ -14,6 +14,11 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val signingProperties = Properties().apply {
+    val localFile = rootProject.file("keystore.properties")
+    if (localFile.exists()) localFile.inputStream().use { load(it) }
+}
+
 android {
     compileSdk = 36
     namespace = "ru.zhivaya_skazka.operator"
@@ -27,10 +32,10 @@ android {
     }
     signingConfigs {
         create("release") {
-            storeFile = file("../release.keystore")
-            storePassword = "Zhivaya2025!"
-            keyAlias = "zhivaya-skazka"
-            keyPassword = "Zhivaya2025!"
+            storeFile = rootProject.file(signingProperties.getProperty("storeFile") ?: System.getenv("ANDROID_KEYSTORE_FILE") ?: "release.keystore")
+            storePassword = signingProperties.getProperty("storePassword") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = signingProperties.getProperty("keyAlias") ?: System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = signingProperties.getProperty("keyPassword") ?: System.getenv("ANDROID_KEY_PASSWORD")
         }
     }    
     buildTypes {
@@ -74,6 +79,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("com.google.android.material:material:1.12.0")
+
+    implementation("androidx.work:work-runtime:2.10.5")
 
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))

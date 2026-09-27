@@ -1,88 +1,45 @@
-﻿<#
-.SYNOPSIS
-  Выпуск новой версии Zhivaya-Skazka-Operator одной командой.
-.DESCRIPTION
-  1) проверяет ключ подписи; 2) бампит версию в package.json и tauri.conf.json;
-  3) собирает tauri build; 4) копирует .zip+.sig в releases/;
-  5) генерирует releases/latest.json и печатает команды деплоя на сервер.
-.EXAMPLE
-  powershell -NoProfile -File scripts\release.ps1 -Version 5.1.6 -Notes "Описание релиза"
-#>
+<# Build signed Windows packages only after the user resumes installer work. #>
 param(
-  [Parameter(Mandatory = $true)][string]$Version,
-  [Parameter(Mandatory = $true)][string]$Notes
+  [Parameter(Mandatory=$true)][string]$Version,
+  [Parameter(Mandatory=$true)][string]$Notes,
+  [switch]$BuildInstallers
 )
-$ErrorActionPreference = "Stop"
-$root = Split-Path $PSScriptRoot -Parent
-
+$ErrorActionPreference='Stop'
+$root=Split-Path $PSScriptRoot -Parent
+if (-not $BuildInstallers) { throw 'Installers are deferred. Use prepare-release.ps1, or explicitly pass -BuildInstallers after resuming native packaging.' }
+$pkg=Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
+$config=Get-Content (Join-Path $root 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
+$server=Get-Content (Join-Path $root 'server/package.json') -Raw | ConvertFrom-Json
+if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$' -or $Version -ne $pkg.version -or $Version -ne $config.version -or $Version -ne $server.version) { throw 'Set and review matching versions in the source first. This script never silently bumps versions.' }
 if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
-  $keyFile = Join-Path $root "src-tauri\keys\update.key"
-  if (Test-Path $keyFile) {
-    $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $keyFile -Raw
-    if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "" }
-    Write-Host "Ключ подписи взят из src-tauri\keys\update.key" -ForegroundColor Yellow
-  } else {
-    throw "TAURI_SIGNING_PRIVATE_KEY не задан и нет файла src-tauri\keys\update.key — без ключа обновление не будет подписано."
-  }
+  $keyFile=Join-Path $root 'src-tauri/keys/update.key'
+  if (-not (Test-Path -LiteralPath $keyFile)) { throw 'Existing updater signing key is required.' }
+  $env:TAURI_SIGNING_PRIVATE_KEY=[IO.File]::ReadAllText($keyFile)
 }
-# гарантируем непустое (но возможно пустой пароль) значение, чтобы tauri не спрашивал интерактивно
-if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "" }
-
-Write-Host "=== Релиз v$Version ===" -ForegroundColor Cyan
-
-# 1. версия в package.json (читаем как UTF-8, иначе PS5.1 ломает не-ASCII)
-$pkgPath = Join-Path $root "package.json"
-$pkg = [System.IO.File]::ReadAllText($pkgPath)
-$pkg = $pkg -replace '("version":\s*")[0-9]+\.[0-9]+\.[0-9]+(")', "`${1}$Version`${2}"
-[System.IO.File]::WriteAllText($pkgPath, $pkg, (New-Object System.Text.UTF8Encoding($false)))
-
-# 2. версия в tauri.conf.json (читаем как UTF-8 — в файле есть кириллица в title)
-$confPath = Join-Path $root "src-tauri\tauri.conf.json"
-$conf = [System.IO.File]::ReadAllText($confPath)
-$conf = $conf -replace '("version":\s*")[0-9]+\.[0-9]+\.[0-9]+(")', "`${1}$Version`${2}"
-[System.IO.File]::WriteAllText($confPath, $conf, (New-Object System.Text.UTF8Encoding($false)))
-Write-Host "Версия проставлена в package.json и tauri.conf.json" -ForegroundColor Green
-
-# 3. сборка
-Write-Host "Сборка (npm run tauri build)…" -ForegroundColor Cyan
+if ($null -eq $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD='' }
+$env:CARGO_BUILD_JOBS='1'
+$env:VITE_API_URL='https://zhivaya-skazka.ru'
 Push-Location $root
-npm run tauri build
-$buildExit = $LASTEXITCODE
-Pop-Location
-if ($buildExit -ne 0) { throw "tauri build завершился с ошибкой ($buildExit)" }
-
-# 4. копирование артефактов
-$bundle = Join-Path $root "src-tauri\target\release\bundle\nsis"
-$zip = Get-ChildItem $bundle -Filter "*_${Version}_x64-setup.nsis.zip" | Select-Object -First 1
-$sig = Get-ChildItem $bundle -Filter "*_${Version}_x64-setup.nsis.zip.sig" | Select-Object -First 1
-if (-not $zip -or -not $sig) { throw "Не найдены артефакты сборки для версии $Version в $bundle" }
-$rel = Join-Path $root "releases"
-if (-not (Test-Path $rel)) { New-Item -ItemType Directory $rel | Out-Null }
-Copy-Item $zip.FullName $rel -Force
-Copy-Item $sig.FullName $rel -Force
-
-# 5. latest.json
-$signature = (Get-Content $sig.FullName -Raw).Trim()
-$pub = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$json = @"
-{
-  "version": "$Version",
-  "notes": "$Notes",
-  "pub_date": "$pub",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "$signature",
-      "url": "https://zhivaya-skazka.ru/updates/operator-desktop/$($zip.Name)"
-    }
+try {
+  & npm.cmd run test:reliability
+  if ($LASTEXITCODE -ne 0) { throw 'Reliability checks failed.' }
+  & npm.cmd run tauri -- build --bundles nsis
+  if ($LASTEXITCODE -ne 0) { throw 'Native Windows build failed.' }
+  $bundle=Join-Path $root 'src-tauri/target/release/bundle/nsis'
+  $zip=Get-ChildItem -LiteralPath $bundle -Filter "*_${Version}_x64-setup.nsis.zip" | Select-Object -First 1
+  if (-not $zip) { throw 'Expected updater ZIP is missing.' }
+  $signaturePath=$zip.FullName+'.sig'
+  if (-not (Test-Path -LiteralPath $signaturePath)) { throw 'Updater signature is missing.' }
+  $release=Join-Path $root "releases/$Version"
+  New-Item -ItemType Directory -Path $release -Force | Out-Null
+  Copy-Item -LiteralPath $zip.FullName,$signaturePath -Destination $release -Force
+  $manifest=@{version=$Version;notes=$Notes;pub_date=[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ');platforms=@{'windows-x86_64'=@{signature=([IO.File]::ReadAllText($signaturePath)).Trim();url="https://zhivaya-skazka.ru/updates/operator-desktop/$($zip.Name)"}}}
+  [IO.File]::WriteAllText((Join-Path $release 'latest.json'),($manifest | ConvertTo-Json -Depth 6),[Text.UTF8Encoding]::new($false))
+  $exe=Get-ChildItem -LiteralPath $bundle -Filter "*_${Version}_x64-setup.exe" | Select-Object -First 1
+  if ($exe) {
+    Copy-Item -LiteralPath $exe.FullName -Destination $release -Force
+    if (Test-Path -LiteralPath ($exe.FullName+'.sig')) { Copy-Item -LiteralPath ($exe.FullName+'.sig') -Destination $release -Force }
   }
-}
-"@
-$outJson = Join-Path $rel "latest.json"
-[System.IO.File]::WriteAllText($outJson, $json, (New-Object System.Text.UTF8Encoding($false)))
-
-Write-Host "`n=== latest.json готов: $outJson ===" -ForegroundColor Green
-Write-Host "`nДеплой на сервер (бэкап + загрузка):" -ForegroundColor Cyan
-Write-Host "ssh root@5.129.241.152 'cp /var/www/updates/operator-desktop/latest.json /var/www/updates/operator-desktop/latest.json.bak'"
-Write-Host "scp `"$($zip.FullName)`" `"$($sig.FullName)`" `"$outJson`" root@5.129.241.152:/var/www/updates/operator-desktop/"
-Write-Host "`nПроверка:" -ForegroundColor Cyan
-Write-Host "curl `"https://zhivaya-skazka.ru/api/updater/check?current_version=5.1.5`""
+  Get-ChildItem -LiteralPath $release -File | Get-FileHash -Algorithm SHA256 | Select-Object Path,Hash
+  Write-Output "Prepared only: $release. No upload or update channel publication was performed."
+} finally { Pop-Location }

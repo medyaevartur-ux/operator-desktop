@@ -1,3 +1,5 @@
+import { useDeliveryStore } from "@/store/delivery.store";
+import { useTemplatesStore } from "@/store/templates.store";
 import { useEffect } from "react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useInboxHotkeys } from "@/features/inbox/use-hotkeys";
@@ -17,6 +19,7 @@ export function useInbox() {
 
   useEffect(() => {
     void loadSessions();
+    void useTemplatesStore.getState().load();
     void loadOperators();
     void loadTags(null);
     // Загружаем visitors раз в минуту чтобы знать кто онлайн на сайте
@@ -47,54 +50,17 @@ export function useInbox() {
   useEffect(() => {
     if (!operatorId) return;
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3010";
-
-    void api(`/api/operators/${operatorId}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "online" }),
-    });
-
     import("@/lib/tauri-bridge").then(({ setCloseToTray }) => {
       const closeToTray = useNotificationStore.getState().closeToTray;
       setCloseToTray(closeToTray);
     }).catch(() => {});
 
-    useNotificationStore.getState().syncBadge();
-
-    // Запросить разрешение на системные уведомления один раз при старте,
-    // чтобы тосты в трее работали сразу, а не после первого сообщения.
-    import("@tauri-apps/plugin-notification").then(async (m) => {
-      try {
-        const granted = await m.isPermissionGranted();
-        if (!granted) await m.requestPermission();
-      } catch { /* не в Tauri — игнорируем */ }
-    }).catch(() => {});
-
-    const handleBeforeUnload = () => {
-      navigator.sendBeacon?.(
-        `${API_URL}/api/operators/${operatorId}/online`,
-        JSON.stringify({ is_online: false }),
-      );
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    let unlistenClose: (() => void) | null = null;
-    import("@/lib/tauri-bridge").then(({ onAppClosing, notifyOfflineNative }) => {
-      onAppClosing(() => {
-        notifyOfflineNative(API_URL, operatorId);
-      }).then((unlisten) => {
-        unlistenClose = unlisten;
-      });
-    }).catch(() => {});
-
     const heartbeat = setInterval(() => {
-      void api(`/api/operators/${operatorId}/heartbeat`, { method: "PATCH" });
+      void api(`/api/operators/${operatorId}/heartbeat`, { method: "PATCH" }).catch(() => undefined);
     }, 30000);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
       clearInterval(heartbeat);
-      if (unlistenClose) unlistenClose();
     };
   }, [operatorId]);
 
@@ -103,7 +69,7 @@ export function useInbox() {
   // и список онлайн-операторов был честным. Ручные статусы (dnd/offline/ручной away) не трогаем.
   useEffect(() => {
     if (!operatorId) return;
-    const IDLE_MS = 5 * 60 * 1000; // 5 минут простоя → away
+    const idleMs = () => (useDeliveryStore.getState().routing.idle_minutes || 5) * 60 * 1000; // 5 минут простоя → away
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
     let autoAway = false;
 
@@ -129,7 +95,7 @@ export function useInbox() {
         autoAway = false;
         if (useAuthStore.getState().operator?.status === "away") patchStatus("online");
       }
-      idleTimer = setTimeout(goAway, IDLE_MS);
+      idleTimer = setTimeout(goAway, idleMs());
     };
 
     const events = ["mousemove", "mousedown", "keydown", "wheel", "touchstart", "focus"];
@@ -137,7 +103,7 @@ export function useInbox() {
     const onVisible = () => { if (!document.hidden) onActivity(); };
     document.addEventListener("visibilitychange", onVisible);
 
-    idleTimer = setTimeout(goAway, IDLE_MS);
+    idleTimer = setTimeout(goAway, idleMs());
 
     return () => {
       if (idleTimer) clearTimeout(idleTimer);

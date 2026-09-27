@@ -7,12 +7,15 @@ import s from "./Toast.module.css";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
+interface ToastAction { label: string; run: () => void }
+
 interface ToastItem {
   id: string;
   type: ToastType;
   title: string;
   message?: string;
   duration?: number;
+  action?: ToastAction;
 }
 
 interface ToastStore {
@@ -34,8 +37,8 @@ export const useToastStore = create<ToastStore>((set) => ({
 
 /* Shorthand */
 export const toast = {
-  success: (title: string, message?: string) =>
-    useToastStore.getState().add({ type: "success", title, message }),
+  success: (title: string, message?: string, action?: ToastAction) =>
+    useToastStore.getState().add({ type: "success", title, message, action, duration: action ? 7000 : undefined }),
   error: (title: string, message?: string) =>
     useToastStore.getState().add({ type: "error", title, message }),
   warning: (title: string, message?: string) =>
@@ -88,6 +91,11 @@ function ToastItem({ item, onRemove }: { item: ToastItem; onRemove: () => void }
         <div className={s.title}>{item.title}</div>
         {item.message && <div className={s.message}>{item.message}</div>}
       </div>
+      {item.action && (
+        <button type="button" className={s.action} onClick={() => { item.action!.run(); handleClose(); }}>
+          {item.action.label}
+        </button>
+      )}
       <button className={s.closeBtn} onClick={handleClose} aria-label="Закрыть">
         <X style={{ width: 14, height: 14 }} />
       </button>

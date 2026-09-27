@@ -1,3 +1,5 @@
+import { getSession } from "@/lib/auth-session";
+const draftKey = (id: string) => `${getSession()?.operator.id || "signed-out"}:${id}`;
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -16,16 +18,16 @@ export const useDraftsStore = create<DraftsState>()(
         if (!sessionId) return;
         if (!text) {
           const next = { ...get().drafts };
-          delete next[sessionId];
+          delete next[draftKey(sessionId)];
           set({ drafts: next });
         } else {
-          set({ drafts: { ...get().drafts, [sessionId]: text } });
+          set({ drafts: { ...get().drafts, [draftKey(sessionId)]: text } });
         }
       },
-      getDraft: (sessionId) => get().drafts[sessionId] ?? "",
+      getDraft: (sessionId) => get().drafts[draftKey(sessionId)] ?? "",
       clearDraft: (sessionId) => {
         const next = { ...get().drafts };
-        delete next[sessionId];
+        delete next[draftKey(sessionId)];
         set({ drafts: next });
       },
     }),

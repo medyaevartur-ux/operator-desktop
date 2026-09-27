@@ -1,18 +1,12 @@
-/* MD3 дизайн-система — единая точка входа.
-   Безопасно: задаёт только токены/шрифты, НЕ переопределяет старые экраны.
-   Старые экраны мигрируют на MD3 по одному (Трек C). */
-
-/* Шрифты (бандлятся, offline-safe для Tauri). Inter — единый шрифт с сайтом/виджетом. */
+/* Шрифты бандлятся (offline-safe для Tauri): Inter — интерфейс, Source Serif 4 — заголовки. */
 @import "@fontsource-variable/inter/index.css";
-@import "material-symbols/rounded.css";
+@import "@fontsource-variable/source-serif-4/opsz.css";
 
-/* Токены */
+/* Статические роли MD3 и их цвета из src/styles/tokens.css */
 @import "./tokens.css";
 @import "./color.css";
-/* Мост: семантические токены приложения → MD3 (перекрашивает весь апп) */
-@import "./bridge.css";
 
-/* Нативные контролы — бирюзовый акцент (checkbox/radio/slider/progress) */
+/* Нативные контролы в цвет акцента (checkbox/radio/slider/progress) */
 input[type="checkbox"],
 input[type="radio"],
 input[type="range"],

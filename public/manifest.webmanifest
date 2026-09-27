@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Р–РёРІР°СЏ РЎРєР°Р·РєР° вЂ” РћРїРµСЂР°С‚РѕСЂ",
+  "short_name": "Р–РёРІР°СЏ РЎРєР°Р·РєР°",
+  "description": "Р”РёР°Р»РѕРіРё СЃ РєР»РёРµРЅС‚Р°РјРё Рё СЂР°Р±РѕС‚Р° РєРѕРјР°РЅРґС‹ Р–РёРІРѕР№ РЎРєР°Р·РєРё",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbfaf7",
+  "theme_color": "#a94d20",
+  "icons": [
+    {
+      "src": "/app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/book-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

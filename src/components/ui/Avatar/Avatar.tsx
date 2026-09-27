@@ -1,7 +1,7 @@
-import { getAvatarGradient, getInitials } from "@/utils/avatar";
+import { getAvatarTone, getInitials } from "@/utils/avatar";
 import s from "./Avatar.module.css";
 
-type AvatarSize = "sm" | "md" | "lg" | "xl";
+type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
 type AvatarStatus = "online" | "away" | "dnd" | "offline";
 
 interface AvatarProps {
@@ -12,31 +12,20 @@ interface AvatarProps {
   className?: string;
 }
 
-const STATUS_CLASS: Record<AvatarStatus, string> = {
-  online: s.statusOnline,
-  away: s.statusAway,
-  dnd: s.statusDnd,
-  offline: s.statusOffline,
+const STATUS_LABEL: Record<AvatarStatus, string> = {
+  online: "в сети",
+  away: "отошёл",
+  dnd: "не беспокоить",
+  offline: "не в сети",
 };
 
 export function Avatar({ name, src, size = "md", status, className }: AvatarProps) {
-  const wrapperClass = [s.wrapper, s[size], className].filter(Boolean).join(" ");
-
   return (
-    <div className={wrapperClass}>
-      <div
-        className={s.avatar}
-        style={!src ? { background: getAvatarGradient(name) } : undefined}
-      >
-        {src ? (
-          <img src={src} alt={name} className={s.image} loading="lazy" />
-        ) : (
-          getInitials(name)
-        )}
-      </div>
-      {status && (
-        <span className={`${s.statusDot} ${STATUS_CLASS[status] || STATUS_CLASS.offline}`} />
-      )}
-    </div>
+    <span className={[s.wrapper, s[size], className].filter(Boolean).join(" ")}>
+      <span className={s.avatar} data-tone={src ? undefined : getAvatarTone(name)} aria-hidden="true">
+        {src ? <img src={src} alt="" className={s.image} loading="lazy" /> : getInitials(name)}
+      </span>
+      {status && <span className={s.statusDot} data-status={status} title={STATUS_LABEL[status]} />}
+    </span>
   );
 }

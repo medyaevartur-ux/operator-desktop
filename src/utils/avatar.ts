@@ -1,14 +1,3 @@
-const GRADIENTS = [
-  "linear-gradient(135deg, #7C5CBF, #B07CD8)",
-  "linear-gradient(135deg, #3B7DD8, #5BA3F5)",
-  "linear-gradient(135deg, #5B8C5A, #7CB97B)",
-  "linear-gradient(135deg, #E8960E, #F5B73D)",
-  "linear-gradient(135deg, #C0392B, #E74C3C)",
-  "linear-gradient(135deg, #1ABC9C, #48D1A5)",
-  "linear-gradient(135deg, #E67E22, #F0A04B)",
-  "linear-gradient(135deg, #8E44AD, #BB6BD9)",
-];
-
 function hashString(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -17,19 +6,16 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-export function getAvatarGradient(name: string): string {
-  return GRADIENTS[hashString(name) % GRADIENTS.length];
+/** Номер приглушённого тона аватара 0..7 (цвета заданы в Avatar.module.css для обеих тем). */
+export function getAvatarTone(name: string): number {
+  return hashString(name) % 8;
 }
 
+/** Первые буквы слов, начинающихся с буквы: «Гость 3fa9c1» → «Г», «Анна Сергеева» → «АС». */
 export function getInitials(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return "?";
-
-  const parts = trimmed.split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return trimmed[0].toUpperCase();
+  const words = name.trim().split(/\s+/).map(word => word.replace(/^[^\p{L}\p{N}]+/u, "")).filter(word => /^\p{L}/u.test(word));
+  if (!words.length) return name.trim() ? name.trim()[0].toUpperCase() : "?";
+  return words.slice(0, 2).map(word => word[0]).join("").toUpperCase();
 }
 
 export function getSessionDisplayName(
@@ -37,5 +23,5 @@ export function getSessionDisplayName(
   visitorId: string
 ): string {
   const trimmed = name?.trim();
-  return trimmed || `Гость ${visitorId.slice(-6)}`;
+  return trimmed || `Гость ${visitorId.replace(/[^\p{L}\p{N}]/gu, "").slice(-6)}`;
 }

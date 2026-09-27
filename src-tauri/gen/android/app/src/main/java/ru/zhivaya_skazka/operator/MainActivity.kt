@@ -1,82 +1,88 @@
 package ru.zhivaya_skazka.operator
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
+import org.json.JSONObject
 
 class MainActivity : TauriActivity() {
-
     private val handler = Handler(Looper.getMainLooper())
-    private var webViewRef: WebView? = null
+    private var pendingSessionId: String? = null
+    private var destroyed = false
+    private lateinit var prefs: SharedPreferences
+    private val tokenListener = SharedPreferences.OnSharedPreferenceChangeListener { preferences, key ->
+        if (key == "fcm_token") preferences.getString(key, null)?.let { injectToken(it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        // Получаем FCM токен и инжектим в WebView
-        fetchFcmTokenAndInject()
-
-        // Если приложение открыто по тапу на push
+        prefs = getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        prefs.registerOnSharedPreferenceChangeListener(tokenListener)
+        pendingSessionId = savedInstanceState?.getString("pending_session_id")
+        requestNotificationsOnce()
+        fetchFcmToken()
         handlePushIntent(intent)
     }
 
-    private fun fetchFcmTokenAndInject() {
+    private fun requestNotificationsOnce() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED &&
+            !prefs.getBoolean("notification_permission_requested", false)) {
+            prefs.edit().putBoolean("notification_permission_requested", true).apply()
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
+    }
+
+    private fun fetchFcmToken() {
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val token = task.result
-                android.util.Log.d("FCM", "Got token: $token")
-
-                // Сохраняем в prefs
-                val prefs = getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
-                prefs.edit().putString("fcm_token", token).apply()
-
-                // Инжектим токен в WebView с повторными попытками
-                injectTokenToWebView(token, 0)
-            } else {
-                android.util.Log.e("FCM", "Failed to get token", task.exception)
+            if (task.isSuccessful && !destroyed) {
+                prefs.edit().putString("fcm_token", task.result).apply()
+                injectToken(task.result)
             }
         }
     }
 
-    private fun injectTokenToWebView(token: String, attempt: Int) {
-        if (attempt > 20) {
-            android.util.Log.e("FCM", "Failed to inject token after 20 attempts")
-            return
-        }
-
+    private fun injectToken(token: String, attempt: Int = 0) {
+        if (destroyed || attempt >= 30) return
         handler.postDelayed({
-            val webView = findWebView(window.decorView)
-            if (webView != null) {
-                webViewRef = webView
-                val js = """
-                    window.__FCM_TOKEN = '$token';
-                    window.__FCM_PLATFORM = 'android';
-                    console.log('[native] FCM token injected: ${token.take(20)}...');
-                """.trimIndent()
-                webView.evaluateJavascript(js, null)
-                android.util.Log.d("FCM", "Token injected to WebView (attempt $attempt)")
-
-                // Повторяем инъекцию через 5 секунд на случай если страница перезагрузится
-                handler.postDelayed({
-                    try {
-                        webView.evaluateJavascript(
-                            "if(!window.__FCM_TOKEN) { window.__FCM_TOKEN = '$token'; window.__FCM_PLATFORM = 'android'; console.log('[native] FCM token re-injected'); }",
-                            null
-                        )
-                    } catch (e: Exception) {
-                        android.util.Log.e("FCM", "Re-inject error: ${e.message}")
-                    }
-                }, 5000)
-            } else {
-                android.util.Log.d("FCM", "WebView not ready, retry attempt ${attempt + 1}")
-                injectTokenToWebView(token, attempt + 1)
+            if (!destroyed) {
+                val webView = findWebView(window.decorView)
+                if (webView == null) {
+                    injectToken(token, attempt + 1)
+                } else {
+                    val value = JSONObject.quote(token)
+                    webView.evaluateJavascript(
+                        "window.__FCM_TOKEN = $value; window.__FCM_PLATFORM = 'android'; " +
+                        "window.dispatchEvent(new Event('fcm-token'));", null
+                    )
+                }
             }
-        }, 1000)
+        }, 500)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        NativeAuthVault.foreground = true
+        if (::prefs.isInitialized) prefs.getString("fcm_token", null)?.let { injectToken(it) }
+        deliverPendingSession()
+    }
+
+    override fun onPause() {
+        NativeAuthVault.foreground = false
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -87,33 +93,59 @@ class MainActivity : TauriActivity() {
 
     private fun handlePushIntent(intent: Intent?) {
         val sessionId = intent?.getStringExtra("session_id")
-        if (!sessionId.isNullOrEmpty()) {
-            android.util.Log.d("MainActivity", "Push tap -> session_id: $sessionId")
-
-            handler.postDelayed({
-                try {
-                    val webView = webViewRef ?: findWebView(window.decorView)
-                    webView?.evaluateJavascript(
-                        "window.__PUSH_SESSION_ID = '$sessionId'; " +
-                        "if(window.__openSessionFromPush) window.__openSessionFromPush('$sessionId');",
-                        null
-                    )
-                } catch (e: Exception) {
-                    android.util.Log.e("MainActivity", "JS inject error: ${e.message}")
+        if (sessionId != null && NotificationWork.validId(sessionId)) {
+            pendingSessionId = sessionId
+            intent.getStringExtra("delivery_id")?.let { delivery ->
+                if (NotificationWork.validId(delivery)) java.util.concurrent.Executors.newSingleThreadExecutor().apply {
+                    execute { try { ChatNotifications.ack(applicationContext,delivery,"opened") } catch (_: Exception) {} finally { shutdown() } }
                 }
-            }, 2000)
-
-            intent?.removeExtra("session_id")
+            }
+            intent.removeExtra("delivery_id")
+            intent.removeExtra("session_id")
+            deliverPendingSession()
         }
+    }
+
+    private fun deliverPendingSession(attempt: Int = 0) {
+        val sessionId = pendingSessionId ?: return
+        if (destroyed || attempt >= 30) return
+        handler.postDelayed({
+            if (!destroyed && pendingSessionId == sessionId) {
+                val webView = findWebView(window.decorView)
+                if (webView == null) {
+                    deliverPendingSession(attempt + 1)
+                } else {
+                    val value = JSONObject.quote(sessionId)
+                    webView.evaluateJavascript(
+                        "(function(){window.__PUSH_SESSION_ID=$value;" +
+                        "if(typeof window.__openSessionFromPush==='function'){" +
+                        "window.__openSessionFromPush($value);window.__PUSH_SESSION_ID=null;return true;}" +
+                        "return false;})()"
+                    ) { handled ->
+                        if (handled == "true" && pendingSessionId == sessionId) pendingSessionId = null
+                        else deliverPendingSession(attempt + 1)
+                    }
+                }
+            }
+        }, 500)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("pending_session_id", pendingSessionId)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        destroyed = true
+        handler.removeCallbacksAndMessages(null)
+        if (::prefs.isInitialized) prefs.unregisterOnSharedPreferenceChangeListener(tokenListener)
+        super.onDestroy()
     }
 
     private fun findWebView(view: android.view.View): WebView? {
         if (view is WebView) return view
         if (view is android.view.ViewGroup) {
-            for (i in 0 until view.childCount) {
-                val result = findWebView(view.getChildAt(i))
-                if (result != null) return result
-            }
+            for (i in 0 until view.childCount) findWebView(view.getChildAt(i))?.let { return it }
         }
         return null
     }

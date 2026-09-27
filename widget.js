@@ -7,7 +7,55 @@
 
   const SCRIPT = document.currentScript;
   const API_BASE = (window.__zsPreviewConfig && window.__zsPreviewConfig.api_base) || (SCRIPT && SCRIPT.getAttribute("data-api")) || "https://zhivaya-skazka.ru";
-  const VISITOR_KEY = "zs_visitor_id";
+  // Browser privacy modes and the sandboxed designer may deny storage entirely.
+  function safeStorage(kind) {
+    const memory = new Map(); let backing;
+    try { backing=window[kind]; } catch (_) {}
+    return { getItem(key) { try { return (backing ? backing.getItem(key) : null) ?? memory.get(key) ?? null; } catch (_) { return memory.get(key) || null; } },
+      setItem(key,value) { memory.set(key,String(value));try { backing?.setItem(key,String(value)); } catch (_) {} },
+      removeItem(key) { memory.delete(key);try { backing?.removeItem(key); } catch (_) {} } };
+  }
+  const localStorage=safeStorage("localStorage"),sessionStorage=safeStorage("sessionStorage");
+  const IDENTITY_KEY="zs_identity_v8:"+API_BASE;
+  const DRAFT_KEY="zs_draft_v8:"+API_BASE;
+  const PENDING_KEY=DRAFT_KEY+":pending";
+  function readPending() { try{return JSON.parse(localStorage.getItem(PENDING_KEY)||"null")}catch(_){return null} }
+  function savedIdentity() { try { return JSON.parse(localStorage.getItem(IDENTITY_KEY)||"null"); } catch (_) { return null; } }
+  function messageId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    const bytes=new Uint8Array(16);if(window.crypto?.getRandomValues)window.crypto.getRandomValues(bytes);else for(let i=0;i<16;i++)bytes[i]=Math.floor(Math.random()*256);
+    bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
+    const hex=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");return hex.slice(0,8)+"-"+hex.slice(8,12)+"-"+hex.slice(12,16)+"-"+hex.slice(16,20)+"-"+hex.slice(20);
+  }
+  let identityWork=null;
+  async function ensureIdentity(force) {
+    if(window.__zsPreviewConfig){state.visitorId="11111111-1111-4111-8111-111111111111";state.visitorToken="preview-only";return true;}
+    if(!force&&state.visitorToken&&state.identityExpiresAt>Date.now()+60000)return true;
+    if(identityWork)return identityWork;
+    const obtain=async()=>{
+      const existing=savedIdentity();
+      if(!force&&existing?.visitor_token&&existing.expires_at>Date.now()+60000){state.visitorId=existing.visitor_id;state.visitorToken=existing.visitor_token;state.identityExpiresAt=existing.expires_at;return true;}
+      const request=async(token)=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);try{return await fetch(API_BASE+"/api/widget/identity",{method:"POST",headers:{"Content-Type":"application/json",...(token?{"X-Visitor-Token":token}:{})},body:"{}",signal:controller.signal,credentials:"omit"})}finally{clearTimeout(timer)}};
+      let response=await request(existing?.visitor_token);
+      if(response.status===401){localStorage.removeItem(IDENTITY_KEY);response=await request(null);}
+      if(response.status===403){state.identityBlocked=true;return false;}
+      if(!response.ok)return false;
+      let identity=await response.json();
+      if(!identity.visitor_id||!identity.visitor_token)return false;
+      // A simultaneous first visit in another tab may already have established
+      // the identity. Both tabs adopt that first signed identity.
+      const winner=savedIdentity();
+      if(!existing&&winner?.visitor_token&&winner.expires_at>Date.now()+60000)identity=winner;
+      const changed=state.visitorId&&state.visitorId!==identity.visitor_id;
+      identity.expires_at=identity.expires_at||Date.now()+identity.expires_in*1000;
+      localStorage.setItem(IDENTITY_KEY,JSON.stringify(identity));
+      state.visitorId=identity.visitor_id;state.visitorToken=identity.visitor_token;state.identityExpiresAt=identity.expires_at;
+      if(changed){state.session=null;state.messages=[];state.deliveredIds={};state.readIds={};}
+      return true;
+    };
+    identityWork=(navigator.locks?navigator.locks.request("zs-widget-identity-v8",obtain):obtain()).catch(()=>false).finally(()=>{identityWork=null;});
+    return identityWork;
+  }
   const SOUND_KEY = "zs_sound_enabled";
 
   // ═══ SOUND ═══
@@ -46,22 +94,7 @@
   }
 
   // ═══ UTIL ═══
-  function genId() {
-    // Новым посетителям выдаём непредсказуемый UUID (crypto.randomUUID), с фолбэком
-    // на старый способ для окружений без Web Crypto. Существующий id из localStorage не трогаем.
-    try {
-      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-        return "v_" + crypto.randomUUID();
-      }
-    } catch (e) { /* ignore */ }
-    return "v_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-  }
-
-  function getVisitorId() {
-    let id = localStorage.getItem(VISITOR_KEY);
-    if (!id) { id = genId(); localStorage.setItem(VISITOR_KEY, id); }
-    return id;
-  }
+  function getVisitorId() { return savedIdentity()?.visitor_id || ""; }
 
   const UTM_KEY = "zs_utm";
   // First-touch атрибуция: метки utm_* захватываются из URL при первом заходе
@@ -88,7 +121,7 @@
     if (!s) return "";
     const d = document.createElement("div");
     d.textContent = s;
-    return d.innerHTML;
+    return d.innerHTML.replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   }
 
   function parseMarkdown(text) {
@@ -123,7 +156,7 @@
   function isSafeImgUrl(url) {
     try {
       const u = new URL(url, API_BASE);
-      return /^https?:$/i.test(u.protocol) && /\.(jpg|jpeg|png|webp|gif)$/i.test(u.pathname);
+      return /^https?:$/i.test(u.protocol) && (/\.(jpg|jpeg|png|webp|gif)$/i.test(u.pathname) || (u.origin === new URL(API_BASE,location.href).origin && /^\/api\/chat-v8\/files\/[a-f0-9-]{36}$/i.test(u.pathname)));
     } catch { return false; }
   }
 
@@ -134,36 +167,61 @@
       if (m.attachments && typeof m.attachments === "string") a = JSON.parse(m.attachments);
       else if (Array.isArray(m.attachments)) a = m.attachments;
     } catch(e) {}
-    if (a && a[0] && a[0].url && isSafeImgUrl(a[0].url)) return a[0].url;
+    if (a && a[0] && a[0].url && (a[0].mime_type?.startsWith("image/") || m.message_type === "image") && isSafeImgUrl(a[0].url)) return a[0].url;
     if (m.message_type === "image" && m.message && isSafeImgUrl(m.message)) return m.message;
     if (m.image_url && isSafeImgUrl(m.image_url)) return m.image_url;
     if (isSafeImgUrl(m.message || "")) return m.message;
     return null;
   }
 
+  function getMsgFiles(message) {
+    let entries=message.attachments;
+    try{if(typeof entries==="string")entries=JSON.parse(entries);}catch(_){return [];}
+    if(!Array.isArray(entries)||message.is_deleted)return [];
+    return entries.filter(file=>file?.url&&!file.mime_type?.startsWith("image/")&&message.message_type!=="image").flatMap(file=>{
+      try{const url=new URL(file.url,API_BASE);return /^https?:$/.test(url.protocol)?[{...file,url:url.href}]:[];}catch(_){return [];}
+    });
+  }
+
   // ═══ ASYNC API ═══
-  async function api(method, path, body) {
-    const headers = {};
-    let sendBody = body;
-    if (body && !(body instanceof FormData)) {
-      headers["Content-Type"] = "application/json";
-      sendBody = JSON.stringify(body);
+  let creatingSession=null;
+  async function api(method,path,body,extraHeaders) {
+    if(method==="POST"&&path==="/api/widget/sessions") {
+      if(creatingSession)return creatingSession;
+      // Показанное автосообщение сервер запишет в историю первым — у оператора та же картина, что у клиента.
+      if(state.autoWelcome&&body&&!body.auto_message_id)body={...body,auto_message_id:String(state.autoWelcome.id)};
+      creatingSession=requestApi(method,path,body,extraHeaders).then(result=>{if(result&&result.id)state.autoWelcome=null;return result;}).finally(()=>{creatingSession=null;});
+      return creatingSession;
     }
-    // Контракт с сервером: на все запросы к сессиям шлём идентификатор посетителя.
-    // Покрывает /api/widget/sessions/:id (GET/POST/PATCH messages, status, page, deliver, read, rate, bot-event).
+    return requestApi(method,path,body,extraHeaders);
+  }
+  async function requestApi(method,path,body,extraHeaders) {
+    // Приглашения тоже требуют подписи посетителя: без неё принять или отклонить нельзя (было 403).
+    const owned=path.startsWith("/api/widget/sessions")||path.startsWith("/api/widget/invitations/")||path==="/api/widget/offline-leads"||path==="/api/widget/ab-track";
+    if(owned&&!await ensureIdentity())return null;
+    if(owned&&body&&!(body instanceof FormData)&&Object.prototype.hasOwnProperty.call(body,"visitor_id"))body={...body,visitor_id:state.visitorId};
+    if(path==="/api/widget/offline-leads"&&body&&!body.client_request_id) {
+      const data=JSON.stringify(body);let fingerprint=data;
+      if(window.crypto?.subtle){const digest=await window.crypto.subtle.digest("SHA-256",new TextEncoder().encode(data));fingerprint=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");}
+      let pending;try{pending=JSON.parse(localStorage.getItem(DRAFT_KEY+":lead")||"null")}catch(_){}
+      const id=pending?.fingerprint===fingerprint?pending.id:messageId();
+      localStorage.setItem(DRAFT_KEY+":lead",JSON.stringify({id,fingerprint}));body={...body,client_request_id:id};
+    }
+    if(path.startsWith("/api/widget/sessions?"))path="/api/widget/sessions?visitor_id="+encodeURIComponent(state.visitorId);
+    const headers={...(extraHeaders||{}),...(owned?{"X-Visitor-Id":state.visitorId,"X-Visitor-Token":state.visitorToken}:{})};
+    let sendBody=body;
+    if(body&&!(body instanceof FormData)){headers["Content-Type"]="application/json";sendBody=JSON.stringify(body);}
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
     try {
-      if (path.indexOf("/api/widget/sessions") === 0 && typeof state !== "undefined" && state.visitorId) {
-        headers["X-Visitor-Id"] = state.visitorId;
+      const response=await fetch(API_BASE+path,{method,headers,body:sendBody,signal:controller.signal,credentials:"omit"});
+      if(!response.ok){state.lastApiError=response.status;if(owned&&response.status===403)await ensureIdentity(true);return null;}
+      state.lastApiError=null;const result=await response.json();
+      if(path==="/api/widget/offline-leads"&&result.ok){
+        localStorage.removeItem(DRAFT_KEY+":lead");
+        if(result.session?.id&&!state.session){state.session=result.session;state.prechatDone=true;localStorage.setItem("zs_prechat_done","1");connectSocket(state.session.id);void loadMessages(state.session.id);startSessionPoll(state.session.id);}
       }
-    } catch (e) { /* ignore */ }
-    try {
-      const res = await fetch(API_BASE + path, { method, headers, body: sendBody });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
-    } catch(e) {
-      console.warn("[ZS] API " + method + " " + path + " failed:", e);
-      return null;
-    }
+      return result;
+    } catch(_){state.lastApiError="network";return null;}finally{clearTimeout(timeout);}
   }
 
   // ═══ GRADIENT HELPERS ═══
@@ -241,11 +299,11 @@
   // ═══ STATE ═══
   const state = {
     open: false, config: null, prechat: null, session: null,
-    messages: [], visitorId: getVisitorId(),
-    visitorDraftMessage: "", prechatDrafts: {},
+    messages: [], visitorId: getVisitorId(), visitorToken:savedIdentity()?.visitor_token||null,identityExpiresAt:savedIdentity()?.expires_at||0,identityBlocked:false,
+    visitorDraftMessage: localStorage.getItem(DRAFT_KEY)||"", prechatDrafts: {},pendingSend:readPending(),
     cardDismissed: !!sessionStorage.getItem("zs_card_dismissed"),
     visitorName: localStorage.getItem("zs_visitor_name") || "",
-    prechatDone: !!localStorage.getItem("zs_prechat_done"),
+    prechatDone: !!savedIdentity() && !!localStorage.getItem("zs_prechat_done"),
     socket: null, unread: 0, typing: false, typingTimeout: null,
     connected: false, soundOn: isSoundOn(), uploading: false,
     lightboxUrl: null, deliveredIds: {}, readIds: {},
@@ -292,8 +350,48 @@
   const host = document.createElement("div");
   host.id = "zs-widget-host";
   host.style.cssText = "position: fixed !important; z-index: 2147483647 !important; pointer-events: none; left: 0; right: 0; bottom: 0; top: 0; height: 0; width: 0; overflow: visible; display: block;";
-  const shadow = host.attachShadow({ mode: "closed" });
+  const shadow = host.attachShadow({ mode: window.__zsPreviewConfig ? "open" : "closed" });
   document.body.appendChild(host);
+
+  // Кнопка чата не закрывает кнопки сайта. Окно сайта поверх страницы (оформление заказа, пункт
+  // выдачи, развёрнутый плеер) — кнопка уходит; полоса у нижнего края (мини-плеер, cookies) —
+  // кнопка поднимается над ней. Открытый разговор не трогаем: его человек открыл сам.
+  // Свой замок прокрутки виджет ставит на <html>, поэтому смотрим только на сигналы сайта.
+  const LIFT_MAX = 160, LIFT_GAP = 12;
+  function pageModalOpen() {
+    if (document.documentElement.hasAttribute("data-overlay-open") || document.body.style.overflow === "hidden") return true;
+    const dialogs = document.querySelectorAll('[aria-modal="true"]');
+    for (let i = 0; i < dialogs.length; i++) if (dialogs[i].getClientRects().length) return true;
+    return false;
+  }
+  // Сколько поднять кнопку над закреплённой панелью сайта под ней; Infinity — панель слишком большая.
+  // Скрытая кнопка не имеет размеров, поэтому помним её последнее положение без подъёма.
+  let launcherSpot = null;
+  function launcherObstruction(lift) {
+    const launcher = Array.from(shadow.querySelectorAll(".zw-fab, .zw-launcher-card")).find(el => el.getClientRects().length);
+    if (launcher) { const r = launcher.getBoundingClientRect(); launcherSpot = { x: r.left + r.width / 2, bottom: r.bottom + lift, height: r.height }; }
+    if (!launcherSpot) return 0;
+    const bottom = launcherSpot.bottom, x = launcherSpot.x, y = Math.min(bottom - launcherSpot.height / 2, window.innerHeight - 1);
+    const page = document.elementsFromPoint(x, y).find(el => el !== host && el !== document.body && el !== document.documentElement);
+    for (let node = page; node && node !== document.body; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.position !== "fixed" && style.position !== "sticky") continue;
+      const box = node.getBoundingClientRect();
+      if (!(parseInt(style.zIndex, 10) >= 1) || box.bottom < window.innerHeight - 48) return 0;
+      const need = bottom - box.top + LIFT_GAP;
+      return box.height > window.innerHeight / 2 || need > LIFT_MAX ? Infinity : Math.max(0, need);
+    }
+    return 0;
+  }
+  // Правила страниц (скрытые разделы, телефон, include/exclude) главнее: на /admin виджета нет.
+  function placeLauncher() {
+    const lift = parseFloat(host.style.getPropertyValue("--zw-lift")) || 0;
+    const need = !isWidgetAllowedOnPage() ? Infinity : state.open ? 0 : pageModalOpen() ? Infinity : launcherObstruction(lift);
+    const display = need === Infinity ? "none" : "block", next = need === Infinity ? lift : need;
+    if (host.style.display !== display) host.style.display = display;
+    if (Math.abs(next - lift) > 2) host.style.setProperty("--zw-lift", Math.round(next) + "px");
+  }
+  if (!window.__zsPreviewConfig) setInterval(placeLauncher, 500);
 
   // ═══ ICONS ═══
   const IC = {
@@ -406,8 +504,6 @@
   --pulse-radius: ${pulseRadius};
   --hdr-bg: ${hdrBg};
   --font: ${ff};
-  --win-hidden: ${winHidden};
-  --win-visible: ${winVisible};
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -415,6 +511,7 @@
 .zw{font-family:var(--font);font-size:${fontSize};line-height:1.5;position:fixed;bottom:${edgeMargin};${side}:${edgeMargin};z-index:2147483647;pointer-events:auto;isolation:isolate;}
 /* Класс .zw-open ставится JS-ом при открытии — упрощает мобильные правила */
 .zw.zw-open .zw-launcher-card{display:none!important;}
+.zw-fab,.zw-launcher-card,.zw-greet,.zw-inv,.zw-mob-invite{translate:0 calc(-1 * var(--zw-lift, 0px));transition:translate .2s ease;}
 
 /* FAB */
 .zw-fab{width:var(--fab-size);height:var(--fab-size);border-radius:var(--fab-radius);background:var(--fab-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:${fabShadow},0 0 0 1px rgba(255,255,255,0.15) inset;transition:transform .25s var(--ez-expo),box-shadow .25s var(--ez-expo);position:relative;${gt === "glass" ? "backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.3);" : ""}${gt === "animated" ? "background-size:400% 400%;animation:zw-gradient-shift 3s ease infinite;" : ""}}
@@ -968,7 +1065,11 @@ ${safeCss}`;
       style = document.createElement("style");
       shadow.appendChild(style);
     }
-    const cssText = getCSS(cfg);
+    const cssText = getCSS(cfg) + `
+.zw-win{border:1px solid rgba(121,86,56,.13);border-radius:18px;box-shadow:0 18px 60px rgba(55,37,20,.16);height:590px;max-height:calc(100dvh - 104px)}
+.zw-hdr{min-height:72px}.zw-hdr-name{font-weight:600;letter-spacing:-.02em}.zw-msgs{padding:18px 16px}.zw-bbl{border-radius:4px 14px 14px 14px;box-shadow:none}.zw-row.v .zw-bbl{border-radius:14px 4px 14px 14px;background:var(--fab-bg)}.zw-txt{font-size:14px;line-height:1.65}.zw-sender{font-weight:500;font-size:11px}.zw-file{display:flex;flex-direction:column;gap:5px;padding:12px 13px;min-width:150px;max-width:260px;border:1px solid rgba(126,94,61,.2);border-radius:9px;color:inherit;text-decoration:none;overflow-wrap:anywhere}.zw-file strong{font-size:13px;font-weight:600}.zw-file span{font-size:11px;opacity:.7}.zw-inp{font-size:14px;line-height:1.55}.zw-send{border-radius:11px}.zw-ava{font-size:12px;font-weight:600}
+@media(max-width:480px){.zw-inp{font-size:16px}.zw-hdr-btn{min-width:42px;min-height:42px}.zw-msgs{padding:16px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}`;
     if (style.textContent !== cssText) {
       style.textContent = cssText;
     }
@@ -988,6 +1089,10 @@ ${safeCss}`;
     if (!root) {
       root = document.createElement("div");
       root.setAttribute("role", "region");
+      // Тап по затемнению вокруг мобильного окна закрывает чат (раньше тап просто терялся).
+      root.addEventListener("click", (e) => {
+        if (e.target === root && state.open && root.classList.contains("zw-mobile")) { closeChat("user"); scheduleRender(); }
+      });
       shadow.appendChild(root);
     }
     root.className = "zw" + (isMobileViewport ? " zw-mobile" : "") + (state.open ? " zw-open" : "");
@@ -1017,7 +1122,8 @@ ${safeCss}`;
     // greet_once: флаг zs_greet_seen теперь ставится при закрытии/открытии (dismissGreet), а НЕ при показе.
     const greetSeen = cfg.greet_once === true && !window.__zsPreviewConfig && localStorage.getItem("zs_greet_seen") === "1";
     // greetDismissed персистится в sessionStorage — поллинг/сокеты больше не «перепоказывают» пузырь.
-    if (!state.open && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen && !state.greetDismissed) {
+    // Пузырь — это автоматическое предложение: только при включённой автоматике и без отказа.
+    if (!state.open && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen && !state.greetDismissed && autoShowAllowed()) {
       const g = document.createElement("div");
       g.className = "zw-greet show";
       g.textContent = cfg.greeting;
@@ -1025,9 +1131,9 @@ ${safeCss}`;
       gx.className = "zw-greet-x";
       gx.textContent = "\u00d7";
       gx.setAttribute("aria-label", "Закрыть приветствие");
-      gx.onclick = (e) => { e.stopPropagation(); g.classList.remove("show"); dismissGreet(); };
+      gx.onclick = (e) => { e.stopPropagation(); g.classList.remove("show"); dismissGreet(true); scheduleRender(); };
       g.appendChild(gx);
-      g.onclick = () => { dismissGreet(); openChat(); scheduleRender(); };
+      g.onclick = () => { openChat("user"); scheduleRender(); };
       root.appendChild(g);
     }
 
@@ -1072,7 +1178,7 @@ ${safeCss}`;
       lc.appendChild(lcClose);
       lc.onclick = (e) => {
         if (e.target === lcClose) return;
-        openChat(); scheduleRender();
+        openChat("user"); scheduleRender();
       };
       root.appendChild(lc);
     }
@@ -1213,12 +1319,7 @@ ${safeCss}`;
     }
 
     fab.onclick = () => {
-      if (state.open) {
-        closeChat();
-        if (cfg.remember_open_state !== false) {
-          try { localStorage.setItem("zs_widget_open", "0"); } catch (e) { /* ignore */ }
-        }
-      } else { openChat(); }
+      if (state.open) closeChat("user"); else openChat("user");
       scheduleRender();
     };
 
@@ -1233,7 +1334,7 @@ ${safeCss}`;
     }
 
     // 9. Мобильное мини-приглашение поверх FAB
-    if (isMobileViewport && !state.open && lt !== "card" && cfg.mobile_invitation_enabled !== false && !state.mobileInviteDismissed && state.mobileInviteShown) {
+    if (isMobileViewport && !state.open && lt !== "card" && cfg.mobile_invitation_enabled !== false && !state.mobileInviteDismissed && state.mobileInviteShown && autoShowAllowed()) {
       const inv = document.createElement("div");
       inv.className = "zw-mob-invite";
       inv.textContent = cfg.mobile_invitation_text || "Нужна помощь? Нажмите!";
@@ -1244,14 +1345,13 @@ ${safeCss}`;
       x.textContent = "×";
       x.onclick = (e) => {
         e.stopPropagation();
-        dismissMobInvite();
+        dismissMobInvite(true);
         scheduleRender();
       };
       inv.appendChild(x);
       inv.onclick = (e) => {
         if (e.target === x) return;
-        dismissMobInvite();
-        openChat();
+        openChat("user");
         scheduleRender();
       };
       root.appendChild(inv);
@@ -1335,37 +1435,85 @@ ${safeCss}`;
       }
     } catch (e) { /* ignore */ }
   }
-  // Помечаем приветственный пузырь закрытым (память + sessionStorage), один раз на вкладку.
-  // Здесь же фиксируем greet_once (zs_greet_seen) — теперь только при закрытии/открытии, а не при показе.
-  function dismissGreet() {
+  // ═══ ПОЛИТИКА ПОКАЗА ═══
+  // Окно открывает человек. Автоматические предложения (приветствие, тизер, таймер, триггеры,
+  // приглашение сервера) работают только когда владелец включил auto_invite_enabled,
+  // и молчат после отказа посетителя — во всех вкладках, пока не пройдёт пауза.
+  const OPEN_KEY = "zs_widget_open";
+  const REFUSED_KEY = "zs_autoshow_refused_until";
+  const RESOLVED_INVITE_KEY = "zs_invitation_resolved";
+  const autoTimers = new Set();
+  function laterAuto(fn, ms) {
+    const id = setTimeout(() => { autoTimers.delete(id); fn(); }, ms);
+    autoTimers.add(id);
+    return id;
+  }
+  function cancelAutoTimers() {
+    autoTimers.forEach((id) => clearTimeout(id));
+    autoTimers.clear();
+    if (state.idleTimer) { clearTimeout(state.idleTimer); state.idleTimer = null; }
+  }
+  function autoShowAllowed() {
+    if (window.__zsPreviewConfig) return true;
+    const cfg = state.config || {};
+    if (cfg.auto_invite_enabled !== true || state.open || state.session) return false;
+    return Number(localStorage.getItem(REFUSED_KEY) || 0) <= Date.now();
+  }
+  function rememberRefusal() {
+    if (window.__zsPreviewConfig) return;
+    const hours = Math.min(720, Math.max(1, Number((state.config || {}).auto_invite_cooldown_hours) || 24));
+    localStorage.setItem(REFUSED_KEY, String(Date.now() + hours * 3600000));
+    cancelAutoTimers();
+    state.mobileInviteShown = false;
+  }
+
+  // Приветственный пузырь: закрытие = отказ от автоматических предложений.
+  function dismissGreet(refused) {
     state.greetDismissed = true;
     if (!window.__zsPreviewConfig) {
       try { sessionStorage.setItem("zs_greet_dismissed", "1"); } catch (e) { /* ignore */ }
-      const cfg = state.config || {};
-      if (cfg.greet_once === true) {
+      if ((state.config || {}).greet_once === true) {
         try { localStorage.setItem("zs_greet_seen", "1"); } catch (e) { /* ignore */ }
       }
+      if (refused) rememberRefusal();
     }
   }
 
-  // Мобильный тизер: закрытие персистим в sessionStorage — один раз на вкладку.
-  function dismissMobInvite() {
+  function dismissMobInvite(refused) {
     state.mobileInviteDismissed = true;
+    state.mobileInviteShown = false;
     if (!window.__zsPreviewConfig) {
       try { sessionStorage.setItem("zs_mobinvite_dismissed", "1"); } catch (e) { /* ignore */ }
+      if (refused) rememberRefusal();
     }
   }
 
-  function closeChat() {
+  // Любой способ закрытия (крестик, свайп, Escape, кнопка, оценка) проходит здесь.
+  function closeChat(reason) {
+    if (!state.open) return;
+    const autoOpened = state.openReason === "auto";
     state.open = false;
+    state.openReason = null;
     unlockBodyScroll();
+    if (state._autoMinTimer) { clearTimeout(state._autoMinTimer); state._autoMinTimer = null; }
+    if (!window.__zsPreviewConfig) { try { localStorage.setItem(OPEN_KEY, "0"); } catch (e) { /* ignore */ } }
+    // Закрыл то, что открылось само, — значит, сейчас помощь не нужна.
+    if (autoOpened && reason !== "system") rememberRefusal();
+    state.pendingInvitation = null;
     if (typeof state._applyVVH === "function") { try { state._applyVVH(); } catch (e) {} }
   }
 
-  function openChat() {
+  // reason: "user" — нажатие посетителя, "invitation" — принял приглашение,
+  // "restore" — возврат открытого окна после перехода, "auto" — правило владельца.
+  function openChat(reason) {
+    reason = reason || "user";
+    if (reason === "auto" && !autoShowAllowed()) return;
     state.open = true;
+    state.openReason = reason;
     state.unread = 0;
-    dismissGreet();
+    dismissGreet(false);
+    if (reason !== "auto") { dismissMobInvite(false); cancelAutoTimers(); }
+    state.pendingInvitation = null;
     markVisibleAsRead();
 
     // Перемещаем хост на самый верх дерева DOM, чтобы z-index работал безотказно
@@ -1374,19 +1522,15 @@ ${safeCss}`;
     }
 
     lockBodyScroll();
+    // Статус «в сети / ответим позже» в шапке — свежий на момент открытия.
+    if (!window.__zsPreviewConfig) void loadTeamOperators();
 
     const cfg = state.config || {};
-    if (cfg.remember_open_state !== false && !window.__zsPreviewConfig) {
-      try { localStorage.setItem("zs_widget_open", "1"); } catch (e) { /* ignore */ }
+    // Запоминаем только открытие человеком: автоматическое окно не должно «преследовать» по страницам.
+    if (reason !== "auto" && cfg.remember_open_state !== false && !window.__zsPreviewConfig) {
+      try { localStorage.setItem(OPEN_KEY, "1"); } catch (e) { /* ignore */ }
     }
-    // Сброс таймера авто-сворачивания
-    if (state._autoMinTimer) { clearTimeout(state._autoMinTimer); state._autoMinTimer = null; }
-    if ((cfg.auto_minimize_after || 0) > 0) {
-      state._autoMinTimer = setTimeout(() => {
-        closeChat();
-        scheduleRender();
-      }, cfg.auto_minimize_after * 1000);
-    }
+    armAutoMinimize();
     if (cfg._ab_variant && !state._abTrackedOpen) {
       state._abTrackedOpen = true;
       api("POST", "/api/widget/ab-track", { variant: cfg._ab_variant, event: "opened", visitor_id: state.visitorId });
@@ -1404,6 +1548,21 @@ ${safeCss}`;
     setTimeout(() => scrollBottom(true), 200);
     setTimeout(() => scrollBottom(true), 500);
   }
+
+  // «Свернуть после бездействия»: таймер перезапускается при любой активности посетителя и новых сообщениях.
+  function armAutoMinimize() {
+    if (state._autoMinTimer) { clearTimeout(state._autoMinTimer); state._autoMinTimer = null; }
+    const seconds = Number((state.config || {}).auto_minimize_after) || 0;
+    if (!state.open || seconds <= 0) return;
+    state._autoMinTimer = setTimeout(() => { closeChat("system"); scheduleRender(); }, seconds * 1000);
+  }
+  ["keydown", "pointerdown", "input", "wheel", "touchstart"].forEach((type) => {
+    shadow.addEventListener(type, () => { if (state.open && state._autoMinTimer) armAutoMinimize(); }, { passive: true });
+  });
+  // Escape закрывает окно, если фокус внутри виджета.
+  shadow.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.open && !state.lightboxUrl) { closeChat("user"); scheduleRender(); }
+  });
 
   function scrollBottom(force) {
     const el = shadow.getElementById("zw-msgs");
@@ -1511,6 +1670,11 @@ ${safeCss}`;
     } else if (s2?.status === "with_operator") {
       st.appendChild(dot);
       st.appendChild(document.createTextNode("Онлайн"));
+    } else if (Array.isArray(state.teamOperators) && state.teamOperators.length === 0) {
+      // Честно: сейчас в сети никого нет — сообщение дойдёт, ответ придёт позже.
+      dot.classList.add("offline");
+      st.appendChild(dot);
+      st.appendChild(document.createTextNode("Сейчас не в сети · ответим позже"));
     } else if (state.connected) {
       st.appendChild(dot);
       st.appendChild(document.createTextNode("Онлайн"));
@@ -1537,7 +1701,7 @@ ${safeCss}`;
     closeBtn.className = "zw-hdr-btn";
     closeBtn.innerHTML = IC.close;
     closeBtn.setAttribute("aria-label", "Закрыть чат");
-    closeBtn.onclick = () => { closeChat(); scheduleRender(); };
+    closeBtn.onclick = () => { closeChat("user"); scheduleRender(); };
     acts.appendChild(closeBtn);
     h.appendChild(acts);
 
@@ -1564,10 +1728,12 @@ ${safeCss}`;
     hi.textContent = cfg.header_title || "Онлайн-чат";
     c.appendChild(hi);
 
-    if (cfg.greeting) {
+    // Автосообщение владельца заменяет приветствие в форме знакомства.
+    const welcomeText = (!state.session && state.autoWelcome && state.autoWelcome.text) || cfg.greeting;
+    if (welcomeText) {
       const desc = document.createElement("div");
       desc.className = "zw-pre-desc";
-      desc.textContent = cfg.greeting;
+      desc.textContent = welcomeText;
       c.appendChild(desc);
     }
 
@@ -1690,8 +1856,12 @@ ${safeCss}`;
     state.refs.msgs = c;
 
     let lastDate = "";
+    // Автосообщение до начала диалога показывается как первое сообщение; сервер сохранит его при старте диалога.
+    const list = !state.session && state.autoWelcome
+      ? [{ id: "auto-welcome", sender: "ai", message: state.autoWelcome.text, created_at: new Date().toISOString(), status: "delivered", _sender_name: state.autoWelcome.sender }].concat(state.messages)
+      : state.messages;
 
-    state.messages.forEach((msg) => {
+    list.forEach((msg) => {
       const d = new Date(msg.created_at).toLocaleDateString("ru-RU");
       if (d !== lastDate) {
         lastDate = d;
@@ -1714,9 +1884,10 @@ ${safeCss}`;
       }
 
       const isV = msg.sender === "visitor";
-      const imgUrl = getMsgImg(msg);
+      const imgUrl = msg.is_deleted ? null : getMsgImg(msg);
+      const files=getMsgFiles(msg);
       const hasImg = !!imgUrl;
-      const showTxt = !hasImg || (msg.message && msg.message !== imgUrl && msg.message !== "[Изображение]" && msg.message !== "\uD83D\uDCF7 [Изображение]");
+      const showTxt = !files.length && (!hasImg || (msg.message && msg.message !== imgUrl && msg.message !== "[Изображение]" && msg.message !== "\uD83D\uDCF7 [Изображение]"));
 
       const row = document.createElement("div");
       row.className = "zw-row " + (isV ? "v" : "o");
@@ -1733,11 +1904,11 @@ ${safeCss}`;
         if (state.session?.operator_avatar_url) {
           ava.innerHTML = '<img src="' + esc(API_BASE + state.session.operator_avatar_url) + '" alt="Оператор">';
         } else {
-          ava.textContent = "\uD83D\uDC68\u200D\uD83D\uDCBC";
+          ava.textContent = (state.session?.operator_name || "Сказка").slice(0,1);
         }
       } else {
         ava.className = "zw-ava ai";
-        ava.textContent = "\uD83E\uDD16";
+        ava.textContent = "ЖС";
       }
       wrap.appendChild(ava);
 
@@ -1783,6 +1954,11 @@ ${safeCss}`;
         bbl.appendChild(imgW);
       }
 
+      for(const file of files) {
+        const link=document.createElement("a");link.className="zw-file";link.href=file.url;link.target="_blank";link.rel="noopener noreferrer";
+        const title=document.createElement("strong");title.textContent=file.filename||"Документ";link.appendChild(title);
+        const hint=document.createElement("span");hint.textContent="Открыть файл";link.appendChild(hint);bbl.appendChild(link);
+      }
       const isDeleted = msg.is_deleted || msg.message_type === "deleted" || !!msg.deleted_at;
 
       if (isDeleted) {
@@ -2148,7 +2324,7 @@ ${safeCss}`;
     c.className = "zw-comp";
 
     const fInp = document.createElement("input");
-    fInp.type = "file"; fInp.accept = "image/*"; fInp.style.display = "none";
+    fInp.type = "file"; fInp.accept = ".jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.docx,.xlsx,.zip"; fInp.style.display = "none";
     fInp.setAttribute("aria-hidden", "true");
     fInp.onchange = () => { handleUpload(fInp); };
     c.appendChild(fInp);
@@ -2167,17 +2343,19 @@ ${safeCss}`;
     inp.placeholder = "Введите сообщение...";
     inp.setAttribute("aria-label", "Введите сообщение");
     inp.rows = 1;
+    inp.disabled=state.sending;
     if (state.visitorDraftMessage) {
       inp.value = state.visitorDraftMessage;
     }
     inp.oninput = () => {
       state.visitorDraftMessage = inp.value;
+      localStorage.setItem(DRAFT_KEY,inp.value);
       inp.style.height = "auto";
       inp.style.height = Math.min(inp.scrollHeight, 100) + "px";
       emitTyping();
     };
     inp.onkeydown = (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(inp); }
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing && (window.innerWidth>480||e.ctrlKey||e.metaKey)) { e.preventDefault(); doSend(inp); }
     };
     c.appendChild(inp);
 
@@ -2211,7 +2389,7 @@ ${safeCss}`;
       setTimeout(() => {
         state.showRating = false;
         state.ratingSubmitted = false;
-        closeChat();
+        closeChat("system");
         resetChat();
         scheduleRender();
       }, 2500);
@@ -2269,7 +2447,7 @@ ${safeCss}`;
     skip.textContent = "Пропустить";
     skip.onclick = () => {
       state.showRating = false;
-      closeChat();
+      closeChat("system");
       resetChat();
       scheduleRender();
     };
@@ -2279,6 +2457,32 @@ ${safeCss}`;
   }
 
   // ═══ INVITATION ═══
+  // Решение по приглашению видно всем вкладкам посетителя.
+  function resolveInvitation(id) {
+    if (state.pendingInvitation && state.pendingInvitation.id === id) state.pendingInvitation = null;
+    try { localStorage.setItem(RESOLVED_INVITE_KEY, String(id)); } catch (e) { /* ignore */ }
+  }
+  function declineInvitation(id) {
+    resolveInvitation(id);
+    rememberRefusal();
+    api("PATCH", "/api/widget/invitations/" + id + "/decline", {});
+  }
+  // Приглашение показываем, только если посетитель не отказывался и окно закрыто.
+  function receiveInvitation(data) {
+    if (!data || !data.id || state.open || state.session) return false;
+    if (localStorage.getItem(RESOLVED_INVITE_KEY) === String(data.id)) return false;
+    const refused = Number(localStorage.getItem(REFUSED_KEY) || 0) > Date.now();
+    if (data.auto && (refused || (state.config || {}).auto_invite_enabled !== true)) {
+      // Автоматическое приглашение после отказа не показываем, а сразу отмечаем отказ на сервере.
+      declineInvitation(data.id);
+      return false;
+    }
+    state.pendingInvitation = data;
+    // Сервер считает приглашение устаревшим через 10 минут — прячем его так же.
+    laterAuto(() => { if (state.pendingInvitation && state.pendingInvitation.id === data.id) { state.pendingInvitation = null; scheduleRender(); } }, 10 * 60 * 1000);
+    return true;
+  }
+
   function mkInvitation(inv) {
     const invEl = document.createElement("div");
     invEl.className = "zw-inv show";
@@ -2320,8 +2524,9 @@ ${safeCss}`;
       acceptBtn.disabled = true;
       acceptBtn.textContent = "Подключение...";
       const invId = inv.id;
-      state.pendingInvitation = null;
-      api("PATCH", "/api/invitations/" + invId + "/accept", {});
+      const accepted = await api("PATCH", "/api/widget/invitations/" + invId + "/accept", {});
+      if (!accepted || !accepted.ok) { acceptBtn.disabled = false; acceptBtn.textContent = "Не получилось — ещё раз"; return; }
+      resolveInvitation(invId);
       state.prechatDone = true;
       localStorage.setItem("zs_prechat_done", "1");
       if (!state.session) {
@@ -2338,7 +2543,7 @@ ${safeCss}`;
         trackPage(session.id);
         startSessionPoll(session.id);
       }
-      openChat();
+      openChat("invitation");
       scheduleRender();
     };
     invActs.appendChild(acceptBtn);
@@ -2347,9 +2552,7 @@ ${safeCss}`;
     declineBtn.className = "zw-inv-decline";
     declineBtn.textContent = "Не сейчас";
     declineBtn.onclick = () => {
-      const invId = inv.id;
-      state.pendingInvitation = null;
-      api("PATCH", "/api/invitations/" + invId + "/decline", {});
+      declineInvitation(inv.id);
       scheduleRender();
     };
     invActs.appendChild(declineBtn);
@@ -2438,7 +2641,17 @@ ${safeCss}`;
 
   async function doSend(inp) {
     const text = inp.value.trim();
-    if (!text || !state.session || state.sending) return;
+    if (!text || state.sending) return;
+    if(!state.session) {
+      state.sending=true;inp.disabled=true;await startSession({});state.sending=false;inp.disabled=false;
+      if(!state.session){showToast("Не удалось подключиться. Текст останется в поле — попробуйте ещё раз.","error");return;}
+    }
+    const sid = state.session.id;
+    if(text.length>10000){showToast("Максимум 10 000 символов в сообщении","error");return;}
+    const clientId=state.pendingSend?.sessionId===sid&&state.pendingSend.text===text?state.pendingSend.clientId:messageId();
+    state.pendingSend={sessionId:sid,text,clientId,visitorId:state.visitorId};
+    localStorage.setItem(PENDING_KEY,JSON.stringify(state.pendingSend));
+    localStorage.setItem(DRAFT_KEY,text);
     inp.value = "";
     inp.style.height = "auto";
     state.visitorDraftMessage = "";
@@ -2450,10 +2663,10 @@ ${safeCss}`;
       api("POST", "/api/widget/ab-track", { variant: cfg2._ab_variant, event: "messaged", visitor_id: state.visitorId });
     }
 
-    state.sending = true;
+    state.sending = true;inp.disabled=true;
 
     const msg = {
-      id: "t_" + Date.now(),
+      id: clientId,client_message_id:clientId,isPending:true,
       session_id: state.session.id,
       sender: "visitor",
       message: text,
@@ -2464,8 +2677,24 @@ ${safeCss}`;
     scheduleRender();
     setTimeout(scrollBottom, 50);
 
-    await api("POST", "/api/widget/sessions/" + state.session.id + "/messages", { sender: "visitor", message: text });
-    state.sending = false;
+    const saved = await api("POST", "/api/widget/sessions/" + sid + "/messages", { sender: "visitor", message: text,client_message_id:clientId }) || state.messages.find(item=>item.client_message_id===clientId&&!item.isPending);
+    state.sending = false;inp.disabled=false;
+    if (state.session?.id !== sid) return;
+    if (!saved || !saved.id) {
+      // A timeout can happen after the server committed the message. Reconcile
+      // history, retain the draft, and never silently resend it automatically.
+      state.messages = state.messages.filter((item) => item.id !== msg.id);
+      state.visitorDraftMessage = text;
+      inp.value = text;
+      showToast(state.lastApiError===409?"Диалог завершён. Откройте новый, текст сохранён.":"Не удалось подтвердить отправку. Текст сохранён; повтор не создаст дубликат.", "error");
+      loadMessages(sid);
+      scheduleRender();
+      return;
+    }
+    state.messages = state.messages.filter((item) => item.id !== msg.id);
+    if (!state.messages.some((item) => item.id === saved.id)) state.messages.push(saved);
+    state.pendingSend=null;localStorage.removeItem(DRAFT_KEY);localStorage.removeItem(PENDING_KEY);
+    scheduleRender();
 
     if (state.socket) {
       state.socket.emit("typing_content", { sessionId: state.session.id, text: "", isTyping: false });
@@ -2481,23 +2710,6 @@ ${safeCss}`;
 
     if (state.isOffline === true && offModeAuto !== "message_only" && isAiSession && !state.showOfflineLeadForm && !state.offlineFormSent) {
       setTimeout(async () => {
-        const botMsgText = cfgOff.offline_message || (state.businessHours && state.businessHours.offline_message) || "Мы сейчас офлайн. Оставьте ваши контакты, и мы свяжемся с вами!";
-
-        const botMsg = {
-          id: "bot_" + Date.now(),
-          session_id: state.session.id,
-          sender: "ai",
-          message: botMsgText,
-          status: "sent",
-          created_at: new Date().toISOString()
-        };
-        state.messages.push(botMsg);
-        
-        await api("POST", "/api/widget/sessions/" + state.session.id + "/messages", {
-          sender: "ai",
-          message: botMsgText
-        });
-        
         state.showOfflineLeadForm = true;
         scheduleRender();
         setTimeout(scrollBottom, 50);
@@ -2506,32 +2718,26 @@ ${safeCss}`;
   }
 
   async function handleUpload(fInp) {
-    const file = fInp.files?.[0];
-    if (!file || !state.session) return;
-    if (!file.type.startsWith("image/")) { alert("Только изображения"); return; }
-    if (file.size > 5 * 1024 * 1024) { alert("Макс. 5MB"); return; }
-
-    state.uploading = true;
+    const file=fInp.files?.[0];if(!file||!state.session||state.uploading)return;
+    if(!/\.(jpe?g|png|webp|gif|pdf|txt|docx|xlsx|zip)$/i.test(file.name)){showToast("Выберите фото или документ PDF, TXT, DOCX, XLSX, ZIP","error");return;}
+    if(file.size>10*1024*1024){showToast("Максимальный размер файла — 10 МБ","error");return;}
+    const sessionId=state.session.id;
+    const key=file.name+":"+file.size+":"+file.lastModified;
+    const clientId=state.pendingUpload?.key===key?state.pendingUpload.clientId:messageId();
+    state.pendingUpload={key,clientId};state.uploading=true;scheduleRender();
+    const data=new FormData();data.append("file",file);
+    const result=await api("POST","/api/widget/sessions/"+sessionId+"/messages/upload",data,{"X-Client-Message-Id":clientId});
+    state.uploading=false;
+    if(result?.id&&state.session?.id===sessionId){if(!state.messages.some(item=>item.id===result.id))state.messages.push(result);state.pendingUpload=null;fInp.value="";}
+    else showToast("Файл не удалось отправить. Выберите его снова — повтор не создаст копию.","error");
     scheduleRender();
-    const fd = new FormData();
-    fd.append("file", file);
-
-    const result = await api("POST", "/api/widget/sessions/" + state.session.id + "/messages/upload", fd);
-    state.uploading = false;
-    scheduleRender();
-    if (!result) alert("Ошибка загрузки");
-    fInp.value = "";
   }
 
   async function requestOperator() {
-    if (!state.session) return;
-    api("PATCH", "/api/widget/sessions/" + state.session.id + "/status", { status: "waiting_operator" });
-    api("POST", "/api/widget/sessions/" + state.session.id + "/messages", {
-      sender: "system",
-      message: "\uD83D\uDD14 Вызываем оператора... Обычно отвечают в течение 2-3 минут."
-    });
-    state.session.status = "waiting_operator";
-    scheduleRender();
+    if(!state.session)return;
+    const result=await api("PATCH","/api/widget/sessions/"+state.session.id+"/status",{status:"waiting_operator"});
+    if(!result){showToast("Не удалось вызвать оператора. Попробуйте ещё раз.","error");return;}
+    state.session.status="waiting_operator";scheduleRender();
   }
 
   var _lastTypingEmit = 0;
@@ -2616,7 +2822,10 @@ ${safeCss}`;
     Object.keys(formData).forEach((k) => {
       if (k !== "name" && formData[k]) { extra[k] = formData[k]; hasExtra = true; }
     });
-    if (hasExtra) body.form_data = extra;
+    if (hasExtra) {
+      extra.__labels={};for(const field of state.prechat?.fields||[]){if(field.id&&field.label)extra.__labels[field.id]=field.label;}
+      body.form_data = extra;
+    }
 
     const session = await api("POST", "/api/widget/sessions", body);
     if (!session || session.error) return;
@@ -2637,13 +2846,20 @@ ${safeCss}`;
       connectSocket(session.id);
       trackPage(session.id);
       startSessionPoll(session.id);
-    }
+    } else if(!state.lastApiError) { state.prechatDone=false;localStorage.removeItem("zs_prechat_done");scheduleRender(); }
   }
 
+  let messagesLoadVersion = 0;
   async function loadMessages(sid) {
+    const version = ++messagesLoadVersion;
     const msgs = await api("GET", "/api/widget/sessions/" + sid + "/messages");
-    if (Array.isArray(msgs)) {
-      state.messages = msgs;
+    if (Array.isArray(msgs) && state.session?.id === sid && version === messagesLoadVersion) {
+      const pending = state.messages.filter(message=>message.isPending&&!msgs.some(item=>item.client_message_id===message.client_message_id));
+      if(state.pendingSend&&msgs.some(item=>item.client_message_id===state.pendingSend.clientId)) {
+        if(state.visitorDraftMessage===state.pendingSend.text){state.visitorDraftMessage="";localStorage.removeItem(DRAFT_KEY);}
+        state.pendingSend=null;localStorage.removeItem(PENDING_KEY);
+      }
+      state.messages = msgs.concat(pending);
       scheduleRender();
       setTimeout(scrollBottom, 50);
       setTimeout(scrollBottom, 150);
@@ -2661,7 +2877,7 @@ ${safeCss}`;
     if (state.sessionPollTimer) clearInterval(state.sessionPollTimer);
     state.sessionPollTimer = setInterval(async () => {
       const s = await api("GET", "/api/widget/sessions/" + sid);
-      if (s?.id) {
+      if (s?.id && state.session?.id === sid) {
         const oldStatus = state.session?.status;
         state.session = s;
         if (s.status === "closed" && !state.showRating) {
@@ -2704,15 +2920,38 @@ ${safeCss}`;
   }
 
   // ═══ SOCKET.IO ═══
+  function restoreSessionConnection(socket, fallbackSid) {
+    state.connected = true;
+    const sid = state.session?.id || fallbackSid;
+    if (sid) {
+      // Socket.IO rooms disappear on disconnect, including the light socket
+      // which is promoted to the conversation socket after opening the widget.
+      socket._joinedSessionId = sid;
+      socket.emit("join_session", { sessionId: sid, visitorId: state.visitorId });
+      loadMessages(sid);
+    }
+    startVisitorPingTimers(socket);
+    scheduleRender();
+  }
+
+  function bindIdentityRecovery(socket) {
+    let timer;
+    const recover=()=>{clearTimeout(timer);timer=setTimeout(async()=>{if(await ensureIdentity(true))socket.connect();},1500);};
+    socket.on("visitor_auth_expired",recover);
+    socket.on("connect_error",error=>{state.connected=false;if(/Unauthorized/.test(error.message))recover();});
+    socket.on("disconnect",reason=>{if(reason==="io server disconnect")recover();});
+  }
+
   function connectSocket(sid) {
+    if(window.__zsPreviewConfig){state.connected=true;return;}
     if (state.socket) {
       if (!state.socket._handlersAttached) {
         setupSessionHandlers(state.socket, sid);
       }
       if (state.socket.connected && state.socket._joinedSessionId !== sid) {
-        state.socket._joinedSessionId = sid;
-        state.socket.emit("join_session", { sessionId: sid, visitorId: state.visitorId });
+        restoreSessionConnection(state.socket, sid);
       }
+      if (!state.socket.connected) state.socket.connect();
       // Гарантируем, что таймеры пингов запущены: light-сокет мог не стартовать их
       if (state.socket.connected && !state.socket._visitorPingTimer) {
         startVisitorPingTimers(state.socket);
@@ -2722,23 +2961,17 @@ ${safeCss}`;
     }
 
     const script = document.createElement("script");
-    script.src = API_BASE + "/socket.io/socket.io.min.js"; // минифицированная сборка клиента (−~24 КиБ)
+    script.src = API_BASE + "/ws/socket.io.min.js"; // минифицированная сборка клиента (−~24 КиБ)
     script.onload = () => {
       const ioLib = window.io;
       if (!ioLib) return;
 
-      const socket = ioLib(API_BASE, { path: "/ws", transports: ["websocket", "polling"] });
+      const socket = ioLib(API_BASE, { path: "/ws", transports: ["websocket", "polling"],tryAllTransports:true,reconnectionAttempts:Infinity,reconnectionDelayMax:10000,auth:callback=>{void ensureIdentity().then(ok=>callback({visitor_token:ok?state.visitorToken:"invalid"}));} });
       state.socket = socket;
+      bindIdentityRecovery(socket);
 
       socket.on("connect", () => {
-        state.connected = true;
-        const currentSid = state.session?.id || sid;
-        if (socket._joinedSessionId !== currentSid) {
-          socket._joinedSessionId = currentSid;
-          socket.emit("join_session", { sessionId: currentSid, visitorId: state.visitorId });
-        }
-        startVisitorPingTimers(socket);
-        scheduleRender();
+        restoreSessionConnection(socket, sid);
       });
 
       socket.on("disconnect", () => {
@@ -2752,8 +2985,7 @@ ${safeCss}`;
 
       socket.on("invitation_sent", (data) => {
         if (data.visitor_id !== state.visitorId) return;
-        state.pendingInvitation = data;
-        if (!state.open) { playSound(); scheduleRender(); }
+        if (receiveInvitation(data)) { playSound(); scheduleRender(); }
       });
     };
     document.head.appendChild(script);
@@ -2830,7 +3062,7 @@ ${safeCss}`;
         state.messages = state.messages.filter((m) => {
           return !(m.id && String(m.id).indexOf("t_") === 0 && m.message === msg.message);
         });
-        state.messages.push(msg);
+        if (!state.messages.some((message) => message.id === msg.id)) state.messages.push(msg);
         scheduleRender();
         return;
       }
@@ -2904,12 +3136,19 @@ ${safeCss}`;
         }
       } else {
         // Вернулись на вкладку — сразу пингуем, чтобы снова попасть в онлайн
+        if (state.socket && !state.socket.connected) state.socket.connect();
         sendVisitorPing();
         if (state.session) {
+          loadMessages(state.session.id);
           startSessionPoll(state.session.id);
           markVisibleAsRead();
         }
       }
+    });
+
+    window.addEventListener("online", () => {
+      if (state.socket && !state.socket.connected) state.socket.connect();
+      if (state.session) loadMessages(state.session.id);
     });
 
     // Уход со страницы — сообщаем серверу, чтобы presence освободился сразу (не ждать TTL)
@@ -3009,7 +3248,7 @@ ${safeCss}`;
       el.style.transform = "";
       // Порог закрытия — 120px.
       if (dy > 120) {
-        closeChat();
+        closeChat("user");
         scheduleRender();
       }
       setTimeout(() => { try { el.style.transition = ""; } catch (e) {} }, 340);
@@ -3045,195 +3284,107 @@ ${safeCss}`;
   }
 
   // ═══ TRIGGERS ═══
+  // Все автоматические показы — только при включённой автоматике (auto_invite_enabled)
+  // и без отказа посетителя. Один показ на вкладку для каждого правила.
   function setupTriggers(cfg) {
-    const tr = cfg.triggers;
-    if (!tr) return;
+    if (cfg.auto_invite_enabled !== true) return;
+    const tr = cfg.triggers || {};
+    const fireOnce = (key) => {
+      if (state.open || state.session || sessionStorage.getItem(key) || !autoShowAllowed()) return;
+      try { sessionStorage.setItem(key, "1"); } catch (err) { /* ignore */ }
+      openChat("auto");
+      scheduleRender();
+    };
 
-    // Exit intent — один раз на вкладку (persist в sessionStorage 'zw_exit_trigger')
-    if (tr.exit_intent && !sessionStorage.getItem("zw_exit_trigger")) {
-      document.addEventListener("mouseleave", (e) => {
-        if (e.clientY <= 0 && !state.open && !state.exitShown) {
-          state.exitShown = true;
-          try { sessionStorage.setItem("zw_exit_trigger", "1"); } catch (err) {}
-          openChat();
-          scheduleRender();
-        }
-      });
+    if (tr.exit_intent) {
+      document.addEventListener("mouseleave", (e) => { if (e.clientY <= 0) fireOnce("zw_exit_trigger"); });
     }
 
-    // Scroll percent — один раз на вкладку (persist в sessionStorage 'zw_scroll_trigger')
-    if (tr.scroll_percent > 0 && !sessionStorage.getItem("zw_scroll_trigger")) {
+    if (tr.scroll_percent > 0) {
       const scrollHandler = () => {
-        if (state.scrollShown || state.open) return;
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const docHeight = Math.max(
-          document.body.scrollHeight, document.documentElement.scrollHeight,
-          document.body.offsetHeight, document.documentElement.offsetHeight
-        );
-        const winHeight = window.innerHeight;
-        const scrolled = (scrollTop / (docHeight - winHeight)) * 100;
+        const docHeight = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight, document.documentElement.offsetHeight);
+        const scrolled = (scrollTop / Math.max(1, docHeight - window.innerHeight)) * 100;
         if (scrolled >= tr.scroll_percent) {
-          state.scrollShown = true;
-          try { sessionStorage.setItem("zw_scroll_trigger", "1"); } catch (err) {}
-          openChat();
-          scheduleRender();
           window.removeEventListener("scroll", scrollHandler);
+          fireOnce("zw_scroll_trigger");
         }
       };
       window.addEventListener("scroll", scrollHandler, { passive: true });
     }
 
-    // Time on page
-    if (tr.time_on_page > 0) {
-      const wasTimeAuto = sessionStorage.getItem("zw_time_trigger");
-      if (!wasTimeAuto) {
-        setTimeout(() => {
-          if (!state.open) {
-            openChat();
-            scheduleRender();
-            sessionStorage.setItem("zw_time_trigger", "1");
-          }
-        }, tr.time_on_page * 1000);
-      }
-    }
+    if (tr.time_on_page > 0) laterAuto(() => fireOnce("zw_time_trigger"), tr.time_on_page * 1000);
 
-    // Inactivity — один раз на вкладку (persist в sessionStorage 'zw_idle_trigger')
-    if (tr.inactivity_seconds > 0 && !sessionStorage.getItem("zw_idle_trigger")) {
+    if (tr.inactivity_seconds > 0) {
       const resetIdle = () => {
         clearTimeout(state.idleTimer);
-        if (state.idleShown || state.open) return;
-        state.idleTimer = setTimeout(() => {
-          if (!state.open && !state.idleShown) {
-            state.idleShown = true;
-            try { sessionStorage.setItem("zw_idle_trigger", "1"); } catch (err) {}
-            openChat();
-            scheduleRender();
-          }
-        }, tr.inactivity_seconds * 1000);
+        if (state.open || !autoShowAllowed()) return;
+        state.idleTimer = setTimeout(() => fireOnce("zw_idle_trigger"), tr.inactivity_seconds * 1000);
       };
-      ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((ev) => {
-        document.addEventListener(ev, resetIdle, { passive: true });
-      });
+      ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((ev) => document.addEventListener(ev, resetIdle, { passive: true }));
       resetIdle();
     }
 
-    // Page URL contains
-    if (tr.page_url_contains?.length > 0) {
+    if (tr.page_url_contains && tr.page_url_contains.length > 0) {
       const patterns = tr.page_url_contains.split(",").map((s) => s.trim().toLowerCase());
       const currentUrl = location.href.toLowerCase();
-      const match = patterns.some((p) => p && currentUrl.indexOf(p) !== -1);
-      if (match && !state.open) {
-        const wasPageTrigger = sessionStorage.getItem("zw_page_trigger_" + location.pathname);
-        if (!wasPageTrigger) {
-          setTimeout(() => {
-            if (!state.open) {
-              openChat();
-              scheduleRender();
-              sessionStorage.setItem("zw_page_trigger_" + location.pathname, "1");
-            }
-          }, 1500);
-        }
-      }
+      if (patterns.some((p) => p && currentUrl.indexOf(p) !== -1)) laterAuto(() => fireOnce("zw_page_trigger_" + location.pathname), 1500);
     }
 
     setupAutoMessages(cfg);
   }
 
   // ═══ AUTO MESSAGES ═══
+  // Автосообщение показывается в окне как приветствие и не создаёт диалог само по себе.
+  // Если посетитель ответит, сервер запишет это сообщение в историю первым — оператор увидит то же, что и клиент.
   function setupAutoMessages(cfg) {
     const msgs = cfg.auto_messages;
     if (!msgs?.length) return;
+
+    // Счётчик визитов обновляем до проверок, чтобы «первый визит» срабатывал только на первом.
+    const counted = sessionStorage.getItem("zw_visit_counted");
+    const visits = parseInt(localStorage.getItem("zw_visit_count") || "0") + (counted ? 0 : 1);
+    if (!counted) {
+      localStorage.setItem("zw_visit_count", String(visits));
+      sessionStorage.setItem("zw_visit_counted", "1");
+    }
 
     msgs.forEach((am) => {
       if (!am.enabled) return;
       const storageKey = "zw_automsg_" + am.id;
       if (am.show_once && localStorage.getItem(storageKey)) return;
 
-      const fire = async () => {
-        if (state.autoMsgShown[am.id]) return;
+      const fire = () => {
+        if (state.autoMsgShown[am.id] || state.session || state.open || !autoShowAllowed()) return;
         if (am.page_filter) {
           const url = location.href.toLowerCase();
           const patterns = am.page_filter.split(",").map((s) => s.trim().toLowerCase());
-          const match = patterns.some((p) => p && url.indexOf(p) !== -1);
-          if (!match) return;
+          if (!patterns.some((p) => p && url.indexOf(p) !== -1)) return;
         }
         state.autoMsgShown[am.id] = true;
         if (am.show_once) localStorage.setItem(storageKey, "1");
-
-        const fakeMsg = {
-          id: "auto_" + am.id + "_" + Date.now(),
-          session_id: state.session?.id || null,
-          sender: "ai",
-          message: am.message,
-          status: "delivered",
-          created_at: new Date().toISOString(),
-          _auto: true,
-          _sender_name: am.sender_name || "Бот",
-        };
-
-        if (state.session) {
-          state.messages.push(fakeMsg);
-          playSound();
-          if (!state.open) state.unread++;
-          scheduleRender();
-        } else {
-          if (!state.open) {
-            state.open = true;
-            state.unread = 0;
-          }
-          state.prechatDone = true;
-          localStorage.setItem("zs_prechat_done", "1");
-
-          const body = {
-            visitor_id: state.visitorId,
-            visitor_name: state.visitorName || "Гость",
-            current_page: location.href,
-            user_agent: navigator.userAgent,
-          };
-          const session = await api("POST", "/api/widget/sessions", body);
-          if (!session || session.error) return;
-          state.session = session;
-          fakeMsg.session_id = session.id;
-          state.messages.push(fakeMsg);
-          connectSocket(session.id);
-          trackPage(session.id);
-          startSessionPoll(session.id);
-          api("POST", "/api/widget/sessions/" + session.id + "/messages", { sender: "ai", message: am.message });
-          scheduleRender();
-        }
+        state.autoWelcome = { id: am.id, text: am.message, sender: am.sender_name || (cfg.header_title || "Команда поддержки") };
+        playSound();
+        openChat("auto");
+        scheduleRender();
       };
 
+      const delay = (seconds, fallback) => (Number(seconds) || fallback) * 1000;
       if (am.trigger === "first_visit") {
-        const visitCount = parseInt(localStorage.getItem("zw_visit_count") || "0");
-        if (visitCount <= 1) setTimeout(fire, (am.delay_seconds || 0) * 1000);
+        if (visits <= 1) laterAuto(fire, delay(am.delay_seconds, 0));
       } else if (am.trigger === "return_visit") {
-        const vc = parseInt(localStorage.getItem("zw_visit_count") || "0");
-        if (vc > 1) setTimeout(fire, (am.delay_seconds || 0) * 1000);
+        if (visits > 1) laterAuto(fire, delay(am.delay_seconds, 0));
       } else if (am.trigger === "on_page") {
-        setTimeout(fire, (am.delay_seconds || 0) * 1000);
+        laterAuto(fire, delay(am.delay_seconds, 0));
       } else if (am.trigger === "after_idle") {
         let idleAm;
-        const resetAmIdle = () => {
-          clearTimeout(idleAm);
-          idleAm = setTimeout(fire, (am.delay_seconds || 30) * 1000);
-        };
-        ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((ev) => {
-          document.addEventListener(ev, resetAmIdle, { passive: true });
-        });
+        const resetAmIdle = () => { clearTimeout(idleAm); idleAm = setTimeout(fire, delay(am.delay_seconds, 30)); };
+        ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((ev) => document.addEventListener(ev, resetAmIdle, { passive: true }));
         resetAmIdle();
       } else if (am.trigger === "cart_abandon") {
-        if (/cart|checkout|корзин/i.test(location.href)) {
-          setTimeout(fire, (am.delay_seconds || 15) * 1000);
-        }
+        if (/cart|checkout|корзин/i.test(location.href)) laterAuto(fire, delay(am.delay_seconds, 15));
       }
     });
-
-    // Track visit count
-    const vc = parseInt(localStorage.getItem("zw_visit_count") || "0");
-    if (!sessionStorage.getItem("zw_visit_counted")) {
-      localStorage.setItem("zw_visit_count", String(vc + 1));
-      sessionStorage.setItem("zw_visit_counted", "1");
-    }
   }
 
   // ═══ PAGE RULES ═══
@@ -3257,6 +3408,8 @@ ${safeCss}`;
       }
       if (match && rule.override) {
         Object.keys(rule.override).forEach((k) => {
+          // Автоматические приглашения управляются одной общей настройкой, не правилами страниц.
+          if (k.indexOf("auto_invite_") === 0) return;
           merged[k] = rule.override[k];
         });
       }
@@ -3275,10 +3428,8 @@ ${safeCss}`;
         state.visitorName = state.identityUser.name;
         localStorage.setItem("zs_visitor_name", state.identityUser.name);
       }
-      if (state.identityUser.id) {
-        state.visitorId = "id_" + state.identityUser.id;
-        localStorage.setItem(VISITOR_KEY, state.visitorId);
-      }
+      // ID посетителя подписан сервером (/api/widget/identity) и не подменяется данными страницы:
+      // прежняя подмена ломала подпись и падала на неопределённой переменной.
     }
   }
 
@@ -3291,13 +3442,8 @@ ${safeCss}`;
       if (changed) {
         scheduleRender();
       }
-    } else {
-      const changed = state.teamOperators && state.teamOperators.length > 0;
-      state.teamOperators = [];
-      if (changed) {
-        scheduleRender();
-      }
     }
+    // При сбое сети оставляем прежнее знание: неизвестность не выдаём за «никого нет».
   }
 
   function ensurePreviewTeam() {
@@ -3315,6 +3461,10 @@ ${safeCss}`;
   function isWidgetAllowedOnPage() {
     if (window.__zsPreviewConfig) return true; // в превью настроек всегда показываем
     const cfg = state.config || {};
+    // Служебные разделы магазина (админка, загрузка файлов) — без виджета.
+    const hidden = Array.isArray(cfg.hidden_paths) ? cfg.hidden_paths : ["/admin", "/upload"];
+    const path = location.pathname.toLowerCase();
+    if (hidden.some((p) => { p = String(p || "").toLowerCase().replace(/\/+$/, ""); return p && (path === p || path.indexOf(p + "/") === 0); })) return false;
     if (cfg.hide_on_mobile && /Mobi|Android/i.test(navigator.userAgent)) return false;
     const mode = cfg.display_pages_mode || "all";
     const pagesStr = cfg.display_pages || "";
@@ -3335,7 +3485,7 @@ ${safeCss}`;
   async function init() {
     // Listen for postMessage updates for live preview
     window.addEventListener("message", (event) => {
-      if (event.data && event.data.type === "ZS_PREVIEW_UPDATE") {
+      if (window.__zsPreviewConfig && event.source === window.parent && event.data && event.data.type === "ZS_PREVIEW_UPDATE") {
         const payload = event.data.payload || {};
         if (event.data.previewSize) {
           if (!window.__zsPreviewConfig) window.__zsPreviewConfig = {};
@@ -3373,14 +3523,18 @@ ${safeCss}`;
     } else {
       data = await api("GET", "/api/widget/settings");
     }
-    if (!data) return;
+    if(!data) {
+      try { data=JSON.parse(localStorage.getItem("zs_widget_public_settings_v8")||"null"); } catch(_) {}
+      data=data||{widget_config:{enabled:true,color:"#aa5129",header_title:"Живая Сказка",greeting:"Поможем выбрать сказку",position:"bottom-right"},prechat_form:{enabled:false}};
+    } else if(!window.__zsPreviewConfig)localStorage.setItem("zs_widget_public_settings_v8",JSON.stringify(data));
 
     const rawConfig = data.widget_config || {};
     state.config = applyPageRules(rawConfig);
     readIdentity(); // после установки config — гейт по cfg.identity_verification
     state.prechat = data.prechat_form || { enabled: false };
     state.businessHours = data.business_hours || null;
-    state.domainSettings = data.domain_settings || null;
+    // Сервер отдаёт ограничение доменов как allowed_domains (раньше читалось несуществующее поле).
+    state.domainSettings = data.allowed_domains || data.domain_settings || null;
 
     // Check domain restriction
     if (state.domainSettings?.enabled && state.domainSettings.domains?.length > 0) {
@@ -3392,6 +3546,8 @@ ${safeCss}`;
       if (!allowed) return;
     }
 
+    await ensureIdentity();
+
     // Check business hours
     state.isOffline = checkOffline();
 
@@ -3401,13 +3557,11 @@ ${safeCss}`;
     // Load font
     loadFont(state.config);
 
-    // Load team operators (в превью — демо-состав, реальный API замокан)
-    if (state.config.team_mode) {
-      if (window.__zsPreviewConfig) {
-        ensurePreviewTeam();
-      } else {
-        loadTeamOperators();
-      }
+    // Кто из команды в сети: нужен для честного статуса в шапке (в превью — демо-состав).
+    if (window.__zsPreviewConfig) {
+      if (state.config.team_mode) ensurePreviewTeam();
+    } else {
+      loadTeamOperators();
     }
 
     // В превью всегда показываем раскрытый виджет, чтобы было видно оформление шапки/цветов.
@@ -3416,6 +3570,9 @@ ${safeCss}`;
       state.cardDismissed = false;
       state.open = true;
       state.prechatDone = true;
+      state.session=window.__zsPreviewConfig.session||null;
+      state.messages=window.__zsPreviewConfig.messages||[];
+      state.connected=true;
     }
 
     render();
@@ -3424,72 +3581,86 @@ ${safeCss}`;
     // Light socket for invitations (only in normal mode, skip in preview)
     if (!window.__zsPreviewConfig && !state.socket) {
       const invScript = document.createElement("script");
-      invScript.src = API_BASE + "/socket.io/socket.io.min.js"; // минифицированная сборка клиента (−~24 КиБ)
+      invScript.src = API_BASE + "/ws/socket.io.min.js"; // минифицированная сборка клиента (−~24 КиБ)
       invScript.onload = () => {
         const ioLib = window.io;
         if (!ioLib || state.socket) return;
 
-        const lightSocket = ioLib(API_BASE, { path: "/ws", transports: ["websocket", "polling"] });
+        const lightSocket = ioLib(API_BASE, { path: "/ws", transports: ["websocket", "polling"],tryAllTransports:true,reconnectionAttempts:Infinity,reconnectionDelayMax:10000,auth:callback=>{void ensureIdentity().then(ok=>callback({visitor_token:ok?state.visitorToken:"invalid"}));} });
 
         lightSocket.on("connect", () => {
-          state.connected = true;
-          // Рекуррентный heartbeat + трекинг страницы даже до открытия чата,
-          // иначе сервер метит посетителя offline через ~60с (главная причина «нет посетителей»).
-          startVisitorPingTimers(lightSocket);
+          restoreSessionConnection(lightSocket);
         });
 
         lightSocket.on("invitation_sent", (data) => {
           if (data.visitor_id !== state.visitorId) return;
-          state.pendingInvitation = data;
-          playSound();
-          scheduleRender();
+          if (receiveInvitation(data)) { playSound(); scheduleRender(); }
         });
 
         lightSocket.on("disconnect", () => {
+          lightSocket._joinedSessionId = null;
           state.connected = false;
           stopVisitorPingTimers();
+          scheduleRender();
         });
 
         state.socket = lightSocket;
+        bindIdentityRecovery(lightSocket);
       };
       document.head.appendChild(invScript);
     }
 
-    if (!window.__zsPreviewConfig && state.prechatDone) resumeSession();
+    const resumed = !window.__zsPreviewConfig && state.prechatDone ? resumeSession() : Promise.resolve();
 
-    // Мобильное приглашение «Нажми на меня» — показать после задержки.
-    // Не планируем заново, если посетитель уже закрыл тизер в этой вкладке (persist).
-    if (!window.__zsPreviewConfig && window.innerWidth <= 480 && state.config.mobile_invitation_enabled !== false && !state.mobileInviteDismissed) {
+    if (!window.__zsPreviewConfig) {
+      // Кнопки сайта «Открыть чат» (FAQ, «Моя семья») — это явное действие посетителя.
+      window.addEventListener("open-chat-widget", () => { openChat("user"); scheduleRender(); });
+      // Нажатие, случившееся пока виджет грузился, загрузчик запомнил — выполняем его сейчас.
+      window.__zsChatReady = true;
+      if (window.__zsOpenChatRequested) { window.__zsOpenChatRequested = false; openChat("user"); scheduleRender(); }
+      // Отказ или решение по приглашению в одной вкладке сразу действуют в остальных.
+      window.addEventListener("storage", (e) => {
+        if (e.key === REFUSED_KEY) {
+          cancelAutoTimers();
+          state.pendingInvitation = null;
+          state.mobileInviteShown = false;
+          state.greetDismissed = true;
+          if (state.open && state.openReason === "auto") closeChat("system");
+          scheduleRender();
+        } else if (e.key === RESOLVED_INVITE_KEY && state.pendingInvitation && String(state.pendingInvitation.id) === e.newValue) {
+          state.pendingInvitation = null;
+          scheduleRender();
+        }
+      });
+    }
+
+    // Мобильная подсказка — автоматическое предложение: только при включённой автоматике и без отказа.
+    if (!window.__zsPreviewConfig && window.innerWidth <= 480 && state.config.auto_invite_enabled === true && state.config.mobile_invitation_enabled !== false && !state.mobileInviteDismissed) {
       const delay = Math.max(0, state.config.mobile_invitation_delay ?? 5) * 1000;
-      setTimeout(() => {
-        if (!state.open && !state.mobileInviteDismissed) {
+      laterAuto(() => {
+        if (!state.mobileInviteDismissed && autoShowAllowed()) {
           state.mobileInviteShown = true;
           scheduleRender();
         }
       }, delay);
     }
 
-    // Восстановление состояния "открыто" между визитами
-    if (!window.__zsPreviewConfig && state.config.remember_open_state !== false) {
-      try {
-        if (localStorage.getItem("zs_widget_open") === "1" && state.prechatDone) {
-          setTimeout(() => { openChat(); scheduleRender(); }, 300);
-        }
-      } catch (e) { /* ignore */ }
+    // Окно, открытое человеком, возвращается после перехода — но только когда известно состояние диалога,
+    // чтобы завершённый разговор не всплывал с формой знакомства.
+    if (!window.__zsPreviewConfig && state.config.remember_open_state !== false && localStorage.getItem(OPEN_KEY) === "1" && state.prechatDone) {
+      Promise.resolve(resumed).then(() => {
+        if (!state.open && state.prechatDone && localStorage.getItem(OPEN_KEY) === "1") { openChat("restore"); scheduleRender(); }
+      });
     }
 
-    // Auto open delay
-    if (!window.__zsPreviewConfig && state.config.auto_open_delay > 0 && !state.prechatDone) {
-      const wasAuto = sessionStorage.getItem("zw_auto");
-      if (!wasAuto) {
-        setTimeout(() => {
-          if (!state.open) {
-            openChat();
-            scheduleRender();
-            sessionStorage.setItem("zw_auto", "1");
-          }
-        }, state.config.auto_open_delay * 1000);
-      }
+    // Автооткрытие через N секунд — одно из автоматических правил владельца.
+    if (!window.__zsPreviewConfig && state.config.auto_invite_enabled === true && state.config.auto_open_delay > 0 && !state.prechatDone && !sessionStorage.getItem("zw_auto")) {
+      laterAuto(() => {
+        if (state.open || !autoShowAllowed()) return;
+        sessionStorage.setItem("zw_auto", "1");
+        openChat("auto");
+        scheduleRender();
+      }, state.config.auto_open_delay * 1000);
     }
 
     // Setup triggers
@@ -3520,4 +3691,4 @@ ${safeCss}`;
     init();
   }
 
-})();      
+})();

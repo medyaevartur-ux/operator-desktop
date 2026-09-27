@@ -22,7 +22,7 @@ async function checkWithRetry(attempts = 3): Promise<Update | null> {
 /** Ручная проверка обновлений (для кнопки в настройках). */
 export async function checkForUpdatesManually(): Promise<string> {
   const update = await checkWithRetry();
-  if (update) return "Доступна версия v" + update.version;
+  if (update) { window.dispatchEvent(new CustomEvent("desktop-update-available",{detail:update}));return "Доступна версия v" + update.version; }
   return "У вас последняя версия";
 }
 
@@ -49,10 +49,13 @@ export function AppUpdater() {
       }
     };
 
+    const manual=(event:Event)=>{const update=(event as CustomEvent<Update>).detail;updateRef.current=update;setVersion(update.version);setStatus("available")};
+    window.addEventListener("desktop-update-available",manual);
     const timer = setTimeout(checkUpdate, 5000);
     const interval = setInterval(checkUpdate, 30 * 60 * 1000);
 
     return () => {
+      window.removeEventListener("desktop-update-available",manual);
       clearTimeout(timer);
       clearInterval(interval);
     };

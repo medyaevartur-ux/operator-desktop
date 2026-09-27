@@ -1,3 +1,2 @@
-export const env = {
-  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:3010",
-};
+import { API_BASE } from "./api-config";
+export const env = {apiUrl:API_BASE};

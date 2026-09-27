@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import Editor from "@monaco-editor/react";
+
 // @ts-ignore
-import widgetRaw from "../../../widget.js?raw";
 import {
   ArrowLeft, Save, MessageCircle, HelpCircle, Sparkles,
   Copy, Check, AlertTriangle, X, Plus,
@@ -19,6 +18,7 @@ import {
   type WidgetConfig, type PrechatFormConfig, type PrechatField,
   type BusinessHours, type DaySchedule, type DomainSettings,
   type AutoMessage, type PageRule, type ABStats, type OfflineLead,
+  DEFAULT_WIDGET_CONFIG,
 } from "@/features/settings/settings.api";
 import { API_BASE } from "@/lib/api";
 import { Toggle, toast } from "@/components/ui";
@@ -75,6 +75,7 @@ export function WidgetSettingsScreen() {
   const [tab, setTab] = useState<Tab>("appearance");
   const [previewSize, setPreviewSize] = useState<"mobile" | "tablet" | "desktop">("desktop");
   const [loading, setLoading] = useState(true);
+  const [loadError,setLoadError]=useState(false),[loadAttempt,setLoadAttempt]=useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -189,34 +190,7 @@ export function WidgetSettingsScreen() {
     toast.success("Пресет успешно применен!");
   };
 
-  const [config, setConfig] = useState<WidgetConfig>({
-    position: "bottom-right", color: "#8b5cf6",
-    greeting: "Привет! 👋\nЧем могу помочь?", header_title: "Онлайн-чат",
-    avatar_url: null, show_operator_name: true, show_operator_avatar: true,
-    button_icon: "chat", button_text: "", button_size: "medium", button_radius: "round",
-    font_size_base: 14, window_width: "normal", edge_margin: 24, bubble_radius: "round", shadow_intensity: "medium", show_powered_by: true,
-    remember_open_state: true, greet_once: false, auto_minimize_after: 0, hide_unread_badge: false, disable_sound_for_visitor: false,
-    mobile_launcher_type: "inherit", mobile_window_mode: "bottom_sheet", mobile_invitation_enabled: true, mobile_invitation_text: "Нужна помощь? Нажмите!", mobile_invitation_delay: 5, mobile_hide_unread_badge: false,
-    display_pages: "", display_pages_mode: "all",
-    auto_open_delay: 0, hide_on_mobile: false, custom_css: "",
-    gradient_type: "solid", gradient_from: "#8b5cf6", gradient_to: "#ec4899", gradient_angle: 135,
-    theme: "light", custom_bg: "#ffffff", custom_text: "#1f2937", custom_bubble_bg: "#f3f4f6", custom_border: "#e5e7eb",
-    open_animation: "slide",
-    launcher_type: "icon_only", launcher_text: "Нужна помощь?", launcher_subtext: "Обычно отвечаем за 2 мин",
-    launcher_show_avatar: true, launcher_pulse: true,
-    font_family: "system", custom_font_url: "",
-    triggers: { exit_intent: false, scroll_percent: null, time_on_page: null, page_url_contains: "", inactivity_seconds: null },
-    quick_replies_enabled: false, quick_replies: [],
-    response_time_enabled: false, response_time_label: "Обычно отвечаем за 2 мин",
-    team_mode: false, team_avatars_count: 3, team_label: "Команда поддержки", team_online_text: "{n} онлайн",
-    offline_mode: "message_only", offline_redirect_url: "",
-    auto_messages: [],
-    ab_test_enabled: false,
-    ab_variants: { a: { greeting: "Привет! 👋 Чем помочь?", weight: 50 }, b: { greeting: "Здравствуйте! Задайте вопрос 💬", weight: 50 } },
-    ab_metric: "message_rate",
-    page_rules: [],
-    identity_verification: false,
-  });
+  const [config, setConfig] = useState<WidgetConfig>(() => ({ ...DEFAULT_WIDGET_CONFIG }));
 
   const [prechat, setPrechat] = useState<PrechatFormConfig>({
     enabled: true,
@@ -245,55 +219,24 @@ export function WidgetSettingsScreen() {
 
   useEffect(() => {
     setLoading(true);
+    setLoadError(false);
     Promise.all([
-      getWidgetConfig().then(setConfig).catch(() => {}),
-      getPrechatFormConfig().then(setPrechat).catch(() => {}),
-      getBusinessHours().then(setHours).catch(() => {}),
-      getDomainSettings().then(setDomains).catch(() => {}),
+      getWidgetConfig().then(setConfig),
+      getPrechatFormConfig().then(setPrechat),
+      getBusinessHours().then(setHours),
+      getDomainSettings().then(setDomains),
       getABStats().then(setAbStats).catch(() => {}),
       getOfflineLeads().then(setOfflineLeads).catch(() => {}),
-    ]).finally(() => setLoading(false));
-  }, []);
+    ]).catch(()=>setLoadError(true)).finally(() => setLoading(false));
+  }, [loadAttempt]);
 
   useEffect(() => {
-    if (loading) return;
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    const doc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!doc) return;
-
-    doc.open();
-    doc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { margin: 0; overflow: hidden; background: #f8fafc; font-family: sans-serif; }
-          </style>
-        </head>
-        <body>
-          <div id="root"></div>
-          <script>
-            window.__zsPreviewConfig = {
-              widget_config: \${JSON.stringify(config)},
-              prechat_form: \${JSON.stringify(prechat)},
-              business_hours: \${JSON.stringify(hours)},
-              api_base: \${JSON.stringify(API_BASE)},
-              previewSize: \${JSON.stringify(previewSize)}
-            };
-            window.fetch = () => Promise.resolve(new Response(JSON.stringify({})));
-          </script>
-        </body>
-      </html>
-    `);
-    doc.close();
-
-    const script = doc.createElement("script");
-    script.text = widgetRaw;
-    doc.body.appendChild(script);
-  }, [loading]);
+    const ready=(event:MessageEvent)=>{
+      if(event.source!==iframeRef.current?.contentWindow||event.data?.type!=="ZS_PREVIEW_READY")return;
+      iframeRef.current.contentWindow?.postMessage({type:"ZS_PREVIEW_UPDATE",payload:{widget_config:config,prechat_form:prechat,business_hours:hours},previewSize,forceOpen:true,skipPrechatPreview:tab!=="prechat"},"*");
+    };
+    window.addEventListener("message",ready);return()=>window.removeEventListener("message",ready);
+  },[config,prechat,hours,previewSize,tab]);
 
   useEffect(() => {
     if (loading) return;
@@ -426,6 +369,8 @@ export function WidgetSettingsScreen() {
   const removeDomain = (idx: number) => {
     setDomains((p) => ({ ...p, domains: p.domains.filter((_, i) => i !== idx) }));
   };
+
+  if (loadError) return <div className={s.screen}><div role="alert" style={{padding:32}}>Не удалось загрузить настройки виджета. Сохранение недоступно, пока не получены текущие значения.<button type="button" onClick={()=>setLoadAttempt(value=>value+1)}>Повторить загрузку</button></div></div>;
 
   if (loading) {
     return (
@@ -821,7 +766,8 @@ export function WidgetSettingsScreen() {
 
                   <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-default)" }}>
                     <Toggle
-                      label="✨ Показывать приглашение поверх кнопки на мобильном"
+                      label="Подсказка поверх кнопки на телефоне"
+                      description={config.auto_invite_enabled === true ? "Показывается один раз, закрытие подсказки — отказ посетителя." : "Не действует, пока выключены автоматические приглашения (вкладка «Поведение»)."}
                       checked={config.mobile_invitation_enabled !== false}
                       onChange={(v) => upd({ mobile_invitation_enabled: v })}
                     />
@@ -874,21 +820,9 @@ export function WidgetSettingsScreen() {
                     Неправильный CSS может сломать виджет
                   </div>
                   <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-default)" }}>
-                    <Editor
-                      height="200px"
-                      language="css"
-                      theme="vs-dark"
-                      value={config.custom_css || ""}
-                      onChange={(val) => upd({ custom_css: val || "" })}
-                      options={{
-                        minimap: { enabled: false },
-                        fontSize: 12,
-                        lineNumbers: "on",
-                        scrollBeyondLastLine: false,
-                        folding: false,
-                        wordWrap: "on"
-                      }}
-                    />
+                    <textarea aria-label="Дополнительный CSS виджета" value={config.custom_css || ""}
+                      onChange={event=>upd({custom_css:event.target.value})} spellCheck={false}
+                      style={{width:"100%",height:200,resize:"vertical",padding:14,fontFamily:"Consolas,monospace",fontSize:12,lineHeight:1.7,background:"var(--surface-1)",color:"var(--text-primary)",border:0}} />
                   </div>
                 </div>
               </div>
@@ -898,18 +832,52 @@ export function WidgetSettingsScreen() {
           {/* ═══ TAB: BEHAVIOR ═══ */}
           {tab === "behavior" && (
             <>
-              {/* Auto open */}
+              {/* Автоматические приглашения — одна общая настройка */}
               <div className={s.section}>
-                <div className={s.sectionTitle}>Автооткрытие</div>
+                <div className={s.sectionTitle}>Автоматические приглашения</div>
                 <div className={s.sectionCard}>
-                  <div className={s.field}>
-                    <div className={s.fieldLabel}>Задержка авто-открытия (0 = выкл)</div>
-                    <div className={s.numberRow}>
-                      <input type="number" className={s.numberInput} value={config.auto_open_delay} onChange={(e) => upd({ auto_open_delay: Math.max(0, +e.target.value) })} min={0} max={300} />
-                      <span className={s.numberUnit}>сек</span>
-                    </div>
-                  </div>
-                  <Toggle label="Скрыть на мобильных" checked={config.hide_on_mobile} onChange={(v) => upd({ hide_on_mobile: v })} />
+                  <Toggle
+                    label="Предлагать помощь автоматически"
+                    description="Выключено — посетитель видит только кнопку чата и открывает его сам. Включено — работают приглашение от команды, автооткрытие, триггеры, подсказка и автосообщения ниже."
+                    checked={config.auto_invite_enabled === true}
+                    onChange={(v) => upd({ auto_invite_enabled: v })}
+                  />
+                  {config.auto_invite_enabled === true && (
+                    <>
+                      <div className={s.field} style={{ marginTop: 12 }}>
+                        <div className={s.fieldLabel}>Пригласить через (время на сайте)</div>
+                        <div className={s.numberRow}>
+                          <input type="number" className={s.numberInput} value={config.auto_invite_delay ?? 60} min={15} max={3600}
+                            onChange={(e) => upd({ auto_invite_delay: Math.min(3600, Math.max(15, +e.target.value || 15)) })} />
+                          <span className={s.numberUnit}>сек</span>
+                        </div>
+                      </div>
+                      <div className={s.field}>
+                        <div className={s.fieldLabel}>Текст приглашения</div>
+                        <textarea className={s.fieldTextarea} rows={2} maxLength={500} value={config.auto_invite_message ?? ""}
+                          onChange={(e) => upd({ auto_invite_message: e.target.value })} />
+                      </div>
+                      <div className={s.field}>
+                        <div className={s.fieldLabel}>Пауза после отказа посетителя</div>
+                        <div className={s.numberRow}>
+                          <input type="number" className={s.numberInput} value={config.auto_invite_cooldown_hours ?? 24} min={1} max={720}
+                            onChange={(e) => upd({ auto_invite_cooldown_hours: Math.min(720, Math.max(1, +e.target.value || 1)) })} />
+                          <span className={s.numberUnit}>ч</span>
+                        </div>
+                      </div>
+                      <div className={s.autoNote}>
+                        Приглашение приходит от имени команды и только когда кто-то из вас в сети. «Не сейчас» или закрытие автоматически
+                        открытого окна — это отказ: до конца паузы посетителю ничего не предлагаем, во всех вкладках.
+                      </div>
+                      <div className={s.field} style={{ marginTop: 14 }}>
+                        <div className={s.fieldLabel}>Дополнительно: открыть окно само через (0 — не открывать)</div>
+                        <div className={s.numberRow}>
+                          <input type="number" className={s.numberInput} value={config.auto_open_delay} onChange={(e) => upd({ auto_open_delay: Math.min(600, Math.max(0, +e.target.value || 0)) })} min={0} max={600} />
+                          <span className={s.numberUnit}>сек</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -958,6 +926,10 @@ export function WidgetSettingsScreen() {
                       </div>
                     </div>
                   )}
+                  <div style={{ marginTop: 10 }}>
+                    <Toggle label="Скрыть на мобильных" checked={config.hide_on_mobile} onChange={(v) => upd({ hide_on_mobile: v })} />
+                  </div>
+                  <div className={s.autoNote}>Админка и загрузка файлов магазина ({(config.hidden_paths ?? ["/admin", "/upload"]).join(", ")}) всегда без виджета.</div>
                 </div>
               </div>
 
@@ -1002,10 +974,11 @@ export function WidgetSettingsScreen() {
                 </div>
               </div>
 
-              {/* 2.1 Triggers */}
+              {/* 2.1 Triggers — часть автоматических приглашений */}
               <div className={s.section}>
-                <div className={s.sectionTitle}>🎯 Умные триггеры</div>
-                <div className={s.sectionCard}>
+                <div className={s.sectionTitle}>Когда открывать чат автоматически</div>
+                {config.auto_invite_enabled !== true && <div className={s.autoNote}>Не действует, пока выключены автоматические приглашения выше.</div>}
+                <div className={s.sectionCard} data-inactive={config.auto_invite_enabled !== true || undefined}>
                   {/* Exit intent */}
                   <div style={{ padding: "10px 0", borderBottom: "1px solid var(--border-default)" }}>
                     <Toggle label="🖱️ Exit Intent — при уходе курсора со страницы" checked={config.triggers.exit_intent} onChange={(v) => updTrigger({ exit_intent: v })} />
@@ -1046,9 +1019,9 @@ export function WidgetSettingsScreen() {
 
                   {/* Page URL contains — для автооткрытия */}
                   <div style={{ padding: "10px 0" }}>
-                    <div className={s.fieldLabel}>📄 Автооткрытие только на страницах (через запятую)</div>
+                    <div className={s.fieldLabel}>Открыть, когда посетитель на этих страницах (через запятую)</div>
                     <input className={s.fieldInput} value={config.triggers.page_url_contains} onChange={(e) => updTrigger({ page_url_contains: e.target.value })} placeholder="/pricing, /checkout, /help" style={{ marginTop: 6 }} />
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Это только условие для автооткрытия по триггерам выше. Чтобы скрыть виджет вообще — см. «Видимость» ниже.</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Самостоятельное правило: срабатывает через 1,5 секунды на подходящей странице, один раз за вкладку. Чтобы скрыть виджет — «Где показывать виджет».</div>
                   </div>
                 </div>
               </div>
@@ -1121,10 +1094,11 @@ export function WidgetSettingsScreen() {
             <>
               {/* 2.2 Auto messages */}
               <div className={s.section}>
-                <div className={s.sectionTitle}>🤖 Автосообщения по сценариям</div>
-                <div className={s.sectionCard}>
+                <div className={s.sectionTitle}>Автосообщения по сценариям</div>
+                {config.auto_invite_enabled !== true && <div className={s.autoNote}>Не действуют, пока выключены автоматические приглашения (вкладка «Поведение»).</div>}
+                <div className={s.sectionCard} data-inactive={config.auto_invite_enabled !== true || undefined}>
                   <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
-                    Настройте автоматические сообщения по событиям. Бот отправит их от своего имени.
+                    Сообщение появляется в окне чата, пока посетитель ещё не писал. Если он ответит, сообщение сохранится в истории диалога первым — вы увидите то же, что и клиент.
                   </p>
 
                   {(config.auto_messages || []).map((am, idx) => (
@@ -1589,6 +1563,9 @@ export function WidgetSettingsScreen() {
             </div>
             <iframe
               ref={iframeRef}
+              src="/widget-preview.html"
+              sandbox="allow-scripts"
+              title="Предпросмотр виджета на тестовых данных"
               style={{
                 width: "100%",
                 flex: 1,

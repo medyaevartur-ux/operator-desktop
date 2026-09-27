@@ -1,85 +1,55 @@
 import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
 import { useNotificationStore } from "@/store/notification.store";
+import { Avatar, Button } from "@/components/ui";
 import s from "./NotificationBanner.module.css";
 
 /**
- * Висящая плашка о непрочитанных чатах. Показывается поверх UI, пока
+ * Строка о новых сообщениях над текущим экраном. Стоит в потоке и сдвигает
+ * содержимое, поэтому не закрывает кнопки в шапке. Живёт, пока
  * useNotificationStore.pending непуст.
  *
- *  - «Открыть чат» — диспатчит событие "open-chat" (тот же механизм, что и
- *    клик по нативному тосту в use-inbox-realtime): открывает сессию через
- *    openSession и снимает её уведомления.
- *  - «Отклонить» — clearNotifications для выбранной сессии (а при наличии
- *    нескольких — снимает все pending).
+ *  - «Открыть» — событие "open-chat" (как клик по системному уведомлению).
+ *  - × — снимает уведомление (если чатов несколько — все).
  */
 export function NotificationBanner() {
-  const pending = useNotificationStore((st) => st.pending);
-  const clearNotifications = useNotificationStore((st) => st.clearNotifications);
-  const clearAll = useNotificationStore((st) => st.clearAll);
+  const pending = useNotificationStore(st => st.pending);
+  const clearNotifications = useNotificationStore(st => st.clearNotifications);
+  const clearAll = useNotificationStore(st => st.clearAll);
 
-  // Самый свежий ожидающий чат — его и открываем по кнопке.
-  const items = useMemo(
-    () => Object.values(pending).sort((a, b) => b.timestamp - a.timestamp),
-    [pending],
-  );
+  const items = useMemo(() => Object.values(pending).sort((a, b) => b.timestamp - a.timestamp), [pending]);
   const latest = items[0];
-  const totalCount = items.reduce((sum, p) => sum + p.count, 0);
   const extraChats = items.length - 1;
 
   const openChat = () => {
     if (!latest) return;
-    window.dispatchEvent(
-      new CustomEvent("open-chat", { detail: { sessionId: latest.sessionId } }),
-    );
-    // open-chat-обработчик сам вызовет clearNotifications для этой сессии,
-    // но подстрахуемся на случай, если сессии ещё нет в списке.
+    window.dispatchEvent(new CustomEvent("open-chat", { detail: { sessionId: latest.sessionId } }));
+    // Обработчик open-chat снимет уведомление сам; здесь — на случай, если сессии ещё нет в списке.
     clearNotifications(latest.sessionId);
   };
-
-  const dismiss = () => {
-    if (items.length > 1) clearAll();
-    else if (latest) clearNotifications(latest.sessionId);
-  };
+  const dismiss = () => (items.length > 1 ? clearAll() : latest && clearNotifications(latest.sessionId));
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {latest && (
         <motion.div
-          className={s.banner}
-          role="alert"
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -16 }}
-          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+          className={s.strip}
+          role="status"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
         >
-          <span className={s.badge}>{totalCount}</span>
-
-          <div className={s.body}>
-            <div className={s.title}>
-              {latest.count > 1
-                ? `${latest.count} новых от ${latest.visitorName}`
-                : `Сообщение от ${latest.visitorName}`}
-            </div>
-            <div className={s.message}>
-              {latest.lastMessage}
-              {extraChats > 0 && (
-                <span className={s.more}>
-                  {" "}
-                  и ещё {extraChats}{" "}
-                  {pluralChats(extraChats)}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className={s.actions}>
-            <button type="button" className={s.openBtn} onClick={openChat}>
-              Открыть чат
-            </button>
-            <button type="button" className={s.dismissBtn} onClick={dismiss}>
-              Отклонить
-            </button>
+          <div className={s.inner}>
+            <Avatar name={latest.visitorName} size="sm" />
+            <p className={s.text}>
+              <strong>{latest.visitorName}{latest.count > 1 ? ` · ${latest.count} новых` : ""}</strong>
+              <span>{latest.lastMessage}</span>
+              {extraChats > 0 && <em>и ещё {extraChats} {pluralChats(extraChats)}</em>}
+            </p>
+            <Button size="sm" onClick={openChat}>Открыть</Button>
+            <button type="button" className={s.close} aria-label="Скрыть уведомление" onClick={dismiss}><X /></button>
           </div>
         </motion.div>
       )}
@@ -94,5 +64,3 @@ function pluralChats(n: number): string {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "чата";
   return "чатов";
 }
-
-export default NotificationBanner;

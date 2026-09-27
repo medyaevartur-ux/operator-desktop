@@ -1,27 +1,15 @@
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect, type SetStateAction } from "react";
 import { useTypingIndicator } from "@/features/inbox/use-typing";
-import { uploadMessageImage } from "@/features/inbox/inbox.api";
 import * as Popover from "@radix-ui/react-popover";
 import {
-  Paperclip,
-  SendHorizonal,
-  UserCheck,
-  MessageSquareQuote,
-  Image as ImageIcon,
-  Loader2,
-  Reply,
-  X as XIcon,  
-  Smile,
-  Bold,
-  Italic,
-  Code,
-  Eye,
-  EyeOff,
+  ArrowUp, Bold, Code, Eye, EyeOff, Italic, Loader2, LockKeyhole, MessageSquareQuote, Paperclip, Reply, Smile, Type,
+  UserCheck, X as XIcon, Zap,
 } from "lucide-react";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useDraftsStore } from "@/store/drafts.store";
 import { useTemplatesStore, applyTemplate, type QuickTemplate } from "@/store/templates.store";
+import { richText } from "@/features/inbox/rich-text";
 import { Tooltip } from "@/components/ui";
 import { FileThumb } from "./FileThumb";
 import s from "./ChatComposer.module.css";
@@ -35,24 +23,8 @@ const EMOJI_LIST = [
   "⏰", "📞", "💬", "📋", "🎯", "💰", "🏷️", "📢",
 ];
 
-const MAX_CHARS = 2000;
-const ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
-
-/* ── Markdown preview ── */
-
-function renderMarkdownPreview(text: string): string {
-  let html = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  html = html.replace(/```([\s\S]*?)```/g, '<code style="background:var(--accent-muted);padding:2px 6px;border-radius:6px;font-family:monospace;font-size:12px">$1</code>');
-  html = html.replace(/`([^`]+)`/g, '<code style="background:var(--accent-muted);padding:1px 4px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>');
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-  html = html.replace(/@(\S+)/g, '<span style="color:var(--accent);font-weight:700;background:var(--accent-soft);padding:0 4px;border-radius:4px">@$1</span>');
-  html = html.replace(/\n/g, "<br>");
-  return html;
-}
+const MAX_CHARS = 10000;
+const ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.pdf,.txt,.docx,.xlsx,.zip";
 
 /* ══════════════════════════════════
    ChatComposer
@@ -62,6 +34,8 @@ export function ChatComposer() {
   const activeSession = useInboxStore((st) => st.activeSession);
   const assignActiveSession = useInboxStore((st) => st.assignActiveSession);
   const sendMessage = useInboxStore((st) => st.sendMessage);
+  const sendFile = useInboxStore((st) => st.sendFile);
+  const [internal, setInternal] = useState(false);
   const operator = useAuthStore((st) => st.operator);
   const operators = useInboxStore((st) => st.operators);
   const messageCount = useInboxStore((st) => st.messages.length);
@@ -74,7 +48,12 @@ export function ChatComposer() {
   const resolveTemplateBody = useTemplatesStore((st) => st.resolveBody);
   const searchTemplates = useTemplatesStore((st) => st.searchTemplates);
   const findByShortcut = useTemplatesStore((st) => st.findByShortcut);
-  const [value, setValue] = useState(() => getDraft(activeSession?.id ?? ""));
+  const [draftValues, setDraftValues] = useState(() => ({reply:getDraft(activeSession?.id || ""),internal:getDraft(`${activeSession?.id || ""}:internal`)}));
+  const value = internal ? draftValues.internal : draftValues.reply;
+  const setValue = useCallback((next: SetStateAction<string>) => setDraftValues(previous => {
+    const key = internal ? "internal" : "reply";
+    return {...previous,[key]:typeof next === "function" ? next(previous[key]) : next};
+  }),[internal]);
   const [isSending, setIsSending] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -84,7 +63,11 @@ export function ChatComposer() {
   const [slashFilter, setSlashFilter] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
 
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [draftFiles,setDraftFiles] = useState<{reply:File[];internal:File[]}>({reply:[],internal:[]});
+  const pendingFiles = internal ? draftFiles.internal : draftFiles.reply;
+  const setPendingFiles = useCallback((next:SetStateAction<File[]>)=>setDraftFiles(previous=>{
+    const key=internal?"internal":"reply";return {...previous,[key]:typeof next==="function"?next(previous[key]):next};
+  }),[internal]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -95,14 +78,16 @@ export function ChatComposer() {
   /* ── File handling ── */
 
   const addFiles = useCallback((files: FileList | File[]) => {
-    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    const candidates = Array.from(files);
+    const arr = candidates.filter(f => /\.(jpe?g|png|webp|gif|pdf|txt|docx|xlsx|zip)$/i.test(f.name) && f.size <= 10 * 1024 * 1024);
+    if(arr.length !== candidates.length) setErrorText('Можно прикрепить фото, PDF, TXT, DOCX, XLSX или ZIP до 10 МБ.');
     if (arr.length === 0) return;
     setPendingFiles((prev) => [...prev, ...arr].slice(0, 10));
-  }, []);
+  }, [setPendingFiles]);
 
   const removeFile = useCallback((index: number) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  }, [setPendingFiles]);
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,20 +116,11 @@ export function ChatComposer() {
     [addFiles],
   );
 
-  // При смене активного чата — подтянуть его черновик в поле
   const activeSessionId = activeSession?.id ?? "";
   useEffect(() => {
-    setValue(getDraft(activeSessionId));
-    setErrorText("");
-    setIsPreviewMode(false);
-  }, [activeSessionId, getDraft]);
-
-  // Автосохранение черновика (debounce 400 мс)
-  useEffect(() => {
-    if (!activeSessionId) return;
-    const t = setTimeout(() => setDraft(activeSessionId, value), 400);
-    return () => clearTimeout(t);
-  }, [value, activeSessionId, setDraft]);
+    if(activeSessionId) setDraft(activeSessionId + (internal ? ":internal" : ""),value);
+  },[activeSessionId,internal,value,setDraft]);
+  useEffect(() => { if(replyTo?.is_internal) setInternal(true); },[replyTo?.id]);
 
   // Подписка на глобальное событие drag-and-drop файлов
   useEffect(() => {
@@ -217,7 +193,7 @@ export function ChatComposer() {
         ta.selectionStart = ta.selectionEnd = start + text.length;
       });
     },
-    [value],
+    [value,setValue],
   );
 
   const wrapSelection = useCallback(
@@ -240,7 +216,7 @@ export function ChatComposer() {
         }
       });
     },
-    [value],
+    [value,setValue],
   );
 
   /* ── Mention detection ── */
@@ -271,14 +247,14 @@ export function ChatComposer() {
           setSlashFilter("");
         }
       }
-      if (!typingThrottleRef.current) {
+      if (!internal && !typingThrottleRef.current) {
         sendTyping();
         typingThrottleRef.current = setTimeout(() => {
           typingThrottleRef.current = null;
         }, 2000);
       }
     },
-    [sendTyping],
+    [sendTyping,internal],
   );
 
   const insertMention = useCallback(
@@ -299,7 +275,7 @@ export function ChatComposer() {
         });
       }
     },
-    [value],
+    [value,setValue],
   );
 
   // Вставка шаблона из «/»-автодополнения: убираем токен «/...», вставляем resolved-текст.
@@ -354,7 +330,8 @@ export function ChatComposer() {
       if (hasFiles) {
         setIsUploading(true);
         for (const file of pendingFiles) {
-          await uploadMessageImage(activeSession.id, operator.id, file);
+          await sendFile(file, internal, activeSession.id);
+          setPendingFiles(prev => prev.filter(item => item !== file));
         }
         setPendingFiles([]);
         setIsUploading(false);
@@ -373,10 +350,10 @@ export function ChatComposer() {
           }
         }
         setIsSending(true);
-        await sendMessage(finalText);
+        await sendMessage(finalText, internal, activeSession.id);
         setValue("");
         setIsPreviewMode(false);
-        if (activeSession?.id) clearDraft(activeSession.id);
+        if (activeSession?.id) clearDraft(activeSession.id + (internal ? ":internal" : ""));
       }
     } catch (error) {
       console.error("send error:", error);
@@ -415,356 +392,200 @@ export function ChatComposer() {
   if (!activeSession) return null;
 
   const busy = isSending || isUploading;
-  const canSend = !busy && !isOverLimit && (!!value.trim() || pendingFiles.length > 0);
+  const canSend = activeSession.status !== "closed" && (internal || !activeSession.operator_id || isAssigned) && !busy && !isOverLimit && (!!value.trim() || pendingFiles.length > 0);
+  const colleagueOwns = !!activeSession.operator_id && !isAssigned;
+  const sortedTemplates = [...templates].sort((a, b) => b.uses - a.uses);
 
   return (
     <div
       className={s.wrapper}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
-      }}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (e.dataTransfer.files) addFiles(e.dataTransfer.files); }}
     >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={ACCEPT}
-        multiple
-        style={{ display: "none" }}
-        onChange={handleFileChange}
-      />
+      <input ref={fileInputRef} type="file" accept={ACCEPT} multiple hidden onChange={handleFileChange} />
 
-      {/* ── Assign banner ── */}
       {!isAssigned && (
-        <div className={s.assignBanner}>
-          <div className={s.assignText}>
-            Чат ещё не закреплён за тобой. При ответе он автоматически назначится.
-          </div>
-          <button type="button" className={s.assignBtn} onClick={() => void assignActiveSession()}>
-            <UserCheck style={{ width: 15, height: 15 }} />
-            Забрать
-          </button>
+        <div className={s.assignHint}>
+          <span>{colleagueOwns ? "С диалогом работает коллега. Вы можете оставить заметку команде." : "Диалог в общей очереди. Ваш первый ответ закрепит его за вами."}</span>
+          {!colleagueOwns && (
+            <button type="button" onClick={() => void assignActiveSession().catch(error => setErrorText(error.message))}>
+              <UserCheck aria-hidden="true" />Взять себе
+            </button>
+          )}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className={s.form}>
-        {/* ── Канал чата (Email/SMS не используются) ── */}
-        <div className={s.tabBar}>
-          <button type="button" className={`${s.tab} ${s.tabActive}`}>
-            Чат
-          </button>
-          <span className={s.tabCount}>всего сообщений: {messageCount}</span>
+      {showMentions && filteredOperators.length > 0 && (
+        <div className={s.popup} onMouseDown={(e) => e.stopPropagation()}>
+          <div className={s.popupLabel}>Упомянуть коллегу</div>
+          {filteredOperators.map((op) => (
+            <button key={op.id} type="button" className={s.popupItem} onClick={() => insertMention(op.name ?? op.email ?? "operator")}>
+              <span className={s.mentionAvatar}>{(op.name ?? "?").charAt(0).toUpperCase()}</span>
+              <span className={s.popupText}><strong>{op.name ?? op.email}</strong><small>{op.role === "admin" ? "Администратор" : op.role === "supervisor" ? "Руководитель" : "Оператор"}</small></span>
+            </button>
+          ))}
         </div>
+      )}
 
-        {/* ── Reply bar ── */}
+      {showSlash && slashCandidates.length > 0 && (
+        <div className={s.popup} onMouseDown={(e) => e.stopPropagation()} role="listbox" aria-label="Быстрые ответы">
+          <div className={s.popupLabel}>Быстрые ответы · ↑↓ выбрать, Enter вставить</div>
+          {slashCandidates.map((tpl, i) => {
+            const preview = previewTpl(tpl);
+            return (
+              <button key={tpl.id} type="button" role="option" aria-selected={i === slashIndex} className={s.popupItem} data-active={i === slashIndex || undefined}
+                onMouseEnter={() => setSlashIndex(i)} onClick={() => insertTemplate(tpl)}>
+                <span className={s.popupText}>
+                  <strong>{tpl.title}{tpl.shortcut && <kbd>{tpl.shortcut}</kbd>}</strong>
+                  <small>{preview.slice(0, 110)}{preview.length > 110 ? "…" : ""}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className={s.card} data-mode={internal ? "note" : "reply"}>
+        {internal && <div className={s.noteBanner}><LockKeyhole aria-hidden="true" />Заметка для команды — клиент её не увидит</div>}
+
         {replyTo && (
           <div className={s.replyBar}>
-            <Reply style={{ width: 16, height: 16, color: "var(--accent)", flexShrink: 0 }} />
+            <Reply aria-hidden="true" />
             <div className={s.replyBarInfo}>
-              <div className={s.replyBarSender}>
-                {replyTo.sender === "visitor" ? "Клиент" : replyTo.sender === "ai" ? "AI-бот" : "Оператор"}
-              </div>
+              <div className={s.replyBarSender}>{replyTo.sender === "visitor" ? "Ответ клиенту на сообщение" : replyTo.sender === "ai" ? "Ответ на сообщение помощника" : "Ответ на сообщение оператора"}</div>
               <div className={s.replyBarText}>{replyTo.message}</div>
             </div>
-            <button type="button" className={s.replyBarClose} onClick={() => setReplyTo(null)}>
-              <XIcon style={{ width: 14, height: 14 }} />
-            </button>
-          </div>
-        )}
-        
-        {/* ── Mention dropdown (inline) ── */}
-        {showMentions && filteredOperators.length > 0 && (
-          <div className={s.mentionContent} onMouseDown={(e) => e.stopPropagation()}>
-            <div className={s.mentionLabel}>Упомянуть оператора</div>
-            {filteredOperators.map((op) => (
-              <button
-                key={op.id}
-                type="button"
-                className={s.mentionItem}
-                onClick={() => insertMention(op.name ?? op.email ?? "operator")}
-              >
-                <div className={s.mentionAvatar}>{(op.name ?? "?").charAt(0).toUpperCase()}</div>
-                <div>
-                  <div className={s.mentionName}>{op.name ?? op.email}</div>
-                  <div className={s.mentionRole}>{op.role}</div>
-                </div>
-              </button>
-            ))}
+            <button type="button" className={s.replyBarClose} aria-label="Убрать цитату" onClick={() => setReplyTo(null)}><XIcon /></button>
           </div>
         )}
 
-        {/* ── Slash template autocomplete (inline) ── */}
-        {showSlash && slashCandidates.length > 0 && (
-          <div className={s.slashContent} onMouseDown={(e) => e.stopPropagation()}>
-            <div className={s.mentionLabel}>Шаблоны — выберите и вставьте</div>
-            {slashCandidates.map((tpl, i) => {
-              const preview = previewTpl(tpl);
-              return (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  className={`${s.slashItem} ${i === slashIndex ? s.slashItemActive : ""}`}
-                  onMouseEnter={() => setSlashIndex(i)}
-                  onClick={() => insertTemplate(tpl)}
-                >
-                  <div className={s.slashItemHead}>
-                    <span className={s.slashItemTitle}>{tpl.title}</span>
-                    {tpl.shortcut && <span className={s.slashItemShortcut}>{tpl.shortcut}</span>}
-                  </div>
-                  <div className={s.slashItemPreview}>
-                    {preview.slice(0, 90)}{preview.length > 90 ? "…" : ""}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── Pending files ── */}
         {pendingFiles.length > 0 && (
           <div className={s.filesBar}>
-            {pendingFiles.map((file, i) => (
-              <FileThumb key={`${file.name}-${i}`} file={file} onRemove={() => removeFile(i)} />
-            ))}
-            {isUploading && (
-              <div className={s.fileUploading}>
-                <Loader2 style={{ width: 22, height: 22 }} className={s.spinIcon} />
-              </div>
-            )}
+            {pendingFiles.map((file, i) => <FileThumb key={`${file.name}-${i}`} file={file} onRemove={() => removeFile(i)} />)}
+            {isUploading && <div className={s.fileUploading}><Loader2 className={s.spinIcon} /></div>}
           </div>
         )}
 
-        {/* ── Textarea / Preview ── */}
-        <div className={s.textareaWrap}>
-          {isPreviewMode ? (
-            <div
-              className={s.preview}
-              dangerouslySetInnerHTML={{
-                __html:
-                  renderMarkdownPreview(value) ||
-                  '<span style="color:var(--text-disabled)">Предпросмотр пуст</span>',
-              }}
-            />
-          ) : (
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => handleTextChange(e.target.value)}
-              onKeyDown={(e) => {
-                // Навигация по «/»-автодополнению имеет приоритет.
-                if (showSlash && slashCandidates.length > 0) {
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    setSlashIndex((i) => (i + 1) % slashCandidates.length);
-                    return;
-                  }
-                  if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    setSlashIndex((i) => (i - 1 + slashCandidates.length) % slashCandidates.length);
-                    return;
-                  }
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    const tpl = slashCandidates[slashIndex] ?? slashCandidates[0];
-                    if (tpl) insertTemplate(tpl);
-                    return;
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
-                    setShowSlash(false);
-                    return;
-                  }
-                }
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-              onPaste={handlePaste}
-              placeholder="Введите ваше сообщение... (@имя для mention)"
-              className={s.textarea}
-            />
-          )}
+        {isPreviewMode ? (
+          <div className={s.preview}>{value.trim() ? richText(value) : <span className={s.previewEmpty}>Предпросмотр пуст</span>}</div>
+        ) : (
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={value}
+            onChange={(e) => handleTextChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (showSlash && slashCandidates.length > 0) {
+                if (e.key === "ArrowDown") { e.preventDefault(); setSlashIndex((i) => (i + 1) % slashCandidates.length); return; }
+                if (e.key === "ArrowUp") { e.preventDefault(); setSlashIndex((i) => (i - 1 + slashCandidates.length) % slashCandidates.length); return; }
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const tpl = slashCandidates[slashIndex] ?? slashCandidates[0]; if (tpl) insertTemplate(tpl); return; }
+                if (e.key === "Escape") { e.preventDefault(); setShowSlash(false); return; }
+              }
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && (window.innerWidth >= 768 || e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            onPaste={handlePaste}
+            aria-label={internal ? "Заметка команде" : "Сообщение клиенту"}
+            placeholder={internal ? "Напишите коллегам: что важно знать по этому клиенту" : "Ответ клиенту… «/» — быстрые ответы"}
+            className={s.textarea}
+          />
+        )}
 
-          {errorText && <div className={s.error}>{errorText}</div>}
+        {errorText && <div role="alert" className={s.error}>{errorText}</div>}
 
-          {/* ── Bottom toolbar ── */}
-          <div className={s.toolbar}>
-            <div className={s.toolGroup}>
-              {/* Emoji Popover */}
-              <Popover.Root>
-                <Tooltip content="Эмодзи" side="top">
-                  <Popover.Trigger asChild>
-                    <button type="button" className={s.toolBtn}>
-                      <Smile style={{ width: 18, height: 18 }} />
-                    </button>
-                  </Popover.Trigger>
-                </Tooltip>
-                <Popover.Portal>
-                  <Popover.Content side="top" sideOffset={8} className={s.popoverContent}>
-                    <div className={s.emojiGrid}>
-                      {EMOJI_LIST.map((emoji) => (
-                        <Popover.Close asChild key={emoji}>
-                          <button
-                            type="button"
-                            className={s.emojiBtn}
-                            onClick={() => insertAtCursor(emoji)}
-                          >
-                            {emoji}
-                          </button>
-                        </Popover.Close>
-                      ))}
-                    </div>
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-
-              {/* Bold */}
-              <Tooltip content="Жирный (**текст**)" side="top">
-                <button type="button" className={s.toolBtn} onClick={() => wrapSelection("**", "**")}>
-                  <Bold style={{ width: 16, height: 16 }} />
-                </button>
-              </Tooltip>
-
-              {/* Italic */}
-              <Tooltip content="Курсив (*текст*)" side="top">
-                <button type="button" className={s.toolBtn} onClick={() => wrapSelection("*", "*")}>
-                  <Italic style={{ width: 16, height: 16 }} />
-                </button>
-              </Tooltip>
-
-              {/* Code */}
-              <Tooltip content="Код (`текст`)" side="top">
-                <button type="button" className={s.toolBtn} onClick={() => wrapSelection("`", "`")}>
-                  <Code style={{ width: 16, height: 16 }} />
-                </button>
-              </Tooltip>
-
-              {/* Preview toggle */}
-              <Tooltip content={isPreviewMode ? "Редактор" : "Предпросмотр"} side="top">
-                <button
-                  type="button"
-                  className={`${s.toolBtn} ${isPreviewMode ? s.toolBtnActive : ""}`}
-                  onClick={() => setIsPreviewMode((p) => !p)}
-                >
-                  {isPreviewMode
-                    ? <EyeOff style={{ width: 16, height: 16 }} />
-                    : <Eye style={{ width: 16, height: 16 }} />}
-                </button>
-              </Tooltip>
-
-              <div className={s.toolDivider} />
-
-              {/* Attach */}
-              <Tooltip content="Прикрепить файл" side="top">
-                <button
-                  type="button"
-                  className={`${s.toolBtn} ${pendingFiles.length > 0 ? s.toolBtnActive : ""}`}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip style={{ width: 18, height: 18 }} />
-                </button>
-              </Tooltip>
-
-              {/* Шаблоны ответов */}
-              <Popover.Root>
-                <Tooltip content="Шаблоны ответов" side="top">
-                  <Popover.Trigger asChild>
-                    <button type="button" className={s.toolBtn}>
-                      <MessageSquareQuote style={{ width: 18, height: 18 }} />
-                    </button>
-                  </Popover.Trigger>
-                </Tooltip>
-                <Popover.Portal>
-                  <Popover.Content side="top" sideOffset={8} className={s.popoverContent}>
-                    <div className={s.quickReplies}>
-                      {templates.length === 0 && (
-                        <div className={s.quickReplyEmpty}>
-                          <div className={s.quickReplyEmptyIcon}>
-                            <MessageSquareQuote style={{ width: 20, height: 20 }} />
-                          </div>
-                          <div className={s.quickReplyEmptyTitle}>Нет быстрых ответов</div>
-                          <div className={s.quickReplyEmptyDesc}>
-                            Создайте шаблон в разделе «Шаблоны», чтобы вставлять его одним кликом
-                          </div>
-                        </div>
-                      )}
-                      {[...templates].sort((a, b) => b.uses - a.uses).map((tpl) => {
-                        const resolved = previewTpl(tpl);
-                        return (
-                          <Popover.Close asChild key={tpl.id}>
-                            <button
-                              type="button"
-                              className={s.quickReplyBtn}
-                              onClick={() => insertAtCursor(applyTpl(tpl))}
-                              title={tpl.shortcut || tpl.title}
-                            >
-                              <div style={{ fontWeight: 700, marginBottom: 2 }}>
-                                {tpl.title}
-                                {tpl.shortcut && <span style={{ marginLeft: 6, fontFamily: "monospace", fontSize: 11, color: "var(--accent)" }}>{tpl.shortcut}</span>}
-                              </div>
-                              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{resolved.slice(0, 80)}{resolved.length > 80 ? "…" : ""}</div>
-                            </button>
-                          </Popover.Close>
-                        );
-                      })}
-                    </div>
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-
-              {/* File count */}
-              {pendingFiles.length > 0 && (
-                <span className={s.fileCount}>
-                  <ImageIcon style={{ width: 14, height: 14 }} />
-                  {pendingFiles.length} фото
-                </span>
-              )}
-            </div>
-
-            {/* Right side */}
-            <div className={s.toolRight}>
-              {/* Char counter */}
-              <span
-                className={`${s.charCount} ${
-                  isOverLimit ? s.charOver : charCount > MAX_CHARS * 0.9 ? s.charWarn : s.charNormal
-                }`}
-              >
-                {charCount}/{MAX_CHARS}
-              </span>
-
-              {/* Typing indicator */}
-              {isVisitorTyping && (
-                <div className={s.typing}>
-                  <span className={s.typingDots}>
-                    {[0, 0.2, 0.4].map((d) => (
-                      <span
-                        key={d}
-                        className={s.typingDot}
-                        style={{ animationDelay: `${d}s` }}
-                      />
-                    ))}
-                  </span>
-                  Клиент печатает...
-                </div>
-              )}
-
-              {/* Send button */}
-              <button type="submit" disabled={!canSend} className={s.sendBtn}>
-                {isUploading ? (
-                  <Loader2 style={{ width: 16, height: 16 }} className={s.spinIcon} />
-                ) : (
-                  <SendHorizonal style={{ width: 16, height: 16 }} />
-                )}
-                {isUploading ? "Загрузка..." : isSending ? "Отправка..." : "Отправить"}
-              </button>
-            </div>
+        <div className={s.toolbar}>
+          <div className={s.mode} role="radiogroup" aria-label="Кому адресовано сообщение">
+            <button type="button" role="radio" aria-checked={!internal} onClick={() => setInternal(false)}>Клиенту</button>
+            <button type="button" role="radio" aria-checked={internal} data-note onClick={() => setInternal(true)}><LockKeyhole aria-hidden="true" />Заметка</button>
           </div>
+
+          <Tooltip content="Прикрепить файл до 10 МБ" side="top">
+            <button type="button" className={s.tool} data-active={pendingFiles.length > 0 || undefined} onClick={() => fileInputRef.current?.click()} aria-label="Прикрепить файл"><Paperclip /></button>
+          </Tooltip>
+
+          <Popover.Root>
+            <Tooltip content="Быстрые ответы" kbd="/" side="top">
+              <Popover.Trigger asChild><button type="button" className={s.tool} aria-label="Быстрые ответы"><Zap /></button></Popover.Trigger>
+            </Tooltip>
+            <Popover.Portal>
+              <Popover.Content side="top" align="start" sideOffset={8} className={s.popoverContent}>
+                <div className={s.quickReplies}>
+                  {sortedTemplates.length === 0 && (
+                    <div className={s.quickReplyEmpty}>
+                      <MessageSquareQuote aria-hidden="true" />
+                      <strong>Пока нет быстрых ответов</strong>
+                      <span>Добавьте их в разделе «Быстрые ответы», чтобы вставлять одним нажатием.</span>
+                    </div>
+                  )}
+                  {sortedTemplates.map((tpl) => {
+                    const resolved = previewTpl(tpl);
+                    return (
+                      <Popover.Close asChild key={tpl.id}>
+                        <button type="button" className={s.quickReplyBtn} onClick={() => insertAtCursor(applyTpl(tpl))}>
+                          <strong>{tpl.title}{tpl.shortcut && <kbd>{tpl.shortcut}</kbd>}</strong>
+                          <span>{resolved.slice(0, 90)}{resolved.length > 90 ? "…" : ""}</span>
+                        </button>
+                      </Popover.Close>
+                    );
+                  })}
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+
+          <Popover.Root>
+            <Tooltip content="Эмодзи" side="top">
+              <Popover.Trigger asChild><button type="button" className={s.tool} aria-label="Эмодзи"><Smile /></button></Popover.Trigger>
+            </Tooltip>
+            <Popover.Portal>
+              <Popover.Content side="top" align="start" sideOffset={8} className={s.popoverContent}>
+                <div className={s.emojiGrid}>
+                  {EMOJI_LIST.map((emoji) => (
+                    <Popover.Close asChild key={emoji}><button type="button" className={s.emojiBtn} onClick={() => insertAtCursor(emoji)}>{emoji}</button></Popover.Close>
+                  ))}
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+
+          <Popover.Root>
+            <Tooltip content="Форматирование" side="top">
+              <Popover.Trigger asChild><button type="button" className={s.tool} data-active={isPreviewMode || undefined} aria-label="Форматирование"><Type /></button></Popover.Trigger>
+            </Tooltip>
+            <Popover.Portal>
+              <Popover.Content side="top" align="start" sideOffset={8} className={`${s.popoverContent} ${s.formatMenu}`}>
+                <Popover.Close asChild><button type="button" onClick={() => wrapSelection("**", "**")}><Bold />Жирный<kbd>**текст**</kbd></button></Popover.Close>
+                <Popover.Close asChild><button type="button" onClick={() => wrapSelection("*", "*")}><Italic />Курсив<kbd>*текст*</kbd></button></Popover.Close>
+                <Popover.Close asChild><button type="button" onClick={() => wrapSelection("`", "`")}><Code />Код<kbd>`текст`</kbd></button></Popover.Close>
+                <Popover.Close asChild><button type="button" onClick={() => setIsPreviewMode((p) => !p)}>{isPreviewMode ? <EyeOff /> : <Eye />}{isPreviewMode ? "Вернуться к тексту" : "Предпросмотр"}</button></Popover.Close>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+
+          <span className={s.spacer} />
+
+          {isVisitorTyping && (
+            <span className={s.typing} aria-live="polite">
+              <span className={s.typingDots}>{[0, 0.2, 0.4].map((d) => <span key={d} className={s.typingDot} style={{ animationDelay: `${d}s` }} />)}</span>
+              печатает
+            </span>
+          )}
+          {charCount > MAX_CHARS * 0.9 && <span className={s.count} data-over={isOverLimit || undefined}>{charCount}/{MAX_CHARS}</span>}
+
+          {internal ? (
+            <button type="submit" disabled={!canSend} className={s.saveNote} aria-label="Сохранить заметку для команды">
+              {busy ? <Loader2 className={s.spinIcon} /> : <LockKeyhole aria-hidden="true" />}
+              {isUploading ? "Загрузка…" : "В заметки"}
+            </button>
+          ) : (
+            <Tooltip content={isUploading ? "Загружаем файлы…" : "Отправить клиенту"} kbd={window.innerWidth >= 768 ? "Enter" : "Ctrl Enter"} side="top">
+              <button type="submit" disabled={!canSend} className={s.send} aria-label="Отправить сообщение клиенту">
+                {busy ? <Loader2 className={s.spinIcon} /> : <ArrowUp />}
+              </button>
+            </Tooltip>
+          )}
         </div>
       </form>
     </div>

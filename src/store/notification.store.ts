@@ -1,3 +1,4 @@
+import { useDeliveryStore } from "./delivery.store";
 import { create } from "zustand";
 
 /* ═══ Web Audio Synthesizer ═══ */
@@ -144,7 +145,6 @@ interface NotificationState {
   soundChatClosed: boolean;
 
   pending: Record<string, PendingNotification>;
-  totalUnread: number;
 
   setSoundEnabled: (v: boolean) => void;
   setDesktopEnabled: (v: boolean) => void;
@@ -169,7 +169,7 @@ interface NotificationState {
   setSlaWarnMinutes: (v: number) => void;
   setSlaOverdueMinutes: (v: number) => void;
 
-  addNotification: (sessionId: string, visitorName: string, message: string, soundType?: SoundType) => void;
+  addNotification: (sessionId: string, visitorName: string, message: string, soundType?: SoundType, silent?: boolean) => void;
   clearNotifications: (sessionId: string) => void;
   clearAll: () => void;
 
@@ -184,12 +184,10 @@ interface NotificationState {
    */
   playSound: (type?: SoundType, critical?: boolean) => void;
   previewSound: (type: SoundType) => void;
-  showDesktopNotification: (sessionId: string) => void;
   closeToTray: boolean;
   showMessagePreview: boolean;
   setCloseToTray: (v: boolean) => void;
   setShowMessagePreview: (v: boolean) => void;
-  syncBadge: () => void;  
   customSound: string | null;
   customSoundName: string | null;
   setCustomSound: (base64: string | null, name: string | null) => void;
@@ -216,7 +214,6 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   customSound: localStorage.getItem("notif_custom_sound") || null,
   customSoundName: localStorage.getItem("notif_custom_sound_name") || null,
   pending: {},
-  totalUnread: 0,
 
   setSoundEnabled: (v) => { saveBool("notif_sound", v); set({ soundEnabled: v }); },
   setDesktopEnabled: (v) => { saveBool("notif_desktop", v); set({ desktopEnabled: v }); },
@@ -251,25 +248,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     }
     set({ customSound: base64, customSoundName: name });
   },
-  syncBadge: () => {
-    const total = get().totalUnread;
-    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(total)).catch(() => {});
-  },  
-  isDndNow: () => {
-    const st = get();
-    if (!st.dndScheduleEnabled) return false;
-    const now = new Date();
-    const hh = now.getHours();
-    const mm = now.getMinutes();
-    const current = hh * 60 + mm;
-    const [fh, fm] = st.dndFrom.split(":").map(Number);
-    const [th, tm] = st.dndTo.split(":").map(Number);
-    const from = fh * 60 + fm;
-    const to = th * 60 + tm;
-    if (from <= to) return current >= from && current < to;
-    return current >= from || current < to; // overnight
-  },
-  addNotification: (sessionId, visitorName, message, soundType = "new_message") => {
+  isDndNow: () => useDeliveryStore.getState().quiet(),
+  addNotification: (sessionId, visitorName, message, soundType = "new_message", silent = false) => {
     // DND schedule check
     if (get().isDndNow()) return;
     const pending = { ...get().pending };
@@ -292,41 +272,25 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       };
     }
 
-    const totalUnread = Object.values(pending).reduce((sum, p) => sum + p.count, 0);
-    set({ pending, totalUnread });
+    // Счётчик на иконке и в заголовке ведёт AppShell по непрочитанным с сервера.
+    set({ pending });
 
-    // Sync badge (Tauri taskbar + document title)
-    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(totalUnread)).catch(() => {
-      if (totalUnread > 0) document.title = `(${totalUnread}) Живая Сказка`;
-    });
-
-    if (get().soundEnabled) {
+    if (get().soundEnabled && !silent) {
       get().playSound(soundType);
     }
 
-    if (get().desktopEnabled) {
-      get().showDesktopNotification(sessionId);
-    }
-
-    get().startRepeatLoop();
+    // System display and server ack are owned by the durable delivery handler.
   },
 
   clearNotifications: (sessionId) => {
     const pending = { ...get().pending };
     delete pending[sessionId];
-    const totalUnread = Object.values(pending).reduce((sum, p) => sum + p.count, 0);
-    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(totalUnread)).catch(() => {
-      document.title = totalUnread > 0 ? `(${totalUnread}) Живая Сказка` : "Живая Сказка — Оператор";
-    });
-    set({ pending, totalUnread });
+    set({ pending });
     if (Object.keys(pending).length === 0) get().stopRepeatLoop();
   },
 
   clearAll: () => {
-    import("@/lib/tauri-bridge").then(({ setBadgeCount }) => setBadgeCount(0)).catch(() => {
-      document.title = "Живая Сказка — Оператор";
-    });
-    set({ pending: {}, totalUnread: 0 });
+    set({ pending: {} });
     get().stopRepeatLoop();
   },
 
@@ -353,7 +317,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   playSound: (type = "new_message", critical = false) => {
     const st = get();
     // Критический звук (эскалация) игнорирует soundEnabled / per-sound toggles / DND.
-    if (!critical) {
+    {
       if (!st.soundEnabled) return;
       if (st.isDndNow()) return;
       // Check per-sound toggle
@@ -397,23 +361,5 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       const vol = get().soundVolume;
       SYNTH_SOUNDS[type](vol);
     } catch { /* ignore */ }
-  },
-
-  showDesktopNotification: (sessionId) => {
-    const state = get();
-    const pending = state.pending[sessionId];
-    if (!pending) return;
-
-    const title = pending.count > 1
-      ? `${pending.count} новых от ${pending.visitorName}`
-      : `Сообщение от ${pending.visitorName}`;
-
-    const body = state.showMessagePreview
-      ? pending.lastMessage.slice(0, 120)
-      : "Новое сообщение в чате";
-
-    import("@/lib/tauri-bridge").then(({ showNativeNotification }) => {
-      showNativeNotification(title, body, sessionId);
-    }).catch(() => {});
   },
 }));

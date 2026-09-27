@@ -20,7 +20,7 @@ function addLog(level: LogLevel, tag: string, ...args: any[]) {
   const message = args.map(a => {
     if (typeof a === "string") return a;
     try { return JSON.stringify(a); } catch { return String(a); }
-  }).join(" ");
+  }).join(" ").replace(/Bearer\s+[^\s"\x27]+/gi, "Bearer [hidden]").replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[hidden]").slice(0, 1500);
 
   logs.push({ time: formatTime(), level, tag, message });
   if (logs.length > MAX_LOGS) logs.shift();
@@ -53,22 +53,10 @@ console.error = (...args: any[]) => {
 
 function extractTag(args: any[]): string {
   if (args.length > 0 && typeof args[0] === "string") {
-    const match = args[0].match(/^$$([^$$]+)\]/);
+    const match = args[0].match(/^\[([^\]]+)\]/);
     if (match) return match[1];
   }
   return "app";
-}
-
-// Добавляем специальные логи для FCM диагностики
-export function logFcmDiag() {
-  addLog("debug", "diag", "=== FCM Diagnostics ===");
-  addLog("debug", "diag", "window.__FCM_TOKEN: " + ((window as any).__FCM_TOKEN ? (window as any).__FCM_TOKEN.substring(0, 30) + "..." : "NOT SET"));
-  addLog("debug", "diag", "window.__FCM_PLATFORM: " + ((window as any).__FCM_PLATFORM || "NOT SET"));
-  addLog("debug", "diag", "window.AndroidFCM exists: " + !!(window as any).AndroidFCM);
-  addLog("debug", "diag", "fcm_token_sent in LS: " + (localStorage.getItem("fcm_token_sent") ? "YES" : "NO"));
-  addLog("debug", "diag", "chat_token in LS: " + (localStorage.getItem("chat_token") ? "YES" : "NO"));
-  addLog("debug", "diag", "Platform: " + navigator.userAgent.substring(0, 80));
-  addLog("debug", "diag", "__TAURI_INTERNALS__: " + !!(window as any).__TAURI_INTERNALS__);
 }
 
 export function getLogs(): LogEntry[] {
@@ -85,50 +73,6 @@ export function subscribeLogs(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-// Автоматически запускаем диагностику через 3 сек после загрузки
-setTimeout(() => {
-  logFcmDiag();
-}, 3000);
-
-// === Глобальный логгер критических ошибок на сервер ===
-async function reportCrash(type: "error" | "unhandledrejection", message: string, stack?: string) {
-  try {
-    const crashReport = {
-      type: "crash_report",
-      crashType: type,
-      message,
-      stack: stack || new Error().stack || "",
-      url: typeof window !== "undefined" ? window.location.href : "",
-      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
-      time: new Date().toISOString(),
-      recentLogs: logs.slice(-30), // последние 30 логов для детального контекста
-    };
-
-    origLog("[CrashLogger] Обнаружена критическая ошибка! Отправка логов на сервер...", crashReport);
-
-    await fetch("/api/logs", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(crashReport),
-    });
-  } catch (err) {
-    origError("[CrashLogger] Не удалось отправить отчет о краше на сервер:", err);
-  }
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("error", (event) => {
-    const message = event.message || (event.error && event.error.message) || String(event);
-    const stack = event.error && event.error.stack;
-    void reportCrash("error", message, stack);
-  });
-
-  window.addEventListener("unhandledrejection", (event) => {
-    const reason = event.reason;
-    const message = reason instanceof Error ? reason.message : String(reason);
-    const stack = reason instanceof Error ? reason.stack : undefined;
-    void reportCrash("unhandledrejection", message, stack);
-  });
-}
+// Crash details stay on this device; exporting diagnostics is an explicit UI action.
+window.addEventListener("error", event => addLog("error", "runtime", event.message || "Runtime error"));
+window.addEventListener("unhandledrejection", event => addLog("error", "promise", event.reason instanceof Error ? event.reason.message : "Unhandled operation"));

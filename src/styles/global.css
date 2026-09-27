@@ -115,9 +115,8 @@
 /* Видимое фокус-кольцо только при клавиатурной навигации (не при клике мышью) */
 :focus { outline: none; }
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ring);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
 }
 
 /* Кнопки нигде не должны «скакать» — отключаем transform на hover,
@@ -164,7 +163,16 @@ textarea { font-family: inherit; }
   }
 }
 
-/* Serif font style for headings & title elements */
-h1, h2, h3, .serif-header {
+/* Заголовки страниц — с засечками, служебные подзаголовки — рубленым шрифтом */
+h1, h2, .serif-header {
   font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
+
+/* Одна толщина линий у всех иконок */
+svg.lucide { stroke-width: 1.75; }
+
+/* Цифры в интерфейсе одинаковой ширины: время, счётчики, таблицы */
+body { font-variant-numeric: tabular-nums; }

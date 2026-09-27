@@ -36,14 +36,10 @@ async function getListen() {
 
 // ═══ Badge ═══
 
+/** Счётчик на иконке приложения; заголовок окна ставит AppShell. */
 export async function setBadgeCount(count: number): Promise<void> {
   const inv = await getInvoke();
-  if (inv) {
-    await inv("set_badge_count", { count });
-  } else {
-    // Browser fallback: update document title
-    document.title = count > 0 ? `(${count}) Живая Сказка` : "Живая Сказка — Оператор";
-  }
+  if (inv) await inv("set_badge_count", { count });
 }
 
 // ═══ Close to Tray ═══
@@ -63,15 +59,6 @@ export async function setCloseToTray(value: boolean): Promise<void> {
   }
 }
 
-// ═══ Notify Offline ═══
-
-export async function notifyOfflineNative(apiUrl: string, operatorId: string): Promise<void> {
-  const inv = await getInvoke();
-  if (inv) {
-    await inv("notify_offline", { apiUrl, operatorId });
-  }
-}
-
 // ═══ Listen to app-closing event ═══
 
 export async function onAppClosing(handler: () => void): Promise<() => void> {
@@ -82,60 +69,42 @@ export async function onAppClosing(handler: () => void): Promise<() => void> {
   return () => {};
 }
 
-// ═══ Notification with click ═══
+// ═══ Notification diagnostics ═══
+// Сами уведомления показывает lib/delivery.ts (show_chat_notification / Service Worker).
 
-export async function showNativeNotification(
-  title: string,
-  body: string,
-  sessionId: string,
-): Promise<void> {
-  if (!isTauri()) {
-    // Browser fallback
-    if ("Notification" in window && Notification.permission === "granted") {
-      const n = new Notification(title, {
-        body,
-        icon: "/icon.png",
-        tag: `chat-${sessionId}`,
-        silent: true,
-      });
-      n.onclick = () => {
-        window.focus();
-        window.dispatchEvent(new CustomEvent("open-chat", { detail: { sessionId } }));
-        n.close();
-      };
-      setTimeout(() => n.close(), 6000);
-    }
-    return;
+export interface DeviceDiagnostics {
+  permission?: "granted" | "denied" | "default" | "unknown";
+  channel_enabled?: boolean | null;
+  battery_optimized?: boolean | null;
+  background_restricted?: boolean | null;
+  quiet_mode?: string | null;
+  toast_setting?: string | null;
+  push_registered?: boolean | null;
+  activation_ready?: boolean;
+  queued_actions?: number;
+}
+
+/** Что знает само устройство: разрешение ОС, канал, экономия батареи (Windows/Android — нативно, браузер — Notification API). */
+export async function readDeviceDiagnostics(): Promise<DeviceDiagnostics> {
+  const inv = await getInvoke();
+  if (inv) {
+    try { return ((await inv("notification_diagnostics")) as DeviceDiagnostics | null) ?? { permission: "unknown" }; }
+    catch { return { permission: "unknown" }; }
   }
-
+  const permission = "Notification" in window ? (Notification.permission as DeviceDiagnostics["permission"]) : "unknown";
+  let push_registered: boolean | null = null;
   try {
-    const { sendNotification, isPermissionGranted, requestPermission } = await import(
-      "@tauri-apps/plugin-notification"
-    );
+    const worker = await navigator.serviceWorker?.getRegistration();
+    push_registered = worker?.pushManager ? !!(await worker.pushManager.getSubscription()) : null;
+  } catch { push_registered = null; }
+  return { permission, push_registered };
+}
 
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const perm = await requestPermission();
-      granted = perm === "granted";
-    }
-
-    if (granted) {
-      sendNotification({ title, body });
-      // Tauri v2 notification click brings window to front automatically
-      // We also dispatch event so frontend navigates to the chat
-      window.dispatchEvent(new CustomEvent("open-chat", { detail: { sessionId } }));
-    }
-  } catch {
-    // Fallback to browser
-    if ("Notification" in window && Notification.permission === "granted") {
-      const n = new Notification(title, { body, silent: true });
-      n.onclick = () => {
-        window.focus();
-        window.dispatchEvent(new CustomEvent("open-chat", { detail: { sessionId } }));
-        n.close();
-      };
-    }
-  }
+/** Открыть системные настройки уведомлений или экономии батареи. false — на этой платформе нельзя. */
+export async function openSystemSettings(kind: "notifications" | "battery"): Promise<boolean> {
+  const inv = await getInvoke();
+  if (!inv) return false;
+  try { await inv("open_system_settings", { kind }); return true; } catch { return false; }
 }
 
 // ═══ Focus window ═══

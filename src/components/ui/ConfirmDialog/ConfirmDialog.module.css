@@ -1,78 +1,28 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 250;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--md-sys-color-scrim) 42%, transparent);
-  backdrop-filter: blur(2px);
+  padding: 16px;
+  background: var(--scrim);
 }
-
 .content {
-  width: 400px;
-  max-width: 90vw;
-  background: var(--surface-1);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--md-sys-elevation-level5);
-  outline: none;
+  width: 420px;
+  max-width: calc(100vw - 32px);
   overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-default);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-xl);
+  outline: none;
 }
-
-.header {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  padding: var(--space-6) var(--space-6) var(--space-2);
-}
-
-.iconWrapper {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  box-shadow: var(--soft-inset);
-}
-
-.iconDanger {
-  background: var(--error-soft);
-  color: var(--error);
-}
-
-.iconWarning {
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-.iconInfo {
-  background: var(--info-soft);
-  color: var(--info);
-}
-
-.title {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-extrabold);
-  color: var(--text-primary);
-  line-height: var(--leading-tight);
-}
-
-.body {
-  padding: var(--space-2) var(--space-6) var(--space-4);
-}
-
-.description {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  line-height: var(--leading-relaxed);
-}
-
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
-  border-top: 1px solid var(--border-subtle);
-}
+.header { display: flex; align-items: flex-start; gap: 12px; padding: 20px 20px 4px; }
+.iconWrapper { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--radius-md); }
+.iconDanger { background: var(--error-soft); color: var(--error); }
+.iconWarning { background: var(--warning-soft); color: var(--warning); }
+.iconInfo { background: var(--info-soft); color: var(--info); }
+.title { font-family: var(--font-serif); font-size: 19px; font-weight: 500; line-height: 1.3; color: var(--text-primary); padding-top: 5px; }
+.body { padding: 6px 20px 16px 68px; }
+.description { font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
+.footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; }

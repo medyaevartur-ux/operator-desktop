@@ -8,47 +8,41 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-family: var(--font-sans);
-  font-weight: var(--weight-extrabold);
-  background-size: cover;
-  background-position: center;
+  border-radius: var(--radius-full);
   overflow: hidden;
   user-select: none;
-  box-shadow: var(--md-sys-elevation-level1);
+  font-family: var(--font-sans);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.01em;
+  background: var(--surface-3);
+  color: var(--text-secondary);
 }
 
-/* ── Sizes ── */
+/* Приглушённые тона: светлая тема */
+.avatar[data-tone="0"] { background: #F1DFD4; color: #8A4A2F; }
+.avatar[data-tone="1"] { background: #EFE6D0; color: #775920; }
+.avatar[data-tone="2"] { background: #DFE9DB; color: #3F6645; }
+.avatar[data-tone="3"] { background: #DDE5EE; color: #3C5877; }
+.avatar[data-tone="4"] { background: #EBDEE7; color: #6E4260; }
+.avatar[data-tone="5"] { background: #E7E6D0; color: #5E5D26; }
+.avatar[data-tone="6"] { background: #F2DDDB; color: #8A3F3F; }
+.avatar[data-tone="7"] { background: #E7E4DD; color: #5A564E; }
 
-.sm .avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-2xs);
-}
+/* Тёмная тема */
+:global(:root[data-theme="dark"]) .avatar[data-tone="0"] { background: #4A3127; color: #F0C6B2; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="1"] { background: #463A21; color: #EDD49C; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="2"] { background: #2F4232; color: #BADDBF; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="3"] { background: #2C3B4C; color: #BED1E6; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="4"] { background: #422F3D; color: #E3C3D8; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="5"] { background: #3D3C23; color: #DCDAA8; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="6"] { background: #4A2D2D; color: #F0BFBF; }
+:global(:root[data-theme="dark"]) .avatar[data-tone="7"] { background: #3B3934; color: #D6D2C8; }
 
-.md .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-md);
-}
-
-.lg .avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-xl);
-  font-size: var(--text-xl);
-}
-
-.xl .avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-xl);
-  font-size: var(--text-2xl);
-}
-
-/* ── Image ── */
+.xs .avatar { width: 22px; height: 22px; font-size: 9.5px; }
+.sm .avatar { width: 28px; height: 28px; font-size: 11px; }
+.md .avatar { width: 36px; height: 36px; font-size: 13px; }
+.lg .avatar { width: 48px; height: 48px; font-size: 17px; }
+.xl .avatar { width: 64px; height: 64px; font-size: 22px; }
 
 .image {
   width: 100%;
@@ -56,32 +50,20 @@
   object-fit: cover;
 }
 
-/* ── Status dot ── */
-
 .statusDot {
   position: absolute;
-  bottom: -1px;
   right: -1px;
-  width: 12px;
-  height: 12px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
   border-radius: var(--radius-full);
-  border: 2.5px solid var(--surface-1);
+  border: 2px solid var(--surface-bg-deep);
+  background: var(--status-offline);
 }
+.xs .statusDot, .sm .statusDot { width: 9px; height: 9px; border-width: 1.5px; }
+.lg .statusDot, .xl .statusDot { width: 14px; height: 14px; border-width: 2.5px; }
 
-.sm .statusDot {
-  width: 10px;
-  height: 10px;
-  border-width: 2px;
-}
-
-.lg .statusDot,
-.xl .statusDot {
-  width: 14px;
-  height: 14px;
-  border-width: 3px;
-}
-
-.statusOnline  { background: var(--status-online); }
-.statusAway    { background: var(--status-away); }
-.statusDnd     { background: var(--status-dnd); }
-.statusOffline { background: var(--status-offline); }
+.statusDot[data-status="online"]  { background: var(--status-online); }
+.statusDot[data-status="away"]    { background: var(--status-away); }
+.statusDot[data-status="dnd"]     { background: var(--status-dnd); }
+.statusDot[data-status="offline"] { background: var(--status-offline); }

@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 dist/
 src-tauri/target/
 src-tauri/keys/
@@ -9,3 +9,22 @@ src-tauri/keys/
 .claude/
 scratch/
 _audit-server/
+
+# Android signing credentials stay local. Existing tracked key needs a separate migration.
+src-tauri/gen/android/keystore.properties
+
+# Local browser evidence and native crash reports are not release inputs.
+.playwright-cli/
+output/playwright/
+src-tauri/hs_err_pid*.log
+src-tauri/replay_pid*.log
+server/private_uploads/
+server/uploads/
+server/.test-uploads/
+
+# Reviewed release packages contain local build output, not repository sources.
+prepared-v8/
+server/build-manifest.json
+# Установщики v8 хранятся рядом с выпуском, не в Git
+releases/8.*/
+__pycache__/

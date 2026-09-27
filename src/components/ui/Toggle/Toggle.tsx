@@ -18,6 +18,7 @@ export function Toggle({ checked, onChange, label, description, disabled }: Togg
       <button
         type="button"
         role="switch"
+        aria-label={label}
         aria-checked={checked}
         disabled={disabled}
         className={`${s.track} ${checked ? s.trackActive : ""}`}

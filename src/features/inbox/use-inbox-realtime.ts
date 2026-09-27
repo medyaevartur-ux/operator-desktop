@@ -1,242 +1,99 @@
-import { useEffect, useRef } from "react";
+import { openConversationFromNotification } from "@/lib/open-conversation";
+import { useEffect } from "react";
 import { getSocket } from "@/lib/socket";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
+import { useTemplatesStore } from "@/store/templates.store";
+import { useDeliveryStore } from "@/store/delivery.store";
+import { useNavigationStore } from "@/store/navigation.store";
 import { useNotificationStore } from "@/store/notification.store";
+import { catchUpDeliveries, handleDelivery, acknowledgeDelivery, recoverNativeReplies } from "@/lib/delivery";
+import { isNative } from "@/lib/api-config";
 import type { ChatMessage } from "@/types/chat";
 
-interface MessageStatusPayload {
-  session_id: string;
-  messages: Array<{
-    id: string;
-    status: "delivered" | "read";
-    delivered_at?: string;
-    read_at?: string;
-  }>;
-}
-
 export function useInboxRealtime() {
-  const appendMessage = useInboxStore((s) => s.appendMessage);
-  const loadSessions = useInboxStore((s) => s.loadSessions);
-  const loadMessages = useInboxStore((s) => s.loadMessages);
-  const updateMessageStatuses = useInboxStore((s) => s.updateMessageStatuses);
-  const activeSessionRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    return useInboxStore.subscribe((state) => {
-      activeSessionRef.current = state.activeSession?.id ?? null;
-    });
-  }, []);
-
-  // Listen for notification clicks
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.sessionId) {
-        const sessions = useInboxStore.getState().sessions;
-        const target = sessions.find((s) => s.id === detail.sessionId);
-        if (target) {
-          useInboxStore.getState().openSession(target);
-        }
-        useNotificationStore.getState().clearNotifications(detail.sessionId);
-      }
-    };
-    window.addEventListener("open-chat", handler);
-    return () => window.removeEventListener("open-chat", handler);
-  }, []);
-
   useEffect(() => {
     const socket = getSocket();
-
-    const handleNewMessage = (message: ChatMessage) => {
-      if (message.session_id === activeSessionRef.current) {
-        appendMessage(message);
-      }
-
-      const operator = useAuthStore.getState().operator;
-      const isOwnOperatorMsg =
-        message.sender === "operator" && !!operator && message.operator_id === operator.id;
-
-      // Не уведомляем о системных и о СВОИХ сообщениях; сообщения других операторов — уведомляем
-      if (message.sender !== "system" && !isOwnOperatorMsg) {
-        if (operator?.status === "dnd") return;
-
-        const sessions = useInboxStore.getState().sessions;
-        const session = sessions.find((s) => s.id === message.session_id);
-        const visitorName = session?.visitor_name?.trim() || `Гость ${message.session_id.slice(-6)}`;
-
-        const isActiveAndFocused = message.session_id === activeSessionRef.current && document.hasFocus();
-
-        if (!isActiveAndFocused) {
-          const isMention = message.message.includes(`@${operator?.name}`);
-          if (isMention) {
-            useNotificationStore.getState().playSound("mention");
-            return; // mention sound takes priority
-          }
-
-          useNotificationStore.getState().addNotification(
-            message.session_id,
-            visitorName,
-            message.message
-          );
-        }
-      }
+    let disposed = false, reloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const refreshSessions = () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(() => { if (!disposed) void useInboxStore.getState().loadSessions(); }, 150); };
+    const activeId = () => useInboxStore.getState().activeSession?.id;
+    const setContext = () => {
+      if (!isNative()) return;
+      const nav = useNavigationStore.getState();
+      const visible = !document.hidden && document.hasFocus() && nav.screen === "inbox" && (window.innerWidth >= 768 || nav.mobileView === "chat-conversation");
+      void import("@tauri-apps/api/core").then(({ invoke }) => invoke("set_native_chat_context", { sessionId: visible ? activeId() || null : null })).catch(() => undefined);
     };
-
-    const handleSessionUpdated = (data?: { session_id?: string; is_new?: boolean; visitor_name?: string }) => {
-      void loadSessions();
-
-      if (data?.is_new) {
-        const operator = useAuthStore.getState().operator;
-        if (operator?.status !== "dnd") {
-          useNotificationStore.getState().playSound("new_chat");
-          useNotificationStore.getState().addNotification(
-            data.session_id || "new",
-            data.visitor_name || "Новый клиент",
-            "Начал диалог"
-          );
-        }
-      }
+    const reconcile = () => {
+      void useInboxStore.getState().loadSessions();
+      if (activeId()) { socket.emit("join_session", activeId()); void useInboxStore.getState().loadMessages(); }
+      void useDeliveryStore.getState().loadPreferences().then(() => catchUpDeliveries());
+      void useTemplatesStore.getState().load();
+      void recoverNativeReplies();
+      void useDeliveryStore.getState().loadRouting().catch(()=>undefined); setContext();
     };
-
-    // ═══ НОВОЕ: обработка message_status_changed ═══
-    const handleMessageStatusChanged = (data: MessageStatusPayload) => {
-      if (data.session_id === activeSessionRef.current) {
-        updateMessageStatuses(data.messages);
-      }
-    };
-
-    const handleMessageUpdated = () => {
-      void loadMessages();
-    };
-
-    const handleMessageDeleted = () => {
-      void loadMessages();
-    };
-
-    const handleReactionUpdated = () => {
-      void loadMessages();
-    };
-
-    // Live typing preview
-    const handleTypingContent = (data: { sessionId: string; text: string; isTyping: boolean }) => {
-      useInboxStore.getState().setTypingPreview(data.sessionId, data.text, data.isTyping);
-    };
-
-    const handleOperatorStatus = (data: { operator_id: string; status: string; is_online: boolean }) => {
-      const currentOperator = useAuthStore.getState().operator;
-      if (currentOperator && data.operator_id === currentOperator.id) {
-        useAuthStore.getState().setOperator({
-          ...currentOperator,
-          status: data.status,
-          is_online: data.is_online,
-        });
-      }
-      void loadSessions();
-    };
-
-    // ═══ Новый диалог: сервер шлёт отдельное событие new_session ═══
-    // Раньше оно не слушалось → новые чаты приходили без звука/бейджа.
-    const handleNewSession = (session: { id?: string; visitor_name?: string } | undefined) => {
-      void loadSessions();
-      const operator = useAuthStore.getState().operator;
-      if (operator?.status === "dnd") return;
-      const sid = session?.id || "new";
-      const visitorName = session?.visitor_name?.trim() || `Гость ${String(sid).slice(-6)}`;
-      // Отдельный звук "new_chat" (восходящее трезвучие) + бейдж + системный тост
-      useNotificationStore.getState().addNotification(sid, visitorName, "Начал новый диалог", "new_chat");
-    };
-
-    // ═══ Re-join после реконнекта ═══
-    // socket.io переподключается сам, но серверные комнаты (session:*) теряются.
-    // На каждый (пере)коннект: заново join активной сессии + перезагрузка списков,
-    // чтобы не пропустить сообщения, пришедшие во время обрыва.
-    const handleConnect = () => {
-      const activeId = activeSessionRef.current;
-      void loadSessions();
-      if (activeId) {
-        socket.emit("join_session", activeId);
-        void loadMessages();
-      }
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("new_session", handleNewSession);
-    socket.on("new_message", handleNewMessage);
-    socket.on("session_updated", handleSessionUpdated);
-    const handlePageChanged = (data: { sessionId: string; url: string; title: string }) => {
+    const newMessage = (message: ChatMessage) => {
       const state = useInboxStore.getState();
-      if (state.activeSession?.id === data.sessionId) {
-        useInboxStore.getState().upsertSession({
-          ...state.activeSession,
-          current_page: data.url,
-          current_page_title: data.title,
-        });
-      }
+      if (message.session_id === activeId() && !state.focusedMessageId) state.appendMessage(message);
+      refreshSessions();
     };
-
-    socket.on("session_page_changed", handlePageChanged);    
-    socket.on("message_status_changed", handleMessageStatusChanged);
-    socket.on("message_updated", handleMessageUpdated);
-    socket.on("message_deleted", handleMessageDeleted);
-    socket.on("reaction_updated", handleReactionUpdated);
-    socket.on("operator_status_changed", handleOperatorStatus);
-    socket.on("typing_content", handleTypingContent);
-    const handleOperatorRequested = (data: { session_id: string; visitor_name: string; message: string }) => {
-      const operator = useAuthStore.getState().operator;
-      if (operator?.status === "dnd") return;
-
-      void loadSessions();
-
-      useNotificationStore.getState().playSound("operator_request");
-      useNotificationStore.getState().addNotification(
-        data.session_id,
-        data.visitor_name || "Посетитель",
-        data.message || "Запросил оператора"
-      );
+    const messageUpdated = (message: ChatMessage) => {
+      if (message?.session_id === activeId() && message.id && typeof message.message === "string") useInboxStore.getState().appendMessage(message);
+      else if (!message?.session_id || message.session_id === activeId()) void useInboxStore.getState().loadMessages();
     };
-    socket.on("operator_requested", handleOperatorRequested);
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("new_session", handleNewSession);
-      socket.off("new_message", handleNewMessage);
-      socket.off("session_updated", handleSessionUpdated);
-      socket.off("message_status_changed", handleMessageStatusChanged);
-      socket.off("session_page_changed", handlePageChanged);
-      socket.off("message_updated", handleMessageUpdated);
-      socket.off("message_deleted", handleMessageDeleted);
-      socket.off("reaction_updated", handleReactionUpdated);
-      socket.off("operator_status_changed", handleOperatorStatus);
-      socket.off("typing_content", handleTypingContent);
-      socket.off("operator_requested", handleOperatorRequested);
+    const statuses = (data: { session_id: string; messages: Array<{ id: string; status: "delivered" | "read"; delivered_at?: string; read_at?: string }> }) => {
+      if (data.session_id === activeId()) useInboxStore.getState().updateMessageStatuses(data.messages);
+      refreshSessions();
     };
-  }, [appendMessage, loadSessions, loadMessages, updateMessageStatuses]);
-
-  // Subscribe to active session room
-  useEffect(() => {
-    const socket = getSocket();
-
-    const unsub = useInboxStore.subscribe((state, prev) => {
-      if (prev.activeSession?.id && prev.activeSession.id !== state.activeSession?.id) {
-        socket.emit("leave_session", prev.activeSession.id);
-      }
-
-      if (state.activeSession?.id && state.activeSession.id !== prev.activeSession?.id) {
-        socket.emit("join_session", state.activeSession.id);
-        useNotificationStore.getState().clearNotifications(state.activeSession.id);
+    const typing = (data: { sessionId: string; text: string; isTyping: boolean }) => useInboxStore.getState().setTypingPreview(data.sessionId, data.text, data.isTyping);
+    const status = (data: { operator_id: string; status: string; is_online: boolean }) => {
+      const own = useAuthStore.getState().operator;
+      useInboxStore.setState(state=>({operators:state.operators.map(item=>item.id===data.operator_id?{...item,status:data.status,is_online:data.is_online}:item)}));
+      if (own?.id === data.operator_id) useAuthStore.getState().setOperator({ ...own, status: data.status, is_online: data.is_online });
+      refreshSessions();
+    };
+    const page = (data: { sessionId: string; url: string; title: string }) => {
+      const active = useInboxStore.getState().activeSession;
+      if (active?.id === data.sessionId) useInboxStore.getState().upsertSession({ ...active, current_page: data.url, current_page_title: data.title });
+    };
+    const templates = () => void useTemplatesStore.getState().load();
+    const delivery = (data: { delivery_id: string }) => { if (data?.delivery_id) void handleDelivery(data.delivery_id); };
+    const deviceReady = () => void catchUpDeliveries();
+    const routing = () => void useDeliveryStore.getState().loadRouting().catch(() => undefined);
+    const open = async (event: Event) => {
+      const data = (event as CustomEvent<{ sessionId?: string; deliveryId?: string }>).detail;
+      if (!data?.sessionId || !/^[a-f0-9-]{36}$/i.test(data.sessionId)) return;
+      if (!(await openConversationFromNotification(data.sessionId, () => !disposed))) return;
+      useNotificationStore.getState().clearNotifications(data.sessionId);
+      if (data.deliveryId) void acknowledgeDelivery(data.deliveryId, "opened").catch(() => undefined);
+    };
+    const onVisible = () => { setContext(); if (!document.hidden) reconcile(); };
+    const onFocus = () => { setContext(); if (socket.connected) void catchUpDeliveries(); };
+    const unsubInbox = useInboxStore.subscribe((state, previous) => {
+      if (state.activeSession?.id !== previous.activeSession?.id) {
+        if (previous.activeSession) socket.emit("leave_session", previous.activeSession.id);
+        if (state.activeSession) { socket.emit("join_session", state.activeSession.id); useNotificationStore.getState().clearNotifications(state.activeSession.id); }
+        setContext();
       }
     });
-
-    const currentId = useInboxStore.getState().activeSession?.id;
-    if (currentId) {
-      socket.emit("join_session", currentId);
-    }
-
+    const unsubNav = useNavigationStore.subscribe(setContext);
+    const events: Array<[string, (...args: any[]) => void]> = [
+      ["connect", reconcile], ["new_message", newMessage], ["message_updated", messageUpdated], ["message_deleted", messageUpdated],
+      ["message_status_changed", statuses], ["reaction_updated", messageUpdated], ["session_updated", refreshSessions], ["new_session", refreshSessions],
+      ["operator_requested", refreshSessions], ["operator_status_changed", status], ["session_page_changed", page], ["typing_content", typing],
+      ["operator_updated",()=>void useInboxStore.getState().loadOperators()],["templates_updated", templates], ["notification_event", delivery], ["routing_updated", routing],
+    ];
+    events.forEach(([name, handler]) => socket.on(name, handler));
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus); window.addEventListener("blur", setContext);
+    window.addEventListener("online", reconcile); window.addEventListener("open-chat", open); window.addEventListener("chat-device-ready", deviceReady);
+    if (socket.connected) reconcile();
     return () => {
-      unsub();
-      const id = useInboxStore.getState().activeSession?.id;
-      if (id) socket.emit("leave_session", id);
+      disposed = true; clearTimeout(reloadTimer); unsubInbox(); unsubNav();
+      events.forEach(([name, handler]) => socket.off(name, handler));
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus); window.removeEventListener("blur", setContext);
+      window.removeEventListener("online", reconcile); window.removeEventListener("open-chat", open); window.removeEventListener("chat-device-ready", deviceReady);
+      if (activeId()) socket.emit("leave_session", activeId());
     };
   }, []);
 }

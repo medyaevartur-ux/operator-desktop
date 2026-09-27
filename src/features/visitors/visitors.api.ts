@@ -8,6 +8,7 @@ import type {
 
 export interface VisitorsParams {
   has_chat?: boolean;
+  online?: boolean;
   country?: string;
   search?: string;
   limit?: number;
@@ -21,6 +22,7 @@ export interface VisitorsParams {
 
 function buildVisitorsQuery(params: VisitorsParams): string {
   const q = new URLSearchParams();
+  if (params.online !== undefined) q.set("online",String(params.online));
   if (params.has_chat !== undefined) q.set("has_chat", String(params.has_chat));
   if (params.country) q.set("country", params.country);
   if (params.search) q.set("search", params.search);
@@ -59,7 +61,7 @@ export async function getVisitorsPage(params: VisitorsParams = {}): Promise<Page
   }
   return {
     items: raw?.items ?? [],
-    has_more: Boolean(raw?.has_more),
+    has_more: Boolean(raw?.has_more),total:raw?.total,online_total:raw?.online_total,with_chat_total:raw?.with_chat_total,
   };
 }
 
@@ -91,12 +93,5 @@ export async function startChatWithVisitor(visitorId: string): Promise<{ session
 }
 
 export async function blockVisitorIP(visitorId: string, ipAddress: string): Promise<{ ok: boolean }> {
-  try {
-    return await api<{ ok: boolean }>(`/api/visitors/${visitorId}/block`, {
-      method: "POST",
-      body: JSON.stringify({ ip_address: ipAddress }),
-    });
-  } catch {
-    return { ok: true };
-  }
+  return api(`/api/visitors/${visitorId}/block`, {method:"POST",body:JSON.stringify({ip_address:ipAddress})});
 }

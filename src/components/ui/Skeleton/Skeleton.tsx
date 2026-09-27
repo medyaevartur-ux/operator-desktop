@@ -31,12 +31,11 @@ export function Skeleton({ width, height = 16, circle, text, className, style }:
 /* Pre-built skeleton patterns */
 export function SkeletonCard() {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
-      <Skeleton circle height={44} />
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px" }}>
+      <Skeleton circle height={36} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-        <Skeleton text height={14} width="60%" />
-        <Skeleton text height={12} width="90%" />
-        <Skeleton text height={10} width="40%" />
+        <Skeleton text height={12} width="55%" />
+        <Skeleton text height={11} width="85%" />
       </div>
     </div>
   );

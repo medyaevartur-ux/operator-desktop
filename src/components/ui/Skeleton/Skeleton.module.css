@@ -1,19 +1,8 @@
 .skeleton {
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    90deg,
-    var(--surface-2) 25%,
-    var(--surface-3) 50%,
-    var(--surface-2) 75%
-  );
+  background: linear-gradient(90deg, var(--surface-pressed) 25%, var(--surface-hover) 50%, var(--surface-pressed) 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.6s ease-in-out infinite;
 }
-
-.circle {
-  border-radius: var(--radius-full);
-}
-
-.text {
-  border-radius: var(--radius-xs);
-}
+.circle { border-radius: var(--radius-full); }
+.text { border-radius: var(--radius-xs); }

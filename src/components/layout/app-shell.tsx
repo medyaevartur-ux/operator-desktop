@@ -1,243 +1,85 @@
-import { useEffect } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useInboxStore } from "@/store/inbox.store";
 import { useInbox } from "@/features/inbox/use-inbox";
 import { useInboxRealtime } from "@/features/inbox/use-inbox-realtime";
-import { useSla } from "@/features/inbox/use-sla";
 import { useVisitorsRealtime } from "@/features/visitors/use-visitors-realtime";
-import { ChatDetails } from "@/components/layout/chat-details";
-import { ChatMain } from "@/components/layout/chat-main";
-import { ChatSidebar } from "@/components/layout/chat-sidebar";
-import { InboxRail } from "@/components/layout/inbox-rail";
-import { VisitorsPanel } from "@/components/layout/visitors-panel";
-import { OperatorsScreen } from "@/components/screens/operators-screen";
-import { SettingsScreen } from "@/components/screens/settings-screen";
-import { QueueScreen } from "@/components/screens/queue-screen";
-import { VisitorsScreen } from "@/components/screens/visitors-screen";
-import { WidgetSettingsScreen } from "@/components/screens/widget-settings-screen";
-import { TemplatesScreen } from "@/components/screens/templates-screen";
-import LogsPage from "@/pages/LogsPage";
-import { MobileAppShell } from "@/components/layout/mobile-app-shell";
-import { TopBar } from "@/components/layout/top-bar";
-import { NotificationBanner } from "@/components/layout/notification-banner";
+import { WorkspaceScreen } from "@/components/screens/workspace-screen";
 import { ErrorBoundary } from "@/app/error-boundary";
-import { isMobile } from "@/lib/platform";
-import { AnimatePresence, motion } from "framer-motion";
+import { Modal } from "@/components/ui";
+import { useIsMobile } from "@/lib/platform";
+import { ChatDetails } from "./chat-details";
+import { ChatMain } from "./chat-main";
+import { CommandPalette } from "./command-palette";
+import { InboxHome } from "./inbox-home";
+import { MobileAppShell } from "./mobile-app-shell";
+import { NotificationBanner } from "./notification-banner";
+import { Sidebar, SidebarRail } from "./sidebar";
 import s from "./AppShell.module.css";
 
-const pageVariants = {
-  initial: { opacity: 0, x: 20 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -20 },
-};
-
-const pageTransition = {
-  duration: 0.2,
-  ease: [0.16, 1, 0.3, 1] as const,
-};
-const detailsVariants = {
-  initial: { opacity: 0, x: 360 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: 360 },
-};
-
-const detailsTransition = {
-  duration: 0.3,
-  ease: [0.16, 1, 0.3, 1] as const,
+// Карточка клиента встаёт колонкой только там, где переписке хватает ширины.
+const WIDE = "(min-width: 1280px)";
+const wideNow = () => window.matchMedia(WIDE).matches;
+const subscribeWide = (notify: () => void) => {
+  const query = window.matchMedia(WIDE);
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
 };
 
 export function AppShell() {
-  // На мобиле — мобильная версия
-  if (isMobile()) {
-    return <MobileAppShell />;
-  }
+  useInbox(); useInboxRealtime(); useVisitorsRealtime();
+  const mobile = useIsMobile();
+  const wide = useSyncExternalStore(subscribeWide, wideNow, () => true);
+  const screen = useNavigationStore(state => state.screen);
+  const detailsOpen = useNavigationStore(state => state.isDetailsOpen);
+  const collapsed = useNavigationStore(state => state.sidebarCollapsed);
+  const sessionId = useInboxStore(state => state.activeSession?.id);
+  const unread = useInboxStore(state => state.sessions.reduce((sum, session) => sum + (session.unread_count || 0), 0));
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  return <DesktopAppShell />;
-}
-
-function DesktopAppShell() {
-  useInbox();
-  useInboxRealtime();
-  useSla();
-  useVisitorsRealtime();
-
-  const screen = useNavigationStore((s) => s.screen);
-  const isDetailsOpen = useNavigationStore((s) => s.isDetailsOpen);
-  const isVisitorsOpen = useNavigationStore((s) => s.isVisitorsOpen);
-
-  // Счётчик непрочитанных в заголовке окна — заметно даже в свёрнутом виде
-  const unreadTotal = useInboxStore((st) =>
-    st.sessions.reduce((acc, ses) => acc + (ses.unread_count ?? 0), 0)
-  );
   useEffect(() => {
-    const base = "Живая Сказка — Оператор";
-    const title = unreadTotal > 0 ? `(${unreadTotal > 99 ? "99+" : unreadTotal}) ${base}` : base;
-    document.title = title;
-    import("@/lib/tauri-bridge")
-      .then((m: any) => { if (typeof m.setWindowTitle === "function") m.setWindowTitle(title); })
-      .catch(() => {});
-  }, [unreadTotal]);
+    document.title = unread ? `(${unread}) Живая Сказка — Оператор` : "Живая Сказка — Оператор";
+    void import("@/lib/tauri-bridge").then(module => module.setBadgeCount(unread)).catch(() => undefined);
+  }, [unread]);
 
-  let columns = "68px 340px minmax(0,1fr)";
-  if (isDetailsOpen && isVisitorsOpen) {
-    columns = "68px 340px minmax(0,1fr) 340px 300px";
-  } else if (isDetailsOpen) {
-    columns = "68px 340px minmax(0,1fr) 340px";
-  } else if (isVisitorsOpen) {
-    columns = "68px 340px minmax(0,1fr) 300px";
-  }
+  // При сужении окна колонка не превращается сама во всплывающее окно.
+  useEffect(() => { if (!wide) useNavigationStore.getState().setDetailsOpen(false); }, [wide]);
 
-  if (screen !== "inbox") {
-    return (
-      <div className={s.root}>
-        <TopBar />
-        <NotificationBanner />
-        <div
-          className={s.shell}
-          style={{ "--shell-columns": "68px minmax(0,1fr)" } as React.CSSProperties}
-        >
-        <InboxRail />
-        <AnimatePresence mode="wait">
-          {screen === "operators" && (
-            <motion.div
-              key="operators"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto" }}
-            >
-              <OperatorsScreen />
-            </motion.div>
-          )}
-          {screen === "settings" && (
-            <motion.div
-              key="settings"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto" }}
-            >
-              <SettingsScreen />
-            </motion.div>
-          )}
-          {screen === "queue" && (
-            <motion.div
-              key="queue"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto" }}
-            >
-              <QueueScreen />
-            </motion.div>
-          )}
-          {screen === "visitors" && (
-            <motion.div
-              key="visitors"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto" }}
-            >
-              <VisitorsScreen />
-            </motion.div>
-          )}
-          {screen === "widget_settings" && (
-            <motion.div
-              key="widget_settings"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto" }}
-            >
-              <WidgetSettingsScreen />
-            </motion.div>
-          )}
-          {screen === "templates" && (
-            <motion.div
-              key="templates"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto", height: "100%" }}
-            >
-              <ErrorBoundary><TemplatesScreen /></ErrorBoundary>
-            </motion.div>
-          )}
-          {screen === "logs" && (
-            <motion.div
-              key="logs"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={pageTransition}
-              style={{ overflow: "auto", height: "100%" }}
-            >
-              <LogsPage />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "k" || key === "л") { event.preventDefault(); setPaletteOpen(open => !open); }
+      else if (key === "b" || key === "и") { event.preventDefault(); useNavigationStore.getState().toggleSidebar(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  if (mobile) return <MobileAppShell />;
+
+  const inbox = screen === "inbox";
+  const inlineDetails = inbox && !!sessionId && wide && detailsOpen;
+  const columns = `${collapsed ? "52px" : "var(--sidebar-width)"} minmax(0,1fr)${inlineDetails ? " var(--details-width)" : ""}`;
 
   return (
-    <div className={s.root}>
-      <TopBar />
-      <div
-        className={s.shell}
-        style={{ "--shell-columns": columns } as React.CSSProperties}
-      >
-        <InboxRail />
-        <ErrorBoundary><ChatSidebar /></ErrorBoundary>
-        <ErrorBoundary><ChatMain /></ErrorBoundary>
-        <AnimatePresence>
-          {isDetailsOpen && (
-            <motion.div
-              key="details"
-              className={s.detailsPanel}
-              variants={detailsVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={detailsTransition}
-            >
-              <ErrorBoundary><ChatDetails /></ErrorBoundary>
-            </motion.div>
-          )}
-          {isVisitorsOpen && (
-            <motion.div
-              key="visitors-panel"
-              className={s.visitorsPanel}
-              variants={{
-                initial: { opacity: 0, x: 300 },
-                animate: { opacity: 1, x: 0 },
-                exit: { opacity: 0, x: 300 },
-              }}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={detailsTransition}
-            >
-              <ErrorBoundary><VisitorsPanel /></ErrorBoundary>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+    <div className={s.shell} style={{ gridTemplateColumns: columns }}>
+      {collapsed ? <SidebarRail onOpenPalette={() => setPaletteOpen(true)} /> : <Sidebar onOpenPalette={() => setPaletteOpen(true)} />}
+      <main className={s.main}>
+        <NotificationBanner />
+        <ErrorBoundary key={inbox ? "inbox" : screen}>
+          {inbox ? (sessionId ? <ChatMain /> : <InboxHome />) : <div className={`${s.workspace} scrollbar-thin`}><WorkspaceScreen /></div>}
+        </ErrorBoundary>
+      </main>
+      {inlineDetails && (
+        <aside className={s.details} aria-label="Карточка клиента">
+          <ErrorBoundary><ChatDetails key={sessionId} /></ErrorBoundary>
+        </aside>
+      )}
+      <Modal open={inbox && !!sessionId && !wide && detailsOpen} onClose={() => useNavigationStore.getState().setDetailsOpen(false)} title="Карточка клиента" width={480}>
+        <div className={s.drawer}><ChatDetails key={sessionId} /></div>
+      </Modal>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

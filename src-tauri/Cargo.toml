@@ -1,6 +1,6 @@
 [package]
 name = "operator-desktop"
-version = "7.1.0"
+version = "8.0.0-beta.3"
 description = "Живая Сказка — Десктоп оператора чата"
 authors = ["Zhivaya Skazka"]
 edition = "2021"
@@ -24,3 +24,14 @@ serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 tauri-plugin-updater = "2"
 image = { version = "0.25", default-features = false, features = ["png"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+
+[target.'cfg(windows)'.dependencies]
+keyring = "4.2.0"
+windows = { version = "0.61", features = ["Foundation_Collections", "Data_Xml_Dom", "UI_Notifications", "Win32_System_Com", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_UI_Notifications", "Win32_Security_Cryptography"] }
+windows-registry = "0.5"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies.windows-core]
+version = "0.61"

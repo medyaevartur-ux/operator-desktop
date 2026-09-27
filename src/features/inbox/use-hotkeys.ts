@@ -1,103 +1,31 @@
 import { useEffect } from "react";
 import { useInboxStore } from "@/store/inbox.store";
+import { useAuthStore } from "@/store/auth.store";
+import { closeConversation, pickConversation } from "@/lib/open-conversation";
+import { groupConversations } from "./conversation-list";
 
+/** Alt+W — завершить (с отменой), Alt+A — взять, Alt+R — прочитано, Alt+↑/↓ — соседний диалог в видимом порядке. */
 export function useInboxHotkeys() {
-  const sessions = useInboxStore((state) => state.sessions);
-  const activeSession = useInboxStore((state) => state.activeSession);
-  const setActiveSession = useInboxStore((state) => state.setActiveSession);
-  const closeActiveSession = useInboxStore((state) => state.closeActiveSession);
-  const assignActiveSession = useInboxStore((state) => state.assignActiveSession);
-  const markActiveSessionRead = useInboxStore((state) => state.markActiveSessionRead);
-
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
+    function onKey(event: KeyboardEvent) {
+      if (!event.altKey || event.ctrlKey || event.metaKey) return;
+      const inbox = useInboxStore.getState();
+      const session = inbox.activeSession;
+      const key = event.key.toLowerCase();
+      if ((key === "w" || key === "ц") && session) { event.preventDefault(); void closeConversation(session); return; }
+      if ((key === "a" || key === "ф") && session) { event.preventDefault(); void inbox.assignActiveSession().catch(() => undefined); return; }
+      if ((key === "r" || key === "к") && session) { event.preventDefault(); void inbox.markActiveSessionRead().catch(() => undefined); return; }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
       const target = event.target as HTMLElement;
-      const isInput =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT" ||
-        target.isContentEditable;
-
-      // Alt+W — закрыть диалог
-      if (event.altKey && event.key === "w") {
-        event.preventDefault();
-        void closeActiveSession();
-        return;
-      }
-
-      // Alt+A — забрать чат
-      if (event.altKey && event.key === "a") {
-        event.preventDefault();
-        void assignActiveSession();
-        return;
-      }
-
-      // Alt+R — пометить прочитанным
-      if (event.altKey && event.key === "r") {
-        event.preventDefault();
-        void markActiveSessionRead();
-        return;
-      }
-
-      // Не обрабатываем навигацию, если фокус в инпуте
-      if (isInput) {
-        return;
-      }
-
-      // Alt+ArrowDown — следующий чат
-      if (event.altKey && event.key === "ArrowDown") {
-        event.preventDefault();
-        navigateSession(1);
-        return;
-      }
-
-      // Alt+ArrowUp — предыдущий чат
-      if (event.altKey && event.key === "ArrowUp") {
-        event.preventDefault();
-        navigateSession(-1);
-        return;
-      }
-
-      // Escape — сбросить поиск по сообщениям
-      if (event.key === "Escape") {
-        useInboxStore.getState().clearMessageSearch();
-        return;
-      }
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+      event.preventDefault();
+      const ordered = groupConversations(inbox.sessions, { filter: inbox.filter, query: inbox.searchQuery, me: useAuthStore.getState().operator?.id }).flatMap(group => group.items);
+      if (!ordered.length) return;
+      const index = ordered.findIndex(item => item.id === session?.id);
+      const next = ordered[(index + (event.key === "ArrowDown" ? 1 : -1) + ordered.length) % ordered.length];
+      if (next) pickConversation(next);
     }
-
-    function navigateSession(direction: 1 | -1) {
-      if (sessions.length === 0) {
-        return;
-      }
-
-      const currentIndex = sessions.findIndex(
-        (s) => s.id === activeSession?.id
-      );
-
-      let nextIndex = currentIndex + direction;
-
-      if (nextIndex < 0) {
-        nextIndex = sessions.length - 1;
-      }
-
-      if (nextIndex >= sessions.length) {
-        nextIndex = 0;
-      }
-
-      setActiveSession(sessions[nextIndex]);
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [
-    sessions,
-    activeSession,
-    setActiveSession,
-    closeActiveSession,
-    assignActiveSession,
-    markActiveSessionRead,
-  ]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 }

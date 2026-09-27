@@ -12,6 +12,8 @@ export interface ChatSession {
   visitor_name: string | null;
   visitor_email: string | null;
   visitor_phone: string | null;
+  contact_revision?: number;
+  form_data?: Record<string,unknown> | null;
   status: ChatSessionStatus | string;
   operator_id: string | null;
   user_agent: string | null;
@@ -81,4 +83,6 @@ export interface ChatMessage {
   reply_to_message?: string | null;
   reply_to_sender?: string | null;  
   isPending?: boolean;
+  client_message_id?: string;
+  sendError?: string;
 }

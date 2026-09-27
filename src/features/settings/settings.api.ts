@@ -1,4 +1,5 @@
-import { api, API_BASE } from "@/lib/api";
+import { api } from "@/lib/api";
+import { toast } from "@/components/ui";
 
 /* ── Pre-chat form ── */
 
@@ -124,6 +125,13 @@ export interface WidgetConfig {
   page_rules: PageRule[];
   // 6.3 Identity
   identity_verification: boolean;
+  // Автоматические приглашения: одна общая настройка, по умолчанию выключена.
+  // Управляет приглашением от сервера, автооткрытием, триггерами, подсказкой и автосообщениями.
+  auto_invite_enabled: boolean;
+  auto_invite_delay: number;          // секунд на сайте до приглашения (15–3600)
+  auto_invite_message: string;
+  auto_invite_cooldown_hours: number; // пауза после отказа посетителя (1–720)
+  hidden_paths: string[];             // служебные разделы сайта без виджета
   _ab_variant?: string;
 }
 
@@ -153,9 +161,14 @@ export interface ABStats {
   count: number;
 }
 
-const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
+export const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
+  auto_invite_enabled: false,
+  auto_invite_delay: 60,
+  auto_invite_message: "Здравствуйте! Если появятся вопросы — напишите, мы на связи.",
+  auto_invite_cooldown_hours: 24,
+  hidden_paths: ["/admin", "/upload"],
   position: "bottom-right",
-  color: "#8b5cf6",
+  color: "#C15F3C",
   greeting: "Привет! Чем помочь?",
   header_title: "Онлайн-чат",
   avatar_url: null,
@@ -169,8 +182,8 @@ const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
   hide_on_mobile: false,
   custom_css: "",
   gradient_type: "solid",
-  gradient_from: "#8b5cf6",
-  gradient_to: "#ec4899",
+  gradient_from: "#C15F3C",
+  gradient_to: "#E0906B",
   gradient_angle: 135,
   theme: "light",
   custom_bg: "#ffffff",
@@ -233,18 +246,16 @@ const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
 };
 
 export async function getWidgetConfig(): Promise<WidgetConfig> {
-  try {
-    return await api<WidgetConfig>("/api/widget-settings/config");
-  } catch {
-    return DEFAULT_WIDGET_CONFIG;
-  }
+  return api<WidgetConfig>("/api/widget-settings/config");
 }
 
 export async function saveWidgetConfig(config: Partial<WidgetConfig>): Promise<WidgetConfig> {
-  const res = await api<{ ok: boolean; config: WidgetConfig }>("/api/widget-settings/config", {
+  const res = await api<{ ok: boolean; config: WidgetConfig; dropped?: string[] }>("/api/widget-settings/config", {
     method: "PUT",
     body: JSON.stringify(config),
   });
+  // Сервер сохраняет всё корректное; ошибочные поля возвращает к значениям по умолчанию и называет их.
+  if (res.dropped?.length) toast.warning("Часть настроек не сохранена", `Проверьте поля: ${res.dropped.join(", ")}. Остальное сохранено.`);
   return res.config;
 }
 
@@ -271,7 +282,7 @@ export interface BusinessHours {
   };
 }
 
-const DEFAULT_BUSINESS_HOURS: BusinessHours = {
+export const DEFAULT_BUSINESS_HOURS: BusinessHours = {
   enabled: false,
   timezone: "Europe/Moscow",
   offline_message: "Мы сейчас офлайн. Оставьте сообщение!",
@@ -287,11 +298,7 @@ const DEFAULT_BUSINESS_HOURS: BusinessHours = {
 };
 
 export async function getBusinessHours(): Promise<BusinessHours> {
-  try {
-    return await api<BusinessHours>("/api/widget-settings/business-hours");
-  } catch {
-    return DEFAULT_BUSINESS_HOURS;
-  }
+  return api<BusinessHours>("/api/widget-settings/business-hours");
 }
 
 export async function saveBusinessHours(hours: BusinessHours): Promise<BusinessHours> {
@@ -310,18 +317,14 @@ export interface DomainSettings {
   rate_limit: number; // requests per minute
 }
 
-const DEFAULT_DOMAINS: DomainSettings = {
+export const DEFAULT_DOMAINS: DomainSettings = {
   enabled: false,
   domains: [],
   rate_limit: 30,
 };
 
 export async function getDomainSettings(): Promise<DomainSettings> {
-  try {
-    return await api<DomainSettings>("/api/widget-settings/domains");
-  } catch {
-    return DEFAULT_DOMAINS;
-  }
+  return api<DomainSettings>("/api/widget-settings/domains");
 }
 
 export async function saveDomainSettings(domains: DomainSettings): Promise<DomainSettings> {
@@ -338,15 +341,7 @@ export async function uploadWidgetAvatar(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const token = localStorage.getItem("chat_token");
-  const res = await fetch(`${API_BASE}/api/widget-settings/avatar`, {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
-  });
-
-  if (!res.ok) throw new Error("Upload failed");
-  const data = await res.json();
+  const data = await api<{ avatar_url: string }>("/api/widget-settings/avatar", { method: "POST", body: formData });
   return data.avatar_url;
 }
 
@@ -376,5 +371,5 @@ export async function getOfflineLeads(): Promise<OfflineLead[]> {
 /* ── Embed code ── */
 
 export function getWidgetEmbedCode(apiBase: string): string {
-  return `<script src="${apiBase}/widget/widget.min.js" async></script>`;
+  return `<script src="${apiBase}/widget/widget.min.js?v=${encodeURIComponent(__APP_VERSION__)}" async></script>`;
 }

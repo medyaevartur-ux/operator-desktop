@@ -1,303 +1,33 @@
-import { useEffect, useState, useMemo } from "react";
-import { getOperators, deleteOperator, updateOperator } from "@/features/operators/operators.api";
+import { useEffect, useMemo, useState } from "react";
+import { Users, Plus, Search, MoreHorizontal, ShieldCheck, Pencil, UserX, BarChart3, RefreshCw } from "lucide-react";
+import * as Dropdown from "@radix-ui/react-dropdown-menu";
+import { getOperators, createOperator, updateOperator, deleteOperator, getOperatorActivity, type OperatorActivity } from "@/features/operators/operators.api";
 import { useAuthStore } from "@/store/auth.store";
-import { useNavigationStore } from "@/store/navigation.store";
+import { Avatar, Button, Input, Modal, Select, toast, useConfirm } from "@/components/ui";
+import { getSocket } from "@/lib/socket";
 import type { ChatOperator } from "@/types/operator";
-import {
-  ArrowLeft, Plus, Search, X, Filter,
-  CheckSquare, UserX,
-} from "lucide-react";
-import { Select, useConfirm, toast, Skeleton } from "@/components/ui";
-import { OperatorCard } from "./OperatorCard";
-import { OperatorModal } from "./OperatorModal";
 import s from "./OperatorsScreen.module.css";
-
-type StatusFilter = "all" | "online" | "away" | "dnd" | "offline";
-
-const STATUS_COLORS: Record<string, string> = {
-  online: "var(--status-online)",
-  away: "var(--status-away)",
-  dnd: "var(--status-dnd)",
-  offline: "var(--text-disabled)",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  all: "Все",
-  online: "Онлайн",
-  away: "Отошёл",
-  dnd: "Не беспокоить",
-  offline: "Офлайн",
-};
-
-const ROLE_OPTIONS = [
-  { value: "all", label: "Все роли" },
-  { value: "admin", label: "Админы" },
-  { value: "supervisor", label: "Супервайзеры" },
-  { value: "operator", label: "Операторы" },
-];
-
+const roles=[{value:"operator",label:"Оператор"},{value:"supervisor",label:"Руководитель команды"},{value:"admin",label:"Администратор"}];
+const status=(op:ChatOperator)=>!op.is_active?"Отключён":op.status==="dnd"?"Не беспокоить":op.status==="away"?"Отошёл":op.status==="online"&&op.is_online?"На связи":"Не в сети";
+const empty={name:"",email:"",password:"",role:"operator",max_concurrent_chats:5};
 export function OperatorsScreen() {
-  const [operators, setOperators] = useState<ChatOperator[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editOp, setEditOp] = useState<ChatOperator | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [roleFilter, setRoleFilter] = useState("all");
-
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkMode, setBulkMode] = useState(false);
-
-  const currentUser = useAuthStore((st) => st.operator);
-  const setScreen = useNavigationStore((st) => st.setScreen);
-  const { confirm } = useConfirm();
-
-  const load = async () => {
-    setLoading(true);
-    const data = await getOperators();
-    setOperators(data.filter((op) => op.is_active !== false));
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  /* ── Filtered list ── */
-  const filtered = useMemo(() => {
-    let result = operators;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (op) =>
-          (op.name ?? "").toLowerCase().includes(q) ||
-          (op.email ?? "").toLowerCase().includes(q),
-      );
-    }
-    if (statusFilter !== "all") {
-      result = result.filter((op) => op.status === statusFilter);
-    }
-    if (roleFilter !== "all") {
-      result = result.filter((op) => op.role === roleFilter);
-    }
-    return result;
-  }, [operators, searchQuery, statusFilter, roleFilter]);
-
-  /* ── Stats based on FILTERED (8.8) ── */
-  const stats = useMemo(() => {
-    const online = filtered.filter((o) => o.status === "online").length;
-    const away = filtered.filter((o) => o.status === "away").length;
-    const totalChats = filtered.reduce((a, o) => a + (o.current_chats_count ?? 0), 0);
-    return { online, away, total: filtered.length, totalChats };
-  }, [filtered]);
-
-  /* ── Bulk ── */
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filtered.map((o) => o.id)));
-  };
-
-  const bulkDeactivate = async () => {
-    if (selectedIds.size === 0) return;
-    if (selectedIds.has(currentUser?.id ?? "")) {
-      toast.error("Нельзя деактивировать себя");
-      return;
-    }
-    const ok = await confirm({
-      title: "Деактивировать операторов?",
-      message: `Будет деактивировано ${selectedIds.size} операторов. Их чаты станут неназначенными.`,
-      confirmText: "Деактивировать",
-      cancelText: "Отмена",
-      danger: true,
-    });
-    if (!ok) return;
-    for (const id of selectedIds) {
-      await updateOperator(id, { is_active: false });
-    }
-    setSelectedIds(new Set());
-    setBulkMode(false);
-    void load();
-  };
-
-  const modalOpen = !!(editOp || isCreating);
-
-  return (
-    <div className={s.screen}>
-      {/* ── Header ── */}
-      <div className={s.header}>
-        <button className={s.backBtn} onClick={() => setScreen("inbox")}>
-          <ArrowLeft style={{ width: 18, height: 18 }} />
-        </button>
-
-        <div className={s.headerInfo}>
-          <h1 className={s.headerTitle}>Операторы</h1>
-          <span className={s.headerSub}>
-            {stats.online} онлайн · {stats.away} отошли · {stats.totalChats} активных чатов
-          </span>
-        </div>
-
-        <div className={s.headerActions}>
-          <button
-            className={`${s.toggleBtn} ${bulkMode ? s.toggleBtnActive : s.toggleBtnDefault}`}
-            onClick={() => { setBulkMode((p) => !p); setSelectedIds(new Set()); }}
-          >
-            <CheckSquare style={{ width: 15, height: 15 }} />
-            {bulkMode ? "Отмена" : "Выбрать"}
-          </button>
-
-          <button
-            className={s.addBtn}
-            onClick={() => { setIsCreating(true); setEditOp(null); }}
-          >
-            <Plus style={{ width: 16, height: 16 }} />
-            Добавить
-          </button>
-        </div>
-      </div>
-
-      {/* ── Filters ── */}
-      <div className={s.filters}>
-        {/* Search */}
-        <div className={s.searchWrap}>
-          <Search className={s.searchIcon} />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Поиск по имени или email..."
-            className={s.searchInput}
-          />
-          {searchQuery && (
-            <button className={s.searchClear} onClick={() => setSearchQuery("")}>
-              <X style={{ width: 14, height: 14 }} />
-            </button>
-          )}
-        </div>
-
-        {/* Status pills */}
-        <div className={s.statusFilters}>
-          <Filter className={s.filterIcon} />
-          {(["all", "online", "away", "dnd", "offline"] as StatusFilter[]).map((key) => (
-            <button
-              key={key}
-              className={`${s.statusPill} ${statusFilter === key ? s.statusPillActive : ""}`}
-              onClick={() => setStatusFilter(key)}
-            >
-              {key !== "all" && (
-                <span
-                  className={s.statusPillDot}
-                  style={{ background: STATUS_COLORS[key] }}
-                />
-              )}
-              {STATUS_LABELS[key]}
-            </button>
-          ))}
-        </div>
-
-        {/* Role — Radix Select */}
-        <Select
-          value={roleFilter}
-          onChange={(v) => setRoleFilter(v)}
-          options={ROLE_OPTIONS}
-          placeholder="Все роли"
-        />
-      </div>
-
-      {/* ── Bulk bar ── */}
-      {bulkMode && selectedIds.size > 0 && (
-        <div className={s.bulkBar}>
-          <span>Выбрано: {selectedIds.size}</span>
-          <button className={s.bulkDeactivate} onClick={() => void bulkDeactivate()}>
-            <UserX style={{ width: 14, height: 14 }} />
-            Деактивировать
-          </button>
-          <button className={s.bulkSelectAll} onClick={selectAll}>
-            {selectedIds.size === filtered.length ? "Снять все" : "Выбрать все"}
-          </button>
-        </div>
-      )}
-
-      {/* ── List ── */}
-      <div className={`${s.list} scrollbar-thin`}>
-        {loading &&
-          Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className={s.skeletonCard}>
-              <Skeleton circle height={44} />
-              <div className={s.skeletonBody}>
-                <Skeleton text height={14} width="45%" />
-                <Skeleton text height={12} width="70%" />
-                <Skeleton text height={10} width="30%" />
-              </div>
-            </div>
-          ))}
-
-        {!loading && filtered.length === 0 && (
-          <div className={s.empty}>
-            <div className={s.emptyIcon}>
-              <UserX style={{ width: 26, height: 26 }} />
-            </div>
-            <div className={s.emptyTitle}>
-              {searchQuery || statusFilter !== "all" || roleFilter !== "all"
-                ? "Ничего не найдено"
-                : "Нет операторов"}
-            </div>
-            <div className={s.emptyDesc}>
-              {searchQuery || statusFilter !== "all" || roleFilter !== "all"
-                ? "Измените фильтры или поисковый запрос"
-                : "Добавьте первого оператора кнопкой выше"}
-            </div>
-          </div>
-        )}
-
-        {filtered.map((op) => (
-          <OperatorCard
-            key={op.id}
-            op={op}
-            isSelf={op.id === currentUser?.id}
-            bulkMode={bulkMode}
-            isSelected={selectedIds.has(op.id)}
-            onToggleSelect={() => toggleSelect(op.id)}
-            onEdit={() => { setEditOp(op); setIsCreating(false); }}
-            onDelete={async () => {
-              if (op.id === currentUser?.id) return;
-              const ok = await confirm({
-                title: "Удалить оператора?",
-                message: `Оператор «${op.name}» будет удалён. Все его чаты станут неназначенными.`,
-                confirmText: "Удалить",
-                cancelText: "Отмена",
-                danger: true,
-              });
-              if (!ok) return;
-              await deleteOperator(op.id);
-              void load();
-            }}
-          />
-        ))}
-      </div>
-
-      {/* ── Modal ── */}
-      <OperatorModal
-        operator={isCreating ? null : editOp}
-        open={modalOpen}
-        onClose={() => { setEditOp(null); setIsCreating(false); }}
-        onSaved={() => {
-          setEditOp(null);
-          setIsCreating(false);
-          void load();
-          if (editOp?.id === currentUser?.id) {
-            void useAuthStore.getState().checkAuth();
-          }
-        }}
-      />
-    </div>
-  );
+  const own=useAuthStore(state=>state.operator),admin=own?.role==="admin";
+  const [list,setList]=useState<ChatOperator[]>([]),[query,setQuery]=useState(""),[filter,setFilter]=useState("active"),[loading,setLoading]=useState(true),[error,setError]=useState("");
+  const [editing,setEditing]=useState<ChatOperator|null>(null),[open,setOpen]=useState(false),[form,setForm]=useState(empty),[busy,setBusy]=useState(false),[formError,setFormError]=useState("");
+  const [selected,setSelected]=useState<string[]>([]),[activity,setActivity]=useState<OperatorActivity|null>(null),[activityName,setActivityName]=useState("");
+  const {confirm}=useConfirm();
+  const load=async()=>{try{setList(await getOperators());setError("")}catch{setError("Не удалось обновить список команды")}finally{setLoading(false)}};
+  useEffect(()=>{void load();const socket=getSocket();socket.on("operator_status_changed",load);socket.on("operator_updated",load);return()=>{socket.off("operator_status_changed",load);socket.off("operator_updated",load)}},[]);
+  const filtered=useMemo(()=>list.filter(op=>(filter==="all"||filter==="active"&&op.is_active||filter==="disabled"&&!op.is_active)&&[op.name,op.email].some(value=>value?.toLowerCase().includes(query.toLowerCase()))),[list,filter,query]);
+  const edit=(op:ChatOperator|null)=>{setEditing(op);setForm(op?{name:op.name||"",email:op.email||"",password:"",role:op.role||"operator",max_concurrent_chats:op.max_concurrent_chats||5}:empty);setFormError("");setOpen(true)};
+  const save=async()=>{setBusy(true);setFormError("");try{if(editing){const changed:Record<string,unknown>={};for(const key of ['name','email','role','max_concurrent_chats'] as const)if(form[key]!==editing[key])changed[key]=form[key];if(form.password)changed.password=form.password;await updateOperator(editing.id,changed)}else await createOperator(form);setOpen(false);await load();toast.success(editing?"Сотрудник обновлён":"Сотрудник добавлен")}catch(failure){setFormError(failure instanceof Error?failure.message:"Не удалось сохранить сотрудника")}finally{setBusy(false)}};
+  const deactivate=async(ids:string[])=>{if(!await confirm({title:ids.length>1?`Отключить сотрудников (${ids.length})?`:"Отключить сотрудника?",message:"Вход и уведомления будут отозваны. Переписки сохранятся; открытые диалоги вернутся в очередь.",confirmText:"Отключить",danger:true}))return;setBusy(true);const failures:string[]=[];for(const id of ids){try{await deleteOperator(id)}catch(failure){failures.push(failure instanceof Error?failure.message:"Ошибка")}}setBusy(false);setSelected([]);await load();if(failures.length)toast.error(failures.join("; "));else toast.success("Доступ отключён")};
+  return <section className={s.page}><header className={s.header}><div><h1>Команда</h1><p>Доступность, нагрузка и права сотрудников.</p></div>{admin&&<Button icon={<Plus size={16}/>} onClick={()=>edit(null)}>Добавить сотрудника</Button>}</header>
+    <div className={s.metrics}><article><Users size={20}/><strong>{list.filter(op=>op.is_active).length}</strong><span>в команде</span></article><article><i/><strong>{list.filter(op=>op.is_active&&op.is_online&&op.status==="online").length}</strong><span>на связи</span></article><article><ShieldCheck size={20}/><strong>{list.filter(op=>op.is_active&&op.role==="admin").length}</strong><span>администраторов</span></article></div>
+    <div className={s.toolbar}><div className={s.search}><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Имя или почта сотрудника" aria-label="Поиск сотрудников"/></div><Select value={filter} onChange={setFilter} options={[{value:"active",label:"Активные"},{value:"all",label:"Вся команда"},{value:"disabled",label:"Отключённые"}]}/><button className={s.icon} aria-label="Обновить команду" onClick={()=>void load()}><RefreshCw size={17}/></button></div>
+    {!!selected.length&&<div className={s.selected}>Выбрано {selected.length}<Button variant="dangerGhost" size="sm" disabled={busy} onClick={()=>void deactivate(selected)}>Отключить доступ</Button><button onClick={()=>setSelected([])}>Снять выбор</button></div>}{error&&<p className={s.error} role="alert">{error}</p>}
+    <div className={s.list}>{filtered.map(op=><article className={s.person} key={op.id}>{admin&&op.id!==own?.id&&op.is_active&&<input type="checkbox" aria-label={`Выбрать ${op.name}`} checked={selected.includes(op.id)} onChange={e=>setSelected(previous=>e.target.checked?[...previous,op.id]:previous.filter(id=>id!==op.id))}/>}<Avatar name={op.name||op.email||"Оператор"} size="lg"/><div className={s.identity}><h2>{op.name}{op.id===own?.id&&<small>Вы</small>}</h2><p>{op.email}</p><span>{roles.find(role=>role.value===op.role)?.label||"Оператор"}</span></div><div className={s.availability} data-status={op.is_active?op.status:"offline"}><i/>{status(op)}</div><div className={s.load}><strong>{op.current_chats_count||0}<span> / {op.max_concurrent_chats||5}</span></strong><small>активных чатов</small><div><i style={{width:`${Math.min(100,(op.current_chats_count||0)/(op.max_concurrent_chats||5)*100)}%`}}/></div></div><Dropdown.Root><Dropdown.Trigger asChild><button className={s.icon} aria-label={`Действия: ${op.name}`}><MoreHorizontal size={19}/></button></Dropdown.Trigger><Dropdown.Portal><Dropdown.Content className={s.menu} sideOffset={6} align="end">{admin&&<Dropdown.Item onSelect={()=>edit(op)}><Pencil size={15}/>Изменить</Dropdown.Item>}<Dropdown.Item onSelect={()=>void getOperatorActivity(op.id).then(value=>{setActivity(value);setActivityName(op.name||"Оператор")}).catch(error=>toast.error(error.message))}><BarChart3 size={15}/>Активность</Dropdown.Item>{admin&&(op.is_active?<Dropdown.Item className={s.danger} onSelect={()=>void deactivate([op.id])}><UserX size={15}/>Отключить доступ</Dropdown.Item>:<Dropdown.Item onSelect={()=>void updateOperator(op.id,{is_active:true}).then(load).catch(error=>toast.error(error.message))}>Восстановить доступ</Dropdown.Item>)}</Dropdown.Content></Dropdown.Portal></Dropdown.Root></article>)}{!filtered.length&&<div className={s.empty}><Users size={30}/><h2>{loading?"Загружаем команду…":query?"Сотрудник не найден":"В этом списке пока никого нет"}</h2></div>}</div>
+    <Modal open={open} onClose={()=>!busy&&setOpen(false)} title={editing?"Изменить сотрудника":"Новый сотрудник"} width={560} footer={<><Button variant="secondary" disabled={busy} onClick={()=>setOpen(false)}>Отмена</Button><Button disabled={busy||!form.name.trim()||!form.email.trim()||(!editing&&form.password.length<8)} onClick={()=>void save()}>{busy?"Сохраняем…":"Сохранить"}</Button></>}><div className={s.form}><Input label="Имя" value={form.name} maxLength={100} onChange={e=>setForm({...form,name:e.target.value})}/><Input type="email" label="Почта для входа" value={form.email} maxLength={254} autoComplete="off" onChange={e=>setForm({...form,email:e.target.value})}/><div className={s.row}><Select label="Роль" value={form.role} options={roles} onChange={role=>setForm({...form,role})}/><Input label="Одновременно чатов" type="number" min={1} max={100} value={form.max_concurrent_chats} onChange={e=>setForm({...form,max_concurrent_chats:Number(e.target.value)})}/></div><Input type="password" autoComplete="new-password" label={editing?"Новый пароль (если нужно изменить)":"Пароль"} value={form.password} minLength={8} maxLength={128} onChange={e=>setForm({...form,password:e.target.value})}/><small>Смена роли, почты или пароля завершит прежние сеансы сотрудника.</small>{formError&&<p className={s.error} role="alert">{formError}</p>}</div></Modal>
+    <Modal open={!!activity} onClose={()=>setActivity(null)} title={`${activityName} · последние 30 дней`} width={650}>{activity&&<div className={s.activity}><div className={s.metrics}><article><strong>{activity.summary.chats_handled}</strong><span>диалогов</span></article><article><strong>{activity.summary.messages_sent}</strong><span>сообщений</span></article></div><h3>Последние диалоги</h3>{activity.recent_sessions.map(session=><div key={session.id}><span>{session.visitor_name||"Посетитель"}</span><small>{new Date(session.created_at).toLocaleDateString("ru-RU")}</small><strong>{session.operator_messages} сообщ.</strong></div>)}{!activity.recent_sessions.length&&<p>В этом периоде пока нет диалогов.</p>}</div>}</Modal>
+  </section>;
 }

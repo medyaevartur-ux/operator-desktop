@@ -16,9 +16,7 @@ pub fn icon_for_count(count: u32) -> Option<tauri::image::Image<'static>> {
     }
     let (w, h) = rgba.dimensions();
     let raw = rgba.into_raw();
-    // Tauri Image::new требует 'static — отдадим Boxed.
-    let leaked: &'static [u8] = Box::leak(raw.into_boxed_slice());
-    Some(tauri::image::Image::new(leaked, w, h))
+    Some(tauri::image::Image::new_owned(raw, w, h))
 }
 
 #[cfg(desktop)]

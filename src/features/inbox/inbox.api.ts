@@ -31,10 +31,10 @@ export async function blockVisitorBySession(visitorId: string) {
   });
 }
 
-export async function transferOperatorToSession(sessionId: string, operatorId: string, fromOperatorId?: string) {
+export async function transferOperatorToSession(sessionId: string, operatorId: string, fromOperatorId?: string, comment?: string) {
   return api(`/api/sessions/${sessionId}/transfer`, {
     method: "PATCH",
-    body: JSON.stringify({ operator_id: operatorId, from_operator_id: fromOperatorId }),
+    body: JSON.stringify({ operator_id: operatorId, from_operator_id: fromOperatorId, comment }),
   });
 }
 
@@ -58,12 +58,18 @@ export async function markChatSessionUnread(sessionId: string) {
 export async function getChatMessages(sessionId: string): Promise<ChatMessage[]> {
   return api<ChatMessage[]>(`/api/sessions/${sessionId}/messages`);
 }
+export interface MessagePage { messages: ChatMessage[]; next_cursor: string | null }
+export async function getMessagePage(sessionId: string, cursor?: string | null, around?: string): Promise<MessagePage> {
+  return api(`/api/sessions/${sessionId}/messages?paged=1&limit=80${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}${around ? `&around=${encodeURIComponent(around)}` : ""}`);
+}
 
 export async function sendOperatorMessage(params: {
   sessionId: string;
   operatorId: string;
   message: string;
   replyToId?: string;
+  clientId: string;
+  isInternal?: boolean;
 }): Promise<ChatMessage> {
   return api<ChatMessage>(`/api/sessions/${params.sessionId}/messages`, {
     method: "POST",
@@ -71,13 +77,18 @@ export async function sendOperatorMessage(params: {
       operator_id: params.operatorId,
       message: params.message,
       reply_to_id: params.replyToId || undefined,
+      client_message_id: params.clientId,
+      is_internal: !!params.isInternal,
     }),
   });
 }
 
 export async function searchMessages(query: string): Promise<ChatMessage[]> {
-  return api<ChatMessage[]>(`/api/messages/search?q=${encodeURIComponent(query)}`);
+  const result = await searchMessagePage(query);
+  return result.messages;
 }
+export const searchMessagePage = (query: string, page = 1) =>
+  api<{ messages: ChatMessage[]; total: number; page: number; pages: number }>(`/api/messages/search?q=${encodeURIComponent(query)}&page=${page}`);
 
 // === Notes ===
 
@@ -157,29 +168,16 @@ export async function getSessionActivityLogs(sessionId: string) {
 export async function uploadMessageImage(
   sessionId: string,
   operatorId: string,
-  file: File
+  file: File,
+  clientId: string = crypto.randomUUID(),
+  isInternal = false,
 ): Promise<any> {
   const formData = new FormData();
   formData.append("operator_id", operatorId);
+  formData.append("is_internal", String(isInternal));
   formData.append("file", file);
 
-  const token = localStorage.getItem("chat_token");
-  const base = import.meta.env.VITE_API_URL || "http://localhost:3010";
-
-  const res = await fetch(`${base}/api/sessions/${sessionId}/messages/upload`, {
-    method: "POST",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Upload failed" }));
-    throw new Error(err.error || "Upload failed");
-  }
-
-  return res.json();
+  return api<ChatMessage>(`/api/sessions/${sessionId}/messages/upload`, { method: "POST", headers: { "X-Client-Message-Id": clientId }, body: formData });
 }
 
 // === Reactions ===
@@ -337,3 +335,8 @@ export async function acceptInvitation(id: string) {
 export async function declineInvitation(id: string) {
   return api(`/api/invitations/${id}/decline`, { method: "PATCH" });
 }
+
+export async function updateContact(sessionId: string, contact: {visitor_name:string|null;visitor_email:string|null;visitor_phone:string|null;contact_revision:number}) {
+  return api<ChatSession>(`/api/sessions/${sessionId}/contact`,{method:"PATCH",body:JSON.stringify(contact)});
+}
+export const getChatSession = (id: string) => api<ChatSession>(`/api/sessions/${id}`);

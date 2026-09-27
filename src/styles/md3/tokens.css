@@ -108,26 +108,13 @@
   --md-sys-shape-corner-extra-large-increased: 32px;
   --md-sys-shape-corner-full: 9999px;
 
-  /* ─── Soft UI elevation (мягкие «объёмные» тени: highlight сверху-слева + тень снизу-справа) ─── */
-  /* Цвета подсветки/тени — тема-зависимые (см. ниже data-theme) */
-  --soft-hi: rgba(255, 255, 255, 0.75);
-  --soft-lo: rgba(124, 100, 64, 0.20);
-
+  /* ─── Elevation: тихие тени из tokens.css (объёмный soft-UI убран) ─── */
   --md-sys-elevation-level0: none;
-  /* Flat */
-  --md-sys-elevation-level1: 0 1px 2px var(--soft-lo);
-  /* Hover */
-  --md-sys-elevation-level2: -2px -2px 5px var(--soft-hi), 3px 3px 8px var(--soft-lo);
-  /* Raised */
-  --md-sys-elevation-level3: -4px -4px 9px var(--soft-hi), 5px 5px 13px var(--soft-lo);
-  /* Modal */
-  --md-sys-elevation-level4: -2px -2px 6px var(--soft-hi), 10px 16px 32px var(--soft-lo);
-  /* Popover */
-  --md-sys-elevation-level5: -3px -3px 8px var(--soft-hi), 16px 20px 44px var(--soft-lo);
-  /* Утопленный (inset) и raised-алиасы для нейморфных контролов */
-  --soft-inset: inset 2px 2px 5px var(--soft-lo), inset -2px -2px 5px var(--soft-hi);
-  --soft-raised: -4px -4px 9px var(--soft-hi), 5px 5px 13px var(--soft-lo);
-  --soft-pressed: inset 3px 3px 7px var(--soft-lo), inset -2px -2px 5px var(--soft-hi);
+  --md-sys-elevation-level1: var(--shadow-xs);
+  --md-sys-elevation-level2: var(--shadow-sm);
+  --md-sys-elevation-level3: var(--shadow-md);
+  --md-sys-elevation-level4: var(--shadow-lg);
+  --md-sys-elevation-level5: var(--shadow-xl);
 
   /* ─── Толщина бордеров ─── */
   --border-1: 1px;
@@ -170,14 +157,4 @@
   --md-sys-state-focus-opacity: 0.10;
   --md-sys-state-pressed-opacity: 0.10;
   --md-sys-state-dragged-opacity: 0.16;
-}
-
-/* ─── Soft UI: тема-зависимые highlight/shadow ─── */
-:root[data-theme="dark"] {
-  --soft-hi: rgba(255, 255, 255, 0.045);
-  --soft-lo: rgba(0, 0, 0, 0.55);
-}
-:root[data-theme="fairytale"] {
-  --soft-hi: rgba(255, 255, 255, 0.8);
-  --soft-lo: rgba(146, 90, 20, 0.22);
 }

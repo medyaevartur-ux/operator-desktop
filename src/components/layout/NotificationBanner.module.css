@@ -1,136 +1,49 @@
-/* ═══ NotificationBanner — висящая плашка о непрочитанных чатах ═══ */
-
-.banner {
-  position: fixed;
-  top: var(--space-4);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-
-  width: min(560px, calc(100vw - var(--space-6)));
-  padding: var(--space-3) var(--space-4);
-
-  background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--soft-raised);
-}
-
-.badge {
+/* Строка о новых сообщениях: в потоке над экраном, ничего не перекрывает. */
+.strip {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--accent);
-  color: var(--text-on-accent);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-extrabold);
-  box-shadow: 0 0 0 4px var(--accent-muted);
-}
-
-.body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.title {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-extrabold);
-  color: var(--text-primary);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.message {
-  margin-top: 2px;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.more {
-  color: var(--text-muted);
-  font-weight: var(--weight-extrabold);
-}
-
-.actions {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.openBtn,
-.dismissBtn {
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-extrabold);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-md);
-  transition:
-    filter var(--duration-fast) var(--ease-default),
-    background var(--duration-fast) var(--ease-default),
-    box-shadow var(--duration-fast) var(--ease-default),
-    transform var(--duration-fast) var(--ease-default);
-}
-
-.openBtn {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  box-shadow: var(--shadow-xs);
-}
-
-.openBtn:hover {
-  background: var(--accent-hover);
-  box-shadow: var(--md-sys-elevation-level1);
-  transform: translateY(-1px);
-}
-
-.openBtn:active {
-  transform: translateY(0);
-  box-shadow: var(--soft-pressed);
-}
-
-.openBtn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--border-focus);
-}
-
-.dismissBtn {
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-2);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
 }
 
-.dismissBtn:hover {
-  background: var(--surface-3);
-  color: var(--text-primary);
+.inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(var(--thread-max) + 48px);
+  margin: 0 auto;
+  padding: 9px 24px;
 }
 
-.dismissBtn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--border-focus);
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 13.5px;
+  white-space: nowrap;
 }
+.text strong { flex-shrink: 0; font-weight: var(--weight-semibold); color: var(--text-primary); }
+.text span { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+.text em { flex-shrink: 0; font-style: normal; font-size: 12.5px; color: var(--text-muted); }
 
-@media (max-width: 640px) {
-  .banner {
-    flex-wrap: wrap;
-  }
+.close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+}
+.close:hover { background: var(--surface-hover); color: var(--text-primary); }
+.close svg { width: 16px; height: 16px; }
 
-  .actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
+@media (max-width: 767px) {
+  .inner { padding: 8px 12px 8px 16px; gap: 10px; }
+  .text { flex-direction: column; gap: 1px; }
+  .text span, .text strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .close { width: 40px; height: 40px; }
 }

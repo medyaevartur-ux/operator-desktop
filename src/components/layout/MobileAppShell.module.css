@@ -1,0 +1,103 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--surface-bg);
+}
+
+.appBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: calc(56px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 12px 0 16px;
+  flex-shrink: 0;
+  background: var(--surface-bg);
+}
+.logo { width: 26px; height: 26px; }
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.back { display: grid; place-items: center; width: 44px; height: 44px; margin-left: -10px; border-radius: var(--radius-full); color: var(--text-primary); }
+.back svg { width: 22px; height: 22px; }
+.back:active { background: var(--surface-pressed); }
+.offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  background: var(--error-soft);
+  color: var(--error);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+}
+.offline svg { width: 15px; height: 15px; }
+
+.content { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.content > * { min-height: 100%; }
+/* Название раздела уже в шапке — в самом экране остаётся только пояснение. */
+.content header h1 { display: none; }
+
+.conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  flex-shrink: 0;
+  padding: 6px 8px max(8px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-bg-deep);
+}
+.tabs button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 52px;
+  padding-top: 4px;
+  border-radius: var(--radius-lg);
+  font-size: 11.5px;
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+.tabs button:active { transform: none; background: var(--surface-pressed); }
+.tabs button[aria-current="page"] { color: var(--text-primary); }
+.tabIcon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 30px;
+  border-radius: var(--radius-full);
+}
+.tabIcon svg { width: 21px; height: 21px; }
+.tabs button[aria-current="page"] .tabIcon { background: var(--surface-3); }
+.tabBadge {
+  position: absolute;
+  top: -2px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--surface-bg-deep);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 10.5px;
+  font-weight: var(--weight-semibold);
+  line-height: 14px;
+  text-align: center;
+}
+.tabBadge[data-kind="queue"] { background: var(--warning); }

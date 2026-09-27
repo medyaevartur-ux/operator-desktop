@@ -7,14 +7,17 @@ use tauri::{
 
 #[cfg(desktop)]
 mod tray_icon;
+mod session_vault;
+#[cfg(windows)]
+mod native_notifications;
 
-#[cfg(not(desktop))]
-use tauri::Manager;
 
 // ═══ IPC Commands ═══
 
 #[tauri::command]
 fn set_badge_count(app: tauri::AppHandle, count: u32) {
+    #[cfg(windows)]
+    native_notifications::set_badge(&app,count);
     #[cfg(desktop)]
     {
         if let Some(tray) = app.tray_by_id("main-tray") {
@@ -82,27 +85,9 @@ fn set_close_to_tray(app: tauri::AppHandle, value: bool) {
     }
 }
 
-#[tauri::command]
-fn notify_offline(api_url: String, operator_id: String) {
-    #[cfg(desktop)]
-    {
-        std::thread::spawn(move || {
-            let client = reqwest::blocking::Client::new();
-            let _ = client
-                .post(&format!("{}/api/operators/{}/online", api_url, operator_id))
-                .json(&serde_json::json!({ "is_online": false }))
-                .timeout(std::time::Duration::from_secs(3))
-                .send();
-        });
-    }
-    #[cfg(not(desktop))]
-    {
-        let _ = (api_url, operator_id);
-    }
-}
-
 // ═══ App State ═══
 
+#[cfg(desktop)]
 struct AppSettings {
     close_to_tray: std::sync::atomic::AtomicBool,
 }
@@ -111,27 +96,47 @@ struct AppSettings {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show(); let _ = window.unminimize(); let _ = window.set_focus();
+            }
+        }));
+    let builder = builder
+        .plugin(session_vault::plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
-        .manage(AppSettings {
-            close_to_tray: std::sync::atomic::AtomicBool::new(true),
-        })
         .invoke_handler(tauri::generate_handler![
             set_badge_count,
             get_close_to_tray,
             set_close_to_tray,
-            notify_offline,
+            session_vault::auth_save_session,
+            session_vault::auth_get_session,
+            session_vault::auth_clear_session,
+            session_vault::set_native_chat_context,
+            session_vault::show_chat_notification,
+            session_vault::read_native_replies,
+            session_vault::ack_native_reply,
+            session_vault::take_native_notification,
+            session_vault::notification_diagnostics,
+            session_vault::open_system_settings,
+            session_vault::android_update_check,
+            session_vault::android_update_download,
+            session_vault::android_update_install,
+            session_vault::android_update_cancel,
         ]);
 
     #[cfg(desktop)]
-    {
-        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
-    }
+    let builder=builder.manage(AppSettings {close_to_tray:std::sync::atomic::AtomicBool::new(true)})
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent,Some(vec!["--minimized"])));
 
     builder
         .setup(|_app| {
+            #[cfg(windows)]
+            if native_notifications::initialize(_app.handle()).is_err() { eprintln!("[native] Notifications registration unavailable"); }
             #[cfg(desktop)]
             {
                 let app = _app;
@@ -143,7 +148,7 @@ pub fn run() {
                 let mi_quit = MenuItem::with_id(app, "tray-quit", "Закрыть полностью", true, None::<&str>)?;
                 let tray_menu = Menu::with_items(app, &[&mi_open, &mi_hide, &sep, &mi_quit])?;
 
-                let _tray = TrayIconBuilder::new()
+                let _tray = TrayIconBuilder::with_id("main-tray")
                     .icon(app.default_window_icon().unwrap().clone())
                     .tooltip("Живая Сказка — Оператор")
                     .icon_as_template(false)
@@ -190,6 +195,10 @@ pub fn run() {
                         }
                     })
                     .build(app)?;
+
+                if std::env::args().any(|arg| arg == "--minimized" || arg == "--toast-activated") {
+                    if let Some(window) = app.get_webview_window("main") { let _ = window.hide(); }
+                }
 
                 let app_handle = app.handle().clone();
                 if let Some(window) = app.get_webview_window("main") {

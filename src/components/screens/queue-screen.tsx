@@ -1,267 +1,29 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Clock, UserPlus, AlertTriangle, Inbox, Volume2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Clock, Inbox, ArrowRight, RefreshCw, Flag } from "lucide-react";
+import { getQueueSessions, assignSession } from "@/features/inbox/inbox.api";
 import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
+import { useDeliveryStore } from "@/store/delivery.store";
+import { useNavigationStore } from "@/store/navigation.store";
 import { getSocket } from "@/lib/socket";
-import { getQueueSessions, assignSession } from "@/features/inbox/inbox.api";
-import { Avatar } from "@/components/ui";
 import { getSessionDisplayName } from "@/utils/avatar";
-import { useNotificationStore } from "@/store/notification.store";
+import { Avatar, Button, Select, toast } from "@/components/ui";
 import type { ChatSession } from "@/types/chat";
 import s from "./QueueScreen.module.css";
-
-
-/* ── Timer helpers ── */
-
-function getWaitSeconds(queuedAt: string | null): number {
-  if (!queuedAt) return 0;
-  return Math.max(0, Math.floor((Date.now() - new Date(queuedAt).getTime()) / 1000));
-}
-
-function formatWait(seconds: number): string {
-  if (seconds < 60) return `${seconds}с`;
-  const min = Math.floor(seconds / 60);
-  const sec = seconds % 60;
-  if (min < 60) return `${min}м ${sec.toString().padStart(2, "0")}с`;
-  const hr = Math.floor(min / 60);
-  return `${hr}ч ${(min % 60).toString().padStart(2, "0")}м`;
-}
-
-function getWaitColor(seconds: number): string {
-  if (seconds < 60) return "var(--status-online, #22c55e)";
-  if (seconds < 180) return "var(--status-away, #f59e0b)";
-  if (seconds < 300) return "#f97316";
-  return "#ef4444";
-}
-
-function getWaitLevel(seconds: number): "green" | "yellow" | "orange" | "red" {
-  if (seconds < 60) return "green";
-  if (seconds < 180) return "yellow";
-  if (seconds < 300) return "orange";
-  return "red";
-}
-
-/* ── QueueCard ── */
-
-function QueueCard({
-  session,
-  onAssign,
-  isAssigning,
-}: {
-  session: ChatSession;
-  onAssign: (id: string) => void;
-  isAssigning: boolean;
-}) {
-  const [waitSec, setWaitSec] = useState(() => getWaitSeconds(session.queued_at));
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setWaitSec(getWaitSeconds(session.queued_at));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [session.queued_at]);
-
-  const level = getWaitLevel(waitSec);
-  const displayName = getSessionDisplayName(session.visitor_name, session.visitor_id);
-  const priority = session.priority || "normal";
-  const isVip = session.is_vip === true;
-  const totalVisits = session.total_visitor_sessions ?? session.visit_count ?? 1;
-
-  return (
-    <div
-      className={`${s.card} ${
-        level === "red" ? s.cardRed :
-        level === "orange" ? s.cardOrange :
-        level === "yellow" ? s.cardYellow : s.cardGreen
-      } ${
-        priority === "urgent" ? s.cardPriorityUrgent :
-        priority === "high" ? s.cardPriorityHigh : ""
-      }`}
-    >
-      <div className={s.cardTop}>
-        <div className={s.cardUser}>
-          <Avatar name={displayName} size="md" />
-          <div>
-            <div className={s.cardName}>
-              {isVip && <span className={s.vipBadge}>VIP</span>}
-              {displayName}
-            </div>
-            <div className={s.cardMeta}>
-              {session.current_page && (
-                <span className={s.cardPage}>📄 {session.current_page_title || session.current_page}</span>
-              )}
-              {totalVisits > 1 && (
-                <span className={s.repeatBadge}>×{totalVisits}</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className={s.timerBlock}>
-          <div className={s.timerValue} style={{ color: getWaitColor(waitSec) }}>
-            <Clock style={{ width: 14, height: 14 }} />
-            {formatWait(waitSec)}
-          </div>
-          {level === "red" && (
-            <div className={s.timerAlert}>
-              <AlertTriangle style={{ width: 12, height: 12 }} />
-              Долгое ожидание
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className={s.cardBottom}>
-        <div className={s.cardInfo}>
-          <span className={s.cardMessages}>
-            {session.messages_count ?? 0} сообщ.
-          </span>
-          {priority !== "normal" && (
-            <span className={`${s.priorityLabel} ${
-              priority === "urgent" ? s.priorityUrgent :
-              priority === "high" ? s.priorityHigh : s.priorityLow
-            }`}>
-              {priority === "urgent" ? "🔴 Срочный" :
-               priority === "high" ? "🟡 Высокий" : "⬇️ Низкий"}
-            </span>
-          )}
-        </div>
-
-        <button
-          type="button"
-          className={s.assignBtn}
-          onClick={() => onAssign(session.id)}
-          disabled={isAssigning}
-        >
-          <UserPlus style={{ width: 15, height: 15 }} />
-          Забрать
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ── QueueScreen ── */
-
+const wait=(session:ChatSession,now:number)=>Math.max(0,Math.floor((now-Date.parse(session.queued_at||session.created_at))/1000));
+const duration=(seconds:number)=>seconds<60?`${seconds} сек.`:seconds<3600?`${Math.floor(seconds/60)} мин. ${seconds%60} сек.`:`${Math.floor(seconds/3600)} ч. ${Math.floor(seconds%3600/60)} мин.`;
 export function QueueScreen() {
-  const [queue, setQueue] = useState<ChatSession[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
-  const operator = useAuthStore((st) => st.operator);
-  const prevCountRef = useRef(0);
-  const soundEnabled = useNotificationStore((st) => st.soundEnabled);
-
-  const loadQueue = useCallback(async () => {
-    try {
-      const data = await getQueueSessions();
-      setQueue(data);
-
-      // Звук при новом чате в очереди
-      if (data.length > prevCountRef.current && prevCountRef.current > 0 && soundEnabled) {
-        try {
-          const audio = new Audio("/sounds/queue-alert.mp3");
-          audio.volume = 0.5;
-          audio.play().catch(() => {});
-        } catch {}
-      }
-      prevCountRef.current = data.length;
-    } catch {
-      // ignore
-    } finally {
-      setIsLoading(false);
-    }
-  }, [soundEnabled]);
-
-  useEffect(() => {
-    loadQueue();
-    const interval = setInterval(loadQueue, 5000);
-    return () => clearInterval(interval);
-  }, [loadQueue]);
-
-  // ─ Live-обновление очереди по сокету ─
-  // Сервер эмитит 'queue_updated' (sessions.ts) при любом изменении очереди
-  // (новый чат в очереди / забор / закрытие). Раньше клиент его не слушал и
-  // очередь обновлялась только поллингом раз в 5с. Теперь — мгновенно.
-  // Если в payload пришёл готовый список — применяем его; иначе ре-фетчим.
-  useEffect(() => {
-    const socket = getSocket();
-
-    const handleQueueUpdate = (payload?: { queue?: ChatSession[] } | ChatSession[]) => {
-      const list = Array.isArray(payload) ? payload : payload?.queue;
-      if (Array.isArray(list)) {
-        setQueue(list);
-        prevCountRef.current = list.length;
-      } else {
-        void loadQueue();
-      }
-    };
-
-    socket.on("queue_updated", handleQueueUpdate);
-    return () => {
-      socket.off("queue_updated", handleQueueUpdate);
-    };
-  }, [loadQueue]);
-
-  const handleAssign = async (sessionId: string) => {
-    if (!operator?.id) return;
-    setAssigningId(sessionId);
-    try {
-      await assignSession(sessionId, operator.id);
-      setQueue((prev) => prev.filter((s) => s.id !== sessionId));
-      // Обновить sidebar
-      void useInboxStore.getState().loadSessions();
-    } catch (err) {
-      console.error("Ошибка забора чата:", err);
-    } finally {
-      setAssigningId(null);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className={s.screen}>
-        <div className={s.header}>
-          <h2 className={s.title}>Очередь</h2>
-        </div>
-        <div className={s.loading}>Загрузка...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={s.screen}>
-      <div className={s.header}>
-        <h2 className={s.title}>
-          Очередь
-          {queue.length > 0 && (
-            <span className={s.queueCount}>{queue.length}</span>
-          )}
-        </h2>
-        <p className={s.subtitle}>
-          Неназначенные чаты, ожидающие оператора
-        </p>
-      </div>
-
-      <div className={s.list}>
-        {queue.length === 0 ? (
-          <div className={s.empty}>
-            <div className={s.emptyIcon}>
-              <Inbox style={{ width: 28, height: 28 }} />
-            </div>
-            <div className={s.emptyTitle}>Очередь пуста</div>
-            <div className={s.emptyDesc}>Все клиенты обслужены 🎉</div>
-          </div>
-        ) : (
-          queue.map((session) => (
-            <QueueCard
-              key={session.id}
-              session={session}
-              onAssign={handleAssign}
-              isAssigning={assigningId === session.id}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
+  const [queue,setQueue]=useState<ChatSession[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[sort,setSort]=useState("wait"),[busy,setBusy]=useState("");
+  const [now,setNow]=useState(Date.now());
+  const operator=useAuthStore(state=>state.operator),limit=useDeliveryStore(state=>state.routing.escalation_minutes)*60;
+  const load=async()=>{try{setQueue(await getQueueSessions());setError("")}catch{setError("Не удалось обновить очередь. Показываем последнее доступное состояние.")}finally{setLoading(false)}};
+  useEffect(()=>{void load();const socket=getSocket();socket.on("queue_updated",load);socket.on("session_updated",load);socket.on("connect",load);const poll=setInterval(()=>void load(),30000),timer=setInterval(()=>setNow(Date.now()),1000);return()=>{clearInterval(poll);clearInterval(timer);socket.off("queue_updated",load);socket.off("session_updated",load);socket.off("connect",load)}},[]);
+  const list=useMemo(()=>[...queue].sort((a,b)=>{const rank={urgent:3,high:2,normal:1,low:0};return sort==="priority"&&(rank[b.priority]||0)!==(rank[a.priority]||0)?(rank[b.priority]||0)-(rank[a.priority]||0):Date.parse(a.queued_at||a.created_at)-Date.parse(b.queued_at||b.created_at)}),[queue,sort]);
+  const open=(session:ChatSession)=>{useInboxStore.getState().openSession(session);useNavigationStore.setState({screen:"inbox",mobileView:"chat-conversation"})};
+  const claim=async(session:ChatSession)=>{if(!operator)return;setBusy(session.id);try{await assignSession(session.id,operator.id);await useInboxStore.getState().loadSessions();open(useInboxStore.getState().sessions.find(item=>item.id===session.id)||{...session,operator_id:operator.id,status:"with_operator"});await load()}catch(failure){toast.error(failure instanceof Error?failure.message:"Не удалось взять диалог");await load()}finally{setBusy("")}};
+  return <section className={s.page}><header className={s.header}><div><h1>Очередь обращений</h1><p>Новые диалоги, которые ждут оператора.</p></div><Button variant="secondary" icon={<RefreshCw size={16}/>} onClick={()=>void load()}>Обновить</Button></header><div className={s.summary}><article><Inbox size={21}/><div><strong>{queue.length}</strong><span>ждут ответа</span></div></article><article><Clock size={21}/><div><strong>{queue.length?duration(Math.max(...queue.map(item=>wait(item,now)))):"—"}</strong><span>самое долгое ожидание</span></div></article><article><Flag size={21}/><div><strong>{queue.filter(item=>wait(item,now)>=limit).length}</strong><span>ждут дольше {Math.round(limit/60)} мин.</span></div></article></div>
+    <div className={s.toolbar}><h2>Поможем по порядку</h2><Select value={sort} onChange={setSort} options={[{value:"wait",label:"Сначала дольше ждут"},{value:"priority",label:"Сначала срочные"}]}/></div>{error&&<p className={s.error} role="alert">{error}</p>}
+    <div className={s.list}>{list.map((session,index)=>{const name=getSessionDisplayName(session.visitor_name,session.visitor_id),seconds=wait(session,now);return <article className={s.item} data-late={seconds>=limit} key={session.id}><span className={s.number}>{String(index+1).padStart(2,"0")}</span><Avatar name={name} size="md"/><button className={s.preview} onClick={()=>open(session)}><strong>{name}{session.is_vip&&<small>VIP</small>}</strong><p>{session.last_message_text||"Клиент запросил помощь оператора"}</p><span>{session.current_page_title||"На сайте Живой Сказки"}</span></button><div className={s.wait}><Clock size={13}/><span>{duration(seconds)}</span>{seconds>=limit&&<small>Ждёт ответа</small>}</div><Button disabled={!!busy} icon={<ArrowRight size={16}/>} onClick={()=>void claim(session)}>{busy===session.id?"Назначаем…":"Ответить"}</Button></article>})}{!list.length&&<div className={s.empty}><Circle/><h2>{loading?"Загружаем очередь…":error?"Очередь временно недоступна":"Каждый клиент услышан"}</h2><p>{loading?"":error?"Проверьте связь и обновите список.":"Сейчас нет обращений без оператора. Новые появятся здесь автоматически."}</p></div>}</div>
+  </section>;
 }
+function Circle(){return <div className={s.emptyIcon}><Inbox size={28}/></div>}

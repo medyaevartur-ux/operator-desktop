@@ -1,27 +1,33 @@
-.root {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--surface-bg);
-}
-
 .shell {
   display: grid;
-  flex: 1;
-  min-height: 0;
-  grid-template-columns: var(--shell-columns);
-  transition: grid-template-columns var(--duration-normal) var(--ease-spring);
+  height: 100dvh;
   overflow: hidden;
   background: var(--surface-bg);
 }
 
-.detailsPanel {
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--border-subtle);
+  background: var(--surface-bg);
 }
 
-.visitorsPanel {
+.workspace {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.details {
+  min-height: 0;
   overflow: hidden;
   border-left: 1px solid var(--border-subtle);
+  background: var(--surface-bg);
 }
+
+.drawer { max-height: 72dvh; overflow: auto; }
+.drawer aside { border: 0; }

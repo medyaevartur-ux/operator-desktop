@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Tauri instantiates this app-local plugin and its invoke arguments by reflection.
+-keep class ru.zhivaya_skazka.operator.AuthPlugin { *; }
+-keep @app.tauri.annotation.InvokeArg class ru.zhivaya_skazka.operator.** { *; }

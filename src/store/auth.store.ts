@@ -1,178 +1,79 @@
+import { useDeliveryStore } from "@/store/delivery.store";
+import { useInboxStore } from "@/store/inbox.store";
+import { useNavigationStore } from "@/store/navigation.store";
+import { useVisitorsStore } from "@/store/visitors.store";
+import { useNotificationStore } from "@/store/notification.store";
 import { create } from "zustand";
-import { api, setToken, removeToken, isTokenExpired } from "@/lib/api";
+import { api } from "@/lib/api";
+import { signIn, signOut, restoreSession, onSessionChange, type AuthSession } from "@/lib/auth-session";
 import type { ChatOperator } from "@/types/operator";
-
-// Кэш оператора — чтобы при перезапуске/возврате в приложение сессия
-// восстанавливалась мгновенно, без ожидания сети и без повторного логина.
-const OPERATOR_KEY = "chat_operator";
-function loadCachedOperator(): ChatOperator | null {
-  try {
-    const raw = localStorage.getItem(OPERATOR_KEY);
-    return raw ? (JSON.parse(raw) as ChatOperator) : null;
-  } catch {
-    return null;
-  }
-}
-function cacheOperator(op: ChatOperator) {
-  try { localStorage.setItem(OPERATOR_KEY, JSON.stringify(op)); } catch { /* ignore quota */ }
-}
-function clearCachedOperator() {
-  localStorage.removeItem(OPERATOR_KEY);
-}
-
-interface AuthUser {
-  id: string;
-  email: string;
-  role: string;
-}
+import { disconnectSocket } from "@/lib/socket";
+import { stopDeviceRegistration, startDeviceRegistration } from "@/lib/fcm";
 
 interface AuthState {
-  user: AuthUser | null;
+  user: { id: string; email: string; role: string } | null;
   operator: ChatOperator | null;
   isLoading: boolean;
   token: string | null;
+  error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   setOperator: (operator: ChatOperator | null) => void;
-  updateOperatorStatus: (status: "online" | "away" | "dnd" | "offline") => Promise<void>;  
+  updateOperatorStatus: (status: "online" | "away" | "dnd" | "offline") => Promise<void>;
   setLoading: (value: boolean) => void;
   reset: () => void;
 }
-
+function sessionState(session: AuthSession | null) {
+  return {
+    user: session ? { id: session.operator.id, email: session.operator.email ?? "", role: session.operator.role ?? "operator" } : null,
+    operator: session?.operator ?? null, token: session?.token ?? null, isLoading: false,
+  };
+}
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  operator: null,
-  isLoading: true,
-  token: localStorage.getItem("chat_token"),
-
-  login: async (email, password) => {
-    const data = await api<{
-      token: string;
-      operator: ChatOperator;
-    }>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-
-    setToken(data.token);
-    cacheOperator(data.operator);
-
-    set({
-      user: {
-        id: data.operator.id,
-        email: data.operator.email ?? "",
-        role: data.operator.role ?? "operator",
-      },
-      operator: data.operator,
-      token: data.token,
-      isLoading: false,
-    });
-
-    // Регистрируем FCM токен для push-уведомлений (Android)
-    import("@/lib/fcm").then(({ registerFcmToken }) => {
-      registerFcmToken(data.operator.id);
-    }).catch(() => {});    
+  user: null, operator: null, token: null, isLoading: true, error: null,
+  login: async (email, password) => { set({ error: null }); await signIn(email, password); },
+  logout: async () => {
+    try { await signOut(); }
+    catch { set({ error: "Вы вышли из приложения. Сервер недоступен: завершите этот сеанс в разделе «Устройства», когда восстановится связь." }); }
   },
-
-  logout: () => {
-    // Send offline status before clearing token
-    const operator = get().operator;
-    if (operator?.id) {
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3010";
-      // Try Tauri native (reliable even on close)
-      import("@/lib/tauri-bridge").then(({ notifyOfflineNative }) => {
-        notifyOfflineNative(API_URL, operator.id);
-      }).catch(() => {});
-      // Also try fetch as fallback
-      navigator.sendBeacon?.(
-        `${API_URL}/api/operators/${operator.id}/online`,
-        JSON.stringify({ is_online: false }),
-      );
-    }
-    // Удаляем FCM токен
-    import("@/lib/fcm").then(({ unregisterFcmToken }) => {
-      unregisterFcmToken();
-    }).catch(() => {});
-    removeToken();
-    clearCachedOperator();
-    set({
-      user: null,
-      operator: null,
-      token: null,
-      isLoading: false,
-    });
-  },
-
   checkAuth: async () => {
-    const token = localStorage.getItem("chat_token");
-
-    if (!token) {
-      set({ user: null, operator: null, isLoading: false });
-      return;
-    }
-
-    // Мгновенное восстановление сессии из кэша — приложение открывается сразу,
-    // без ожидания сети. Серверная валидация идёт фоном ниже.
-    const cached = loadCachedOperator();
-    if (cached) {
-      set({
-        user: { id: cached.id, email: cached.email ?? "", role: cached.role ?? "operator" },
-        operator: cached,
-        token,
-        isLoading: false,
-      });
-    }
-
     try {
-      const data = await api<{ operator: ChatOperator }>("/api/auth/me");
-      cacheOperator(data.operator);
-      set({
-        user: {
-          id: data.operator.id,
-          email: data.operator.email ?? "",
-          role: data.operator.role ?? "operator",
-        },
-        operator: data.operator,
-        token,
-        isLoading: false,
-      });
-      // Регистрируем FCM токен для push-уведомлений (Android)
-      import("@/lib/fcm").then(({ registerFcmToken }) => {
-        registerFcmToken(data.operator.id);
-      }).catch(() => {});
-    } catch {
-      // Выходим в логин ТОЛЬКО если токен реально истёк. Сетевой сбой /
-      // недоступность сервера не должны разлогинивать — остаёмся в сессии.
-      if (isTokenExpired(token)) {
-        removeToken();
-        clearCachedOperator();
-        set({ user: null, operator: null, token: null, isLoading: false });
-      } else {
-        // Токен ещё валиден — снимаем индикатор загрузки и работаем с кэшем.
-        set({ isLoading: false });
+      const session = await restoreSession();
+      set({ ...sessionState(session), error: null });
+      if (session) {
+        void api<{ operator: ChatOperator }>("/api/auth/me").then(data => {
+          if (get().operator?.id === data.operator.id) set({ operator: data.operator });
+        }).catch(() => undefined);
       }
+    } catch {
+      set({ isLoading: false, error: "Не удалось восстановить вход. Проверьте подключение и повторите попытку." });
     }
   },
-
-  setOperator: (operator) => set({ operator }),
-  updateOperatorStatus: async (status: "online" | "away" | "dnd" | "offline") => {
+  setOperator: operator => set({ operator }),
+  updateOperatorStatus: async status => {
     const operator = get().operator;
-    if (!operator?.id) return;
-
-    const { changeOperatorStatus } = await import("@/features/operators/operators.api");
-    await changeOperatorStatus(operator.id, status);
-
-    set({
-      operator: { ...operator, status, is_online: status !== "offline" },
-    });
-  },  
-
-  setLoading: (value) => set({ isLoading: value }),
-
-  reset: () => {
-    removeToken();
-    clearCachedOperator();
-    set({ user: null, operator: null, token: null, isLoading: false });
+    if (!operator) return;
+    await api(`/api/operators/${operator.id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+    if (get().operator?.id === operator.id) set({ operator: { ...operator, status, is_online: status !== "offline" } });
   },
+  setLoading: isLoading => set({ isLoading }),
+  reset: () => { void get().logout(); },
 }));
+
+onSessionChange(session => {
+  const previous = useAuthStore.getState().operator?.id;
+  const next = session?.operator.id;
+  if (previous !== next) {
+    stopDeviceRegistration();
+    disconnectSocket();
+    // Clear account data, including pending navigation, before another operator opens it.
+    useInboxStore.setState(useInboxStore.getInitialState());
+    useNavigationStore.setState(useNavigationStore.getInitialState());
+    useVisitorsStore.setState(useVisitorsStore.getInitialState());
+    useNotificationStore.getState().clearAll();
+    useDeliveryStore.setState(useDeliveryStore.getInitialState());
+  }
+  useAuthStore.setState({ ...sessionState(session), error: null });
+  if (session && previous !== next) void startDeviceRegistration(session.operator.id);
+});

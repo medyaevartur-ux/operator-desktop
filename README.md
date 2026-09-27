@@ -1,7 +1,43 @@
-# Tauri + React + Typescript
+# Живая Сказка — оператор v8
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Windows и Android (Samsung S22 Ultra), web/PWA и виджет сайта. Основной интерфейс — тёплый фирменный стиль. В репозитории находится кандидат `8.0.0-beta.1`, а не опубликованный стабильный выпуск.
 
-## Recommended IDE Setup
+## Запуск разработки
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Node.js 22. Из корня проекта:
+
+```powershell
+npm ci
+$env:VITE_API_URL='https://zhivaya-skazka.ru'
+npm run dev -- --host 127.0.0.1
+```
+
+Панель: `http://127.0.0.1:1420/`. Макет без входа и сетевых запросов: `http://127.0.0.1:1420/docs/design/v8.html`. Предпросмотр виджета: `/widget-preview.html`.
+
+Новая панель использует API v8. Старый production-сервер 7.1 не подходит для её входа и сокетов. Для отдельного локального кандидата можно задать `VITE_API_URL=http://127.0.0.1:3010`; реальные пароли не вводить в макеты или HTTP-адреса за пределами loopback. Исходники API находятся в `server/`, пример переменных — `server/.env.example`.
+
+## Что реализовано
+
+- Диалоги, поиск с переходом к сообщению, история, ответы и файлы, внутренние заметки, очередь повторной отправки.
+- Карточка клиента, контакты с защитой от перезаписи коллегой, путь посетителя, метки, приоритет и передача с комментарием.
+- Общие шаблоны, команда и роли, распределение очереди, статистика, приглашения, блокировка, офлайн-заявки.
+- Устройства и сеансы, DND, журнал доставки, Windows/Android уведомления и действия из уведомлений, подготовленные обновления.
+- Подписанная идентификация посетителя, отзыв сеансов, закрытые вложения, идемпотентные сообщения, уведомления без текста переписки во внешних push-службах.
+
+## Проверки и выпуск
+
+```powershell
+npm run test:reliability
+npm run build
+npm --prefix server run build
+npm --prefix server run test:unit
+powershell -NoProfile -File scripts/prepare-release.ps1
+```
+
+Последняя команда готовит сервер, web и виджет в `prepared-v8/`, **без EXE/APK/AAB**. Серверная интеграция требует отдельную синтетическую БД; production для тестов запрещён.
+
+- [Порядок выпуска и отката](docs/RELEASE-V8.md)
+- [Актуальный рабочий хендовер](docs/HANDOFF-OPERATOR-2026-09-28.md)
+- [Исходный хендовер пользователя](docs/HANDOFF-2026-09-operator-app-v8.md)
+
+Сборка исходников не доказывает доставку уведомлений на реальном устройстве. После разрешения владельца установщики Windows x64 и Android ARM64 собраны в `releases/8.0.0-beta.1/`; подписи и версии проверены. Согласованный переход боевого API/виджета, установка и проверка сна, перезагрузки, обновления и фоновой доставки на S22/Windows ещё впереди.

@@ -1,4 +1,4 @@
-import { api, API_BASE } from "@/lib/api";
+import { api } from "@/lib/api";
 import type { ChatOperator } from "@/types/operator";
 
 export async function getOperators(): Promise<ChatOperator[]> {
@@ -37,15 +37,7 @@ export async function uploadAvatar(id: string, file: File): Promise<{ avatar_url
   const formData = new FormData();
   formData.append("file", file);
 
-  const token = localStorage.getItem("chat_token");
-  const res = await fetch(`${API_BASE}/api/operators/${id}/avatar`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
-
-  if (!res.ok) throw new Error("Upload failed");
-  return res.json();
+  return api<{ avatar_url: string }>(`/api/operators/${id}/avatar`, { method: "POST", body: formData });
 }
 
 export async function changeOperatorStatus(

@@ -3,44 +3,27 @@ import { AppShell } from "@/components/layout/app-shell";
 import { LoginScreen } from "@/features/auth/login-screen";
 import { bootstrapAuth, bindAuthListener } from "@/features/auth/auth.bootstrap";
 import { useAuthStore } from "@/store/auth.store";
-import { useNavigationStore } from "@/store/navigation.store";
-import { useInboxStore } from "@/store/inbox.store";
+import { openConversationFromNotification } from "@/lib/open-conversation";
 import { AppUpdater } from "@/components/updater";
 import { ToastContainer, TooltipProvider, ConfirmDialog } from "@/components/ui";
-import { isMobile } from "@/lib/platform";
+import { useIsMobile } from "@/lib/platform";
 import s from "./AppRouter.module.css";
 
-function openSessionById(sessionId: string) {
-  const { sessions, setActiveSession, loadMessages } = useInboxStore.getState();
-  const { setMobileView, setScreen } = useNavigationStore.getState();
-
-  const target = sessions.find((s) => s.id === sessionId);
-  if (target) {
-    setActiveSession(target);
-    void loadMessages(sessionId);
-    setScreen("inbox");
-    if (isMobile()) {
-      setMobileView("chat-conversation");
-    }
-  } else {
-    // Сессии ещё не загружены — сохраняем pending
-    useNavigationStore.getState().setPendingSessionId(sessionId);
-  }
+let queuedNotificationSession: string | null = null;
+function queueNotificationSession(id: string) {
+  if(!/^[a-f0-9-]{36}$/i.test(id)) return;
+  if(useAuthStore.getState().token) openSessionById(id);
+  else queuedNotificationSession = id;
 }
+function openSessionById(sessionId: string) { void openConversationFromNotification(sessionId); }
 
 export function AppRouter() {
   const { token, isLoading } = useAuthStore();
-  const mobile = isMobile();
-  const pendingSessionId = useNavigationStore((s) => s.pendingSessionId);
-  const sessions = useInboxStore((s) => s.sessions);
+  const mobile = useIsMobile();
 
   useEffect(() => {
     const unbind = bindAuthListener();
     void bootstrapAuth();
-    import("@/lib/notifications").then(({ requestNotificationPermission }) => {
-      requestNotificationPermission();
-    });
-
     const unlock = () => {
       import("@/lib/notifications").then(({ unlockAudio }) => unlockAudio());
       document.removeEventListener("click", unlock);
@@ -50,14 +33,20 @@ export function AppRouter() {
     // Регистрируем глобальную функцию для вызова из Kotlin
     (window as any).__openSessionFromPush = (sessionId: string) => {
       console.log("[push] Opening session:", sessionId);
-      openSessionById(sessionId);
+      queueNotificationSession(sessionId);
     };
 
+    const url = new URL(window.location.href);
+    const linkedSession = url.searchParams.get("session_id");
+    if(linkedSession && /^[a-f0-9-]{36}$/i.test(linkedSession)) {
+      queueNotificationSession(linkedSession);
+      history.replaceState({},"",url.pathname);
+    }
     // Проверяем если session_id был передан до загрузки JS
     const pendingFromNative = (window as any).__PUSH_SESSION_ID;
     if (pendingFromNative) {
       (window as any).__PUSH_SESSION_ID = null;
-      setTimeout(() => openSessionById(pendingFromNative), 1500);
+      queueNotificationSession(pendingFromNative);
     }
 
     return () => {
@@ -65,24 +54,20 @@ export function AppRouter() {
     };
   }, []);
 
-  // Обрабатываем pending session когда сессии загрузились
   useEffect(() => {
-    if (pendingSessionId && sessions.length > 0) {
-      const target = sessions.find((s) => s.id === pendingSessionId);
-      if (target) {
-        const { setActiveSession, loadMessages } = useInboxStore.getState();
-        const { setMobileView, setScreen, setPendingSessionId } = useNavigationStore.getState();
-
-        setActiveSession(target);
-        void loadMessages(pendingSessionId);
-        setScreen("inbox");
-        if (isMobile()) {
-          setMobileView("chat-conversation");
-        }
-        setPendingSessionId(null);
-      }
-    }
-  }, [pendingSessionId, sessions]);
+    if(token && queuedNotificationSession) { const id=queuedNotificationSession;queuedNotificationSession=null;openSessionById(id); }
+  },[token]);
+  useEffect(() => {
+    if(!("__TAURI_INTERNALS__" in window)) return;
+    let disposed=false;const stops:Array<()=>void>=[];
+    void Promise.all([import("@tauri-apps/api/event"),import("@tauri-apps/api/core")]).then(async ([events,core])=>{
+      const open=await events.listen<{sessionId:string}>("open-chat",event=>queueNotificationSession(event.payload.sessionId));
+      const replies=await events.listen("native-replies-ready",()=>{void import("@/lib/delivery").then(module=>module.recoverNativeReplies())});
+      if(disposed){open();replies();return;}stops.push(open,replies);
+      const pending=await core.invoke<string|null>("take_native_notification");if(pending)queueNotificationSession(pending);
+    }).catch(()=>undefined);
+    return()=>{disposed=true;stops.forEach(stop=>stop())};
+  },[]);
 
   if (isLoading) {
     return (
@@ -105,7 +90,7 @@ export function AppRouter() {
   return (
     <TooltipProvider>
       <AppShell />
-      {!mobile && <AppUpdater />}
+      {!mobile && "__TAURI_INTERNALS__" in window && <AppUpdater />}
       <ToastContainer />
       <ConfirmDialog />
     </TooltipProvider>

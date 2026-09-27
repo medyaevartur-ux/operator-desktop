@@ -1,74 +1,29 @@
-export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3010";
+import { ApiError, fetchWithDeadline } from "./api-config";
+import { accessToken, authEpoch, expireSession, getSession } from "./auth-session";
+export { API_BASE, ApiError } from "./api-config";
 
-function getToken(): string | null {
-  return localStorage.getItem("chat_token");
-}
-
-export function setToken(token: string) {
-  localStorage.setItem("chat_token", token);
-}
-
-export function removeToken() {
-  localStorage.removeItem("chat_token");
-}
-
-/**
- * Истёк ли JWT по полю exp. Если exp нет или токен нечитаем — считаем НЕ истёкшим
- * (не выкидываем оператора из-за нестандартного токена/сетевых причин).
- */
-export function isTokenExpired(token: string | null): boolean {
-  if (!token) return true;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    if (!payload || typeof payload.exp !== "number") return false;
-    return payload.exp * 1000 <= Date.now();
-  } catch {
-    return false;
-  }
-}
-
-export async function api<T = any>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = getToken();
-  const hasBody = !!options.body;
-
-  const headers: Record<string, string> = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  const epoch = authEpoch();
+  const token = await accessToken();
+  const send = (bearer: string) => {
+    const headers = new Headers(options.headers);
+    headers.set("Authorization", `Bearer ${bearer}`);
+    if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    return fetchWithDeadline(path, { ...options, headers });
   };
-
-  if (hasBody) {
-    headers["Content-Type"] = "application/json";
+  let response = await send(token);
+  if (epoch !== authEpoch()) throw new ApiError("Учётная запись изменилась", 499);
+  if (response.status === 401) {
+    const latest = getSession()?.token;
+    response = await send(latest && latest !== token ? latest : await accessToken(true));
   }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...options.headers,
-    },
-  });
-
-  if (res.status === 401) {
-    // Выкидываем в логин ТОЛЬКО если токен действительно истёк.
-    // Транзиентный 401 от отдельного эндпоинта не должен сбрасывать всю сессию —
-    // оператор остаётся в приложении до реального истечения или явного выхода.
-    if (isTokenExpired(token)) {
-      removeToken();
-      const { useAuthStore } = await import("@/store/auth.store");
-      useAuthStore.getState().reset();
-    }
-    throw new Error("Unauthorized");
+  if (epoch !== authEpoch()) throw new ApiError("Учётная запись изменилась", 499);
+  if (response.status === 401) expireSession();
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new ApiError(typeof body.error === "string" ? body.error : `Ошибка сервера (${response.status})`, response.status, body.code);
   }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `API error ${res.status}`);
-  }
-
-  const text = await res.text();
-  if (!text) return {} as T;
-
-  return JSON.parse(text);
+  const text = await response.text();
+  if (epoch !== authEpoch()) throw new ApiError("Учётная запись изменилась", 499);
+  return (text ? JSON.parse(text) : {}) as T;
 }

@@ -1,146 +1,207 @@
-/* ═══════════════════════════════════════════════
-   ALPHABET OPERATOR — Design Tokens
-   ═══════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   Живая Сказка · Оператор — дизайн-токены v9
+   Единственный источник цвета, типографики и формы.
+   Язык: спокойные тёплые поверхности, один глиняный акцент,
+   тонкие линии вместо теней (в духе приложения Claude).
+   Темы: light (по умолчанию), dark. "fairytale" — старое имя light.
+   ═══════════════════════════════════════════════════════════════ */
 
-/* ── Primitive: Violet ── */
-:root {
-  --violet-50:  #F5F0FF;
-  --violet-100: #EDE0FF;
-  --violet-200: #D9BFFF;
-  --violet-300: #C39BF7;
-  --violet-400: #A875EF;
-  --violet-500: #7C5CBF;
-  --violet-600: #6447A8;
-  --violet-700: #4D348F;
-  --violet-800: #362473;
-  --violet-900: #22155A;
+:root,
+:root[data-theme="light"],
+:root[data-theme="fairytale"] {
+  color-scheme: light;
+
+  /* ── Поверхности ── */
+  --surface-bg:        #FAF9F5;   /* холст основной области */
+  --surface-bg-deep:   #F3F1EA;   /* боковая панель */
+  --surface-1:         #FFFFFF;   /* карточки, редактор, поля, поповеры */
+  --surface-2:         #F6F4EE;   /* тихая заливка внутри карточек */
+  --surface-3:         #EEEBE3;   /* выбранный элемент списка */
+  --surface-hover:     rgba(31, 30, 27, 0.045);
+  --surface-pressed:   rgba(31, 30, 27, 0.08);
+  --scrim:             rgba(31, 30, 27, 0.32);
+
+  /* ── Текст ── */
+  --text-primary:      #1F1E1B;
+  --text-secondary:    #55534D;
+  --text-muted:        #7D7A72;
+  --text-disabled:     #ABA79D;
+  --text-on-accent:    #FFFFFF;
+
+  /* ── Линии ── */
+  --border-default:    rgba(31, 30, 27, 0.11);
+  --border-subtle:     rgba(31, 30, 27, 0.07);
+  --border-strong:     rgba(31, 30, 27, 0.20);
+  --border-focus:      #C15F3C;
+
+  /* ── Акцент: глина ── */
+  --accent:            #C15F3C;
+  --accent-hover:      #A9502F;
+  --accent-text:       #A4502F;   /* текст-ссылка на светлом фоне, ≥5:1 */
+  --accent-soft:       #F6E8E0;
+  --accent-muted:      rgba(193, 95, 60, 0.10);
+  --accent-ring:       rgba(193, 95, 60, 0.28);
+
+  /* ── Смысловые цвета (приглушённые, одной тёплой семьи) ── */
+  --success:           #2F7A4F;
+  --success-soft:      #E5F0E8;
+  --warning:           #A5660F;
+  --warning-soft:      #F8EDD7;
+  --error:             #B3402F;
+  --error-soft:        #F8E3DE;
+  --info:              #3E6A91;
+  --info-soft:         #E4ECF3;
+
+  /* ── Заметка команде: визуально отличается от ответа клиенту ── */
+  --note-bg:           #FBF2DA;
+  --note-border:       #E9D39B;
+  --note-text:         #6B4F12;
+
+  /* ── Присутствие ── */
+  --status-online:     #3B955A;
+  --status-away:       #CE9A1B;
+  --status-dnd:        #C0533A;
+  --status-offline:    #A8A49A;
+
+  /* ── Сообщения ── */
+  --bubble-operator-bg:   #EFEBE2;
+  --bubble-operator-text: #1F1E1B;
+  --bubble-visitor-bg:    #FFFFFF;
+  --bubble-visitor-text:  #1F1E1B;
+  --bubble-ai-bg:         #F3F0E8;
+  --bubble-ai-text:       #3F3D38;
+  --bubble-system-bg:     transparent;
+  --bubble-system-text:   #7D7A72;
+
+  /* ── Тени: тёплые и тихие ── */
+  --shadow-xs:   0 1px 2px rgba(31, 30, 27, 0.05);
+  --shadow-sm:   0 1px 3px rgba(31, 30, 27, 0.06), 0 1px 2px rgba(31, 30, 27, 0.04);
+  --shadow-md:   0 4px 14px rgba(31, 30, 27, 0.07), 0 1px 3px rgba(31, 30, 27, 0.05);
+  --shadow-lg:   0 12px 32px rgba(31, 30, 27, 0.10), 0 2px 6px rgba(31, 30, 27, 0.05);
+  --shadow-xl:   0 24px 56px rgba(31, 30, 27, 0.14), 0 4px 12px rgba(31, 30, 27, 0.06);
+  --shadow-composer: 0 1px 2px rgba(31, 30, 27, 0.04), 0 8px 24px -10px rgba(31, 30, 27, 0.14);
+
+  --badge-unread:  #C15F3C;
 }
 
-/* ── Primitive: Blue ── */
-:root {
-  --blue-50:  #EFF6FF;
-  --blue-100: #DBEAFE;
-  --blue-400: #60A5FA;
-  --blue-500: #3B7DD8;
-  --blue-600: #2563EB;
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-bg:        #262624;
+  --surface-bg-deep:   #1F1E1C;
+  --surface-1:         #30302D;
+  --surface-2:         #2B2B28;
+  --surface-3:         #383835;
+  --surface-hover:     rgba(250, 249, 245, 0.05);
+  --surface-pressed:   rgba(250, 249, 245, 0.09);
+  --scrim:             rgba(0, 0, 0, 0.5);
+
+  --text-primary:      #F2F0E9;
+  --text-secondary:    #C4C1B7;
+  --text-muted:        #9A978E;
+  --text-disabled:     #6C6962;
+  --text-on-accent:    #FFFFFF;
+
+  --border-default:    rgba(250, 249, 245, 0.11);
+  --border-subtle:     rgba(250, 249, 245, 0.07);
+  --border-strong:     rgba(250, 249, 245, 0.19);
+  --border-focus:      #E08A6B;
+
+  --accent:            #C8663F;
+  --accent-hover:      #D77753;
+  --accent-text:       #E89274;
+  --accent-soft:       rgba(217, 119, 87, 0.16);
+  --accent-muted:      rgba(217, 119, 87, 0.12);
+  --accent-ring:       rgba(217, 119, 87, 0.35);
+
+  --success:           #74C293;
+  --success-soft:      rgba(116, 194, 147, 0.14);
+  --warning:           #E3B458;
+  --warning-soft:      rgba(227, 180, 88, 0.14);
+  --error:             #EC8574;
+  --error-soft:        rgba(236, 133, 116, 0.14);
+  --info:              #8DB5DA;
+  --info-soft:         rgba(141, 181, 218, 0.14);
+
+  --note-bg:           rgba(227, 180, 88, 0.11);
+  --note-border:       rgba(227, 180, 88, 0.30);
+  --note-text:         #EACD8E;
+
+  --status-online:     #62B37F;
+  --status-away:       #E0B03F;
+  --status-dnd:        #E27A5F;
+  --status-offline:    #77746C;
+
+  --bubble-operator-bg:   #3A3935;
+  --bubble-operator-text: #F2F0E9;
+  --bubble-visitor-bg:    #30302D;
+  --bubble-visitor-text:  #F2F0E9;
+  --bubble-ai-bg:         #2F2E2B;
+  --bubble-ai-text:       #D9D6CC;
+  --bubble-system-bg:     transparent;
+  --bubble-system-text:   #9A978E;
+
+  --shadow-xs:   0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow-md:   0 4px 14px rgba(0, 0, 0, 0.32);
+  --shadow-lg:   0 12px 32px rgba(0, 0, 0, 0.40);
+  --shadow-xl:   0 24px 56px rgba(0, 0, 0, 0.50);
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px -10px rgba(0, 0, 0, 0.5);
+
+  --badge-unread:  #D77753;
 }
 
-/* ── Primitive: Green ── */
+/* ═══ Производные и совместимость (одинаковы для тем) ═══ */
 :root {
-  --green-50:  #F0FDF4;
-  --green-100: #DCFCE7;
-  --green-400: #4ADE80;
-  --green-500: #32C45A;
-  --green-600: #16A34A;
-}
+  --gradient-accent:  var(--accent);            /* градиенты убраны сознательно */
+  --gradient-subtle:  var(--accent-muted);
+  --shadow-glow:      var(--shadow-sm);
+  --shadow-glow-sm:   var(--shadow-xs);
+  --shadow-2xl:       var(--shadow-xl);
 
-/* ── Primitive: Amber ── */
-:root {
-  --amber-50:  #FFFBEB;
-  --amber-100: #FEF3C7;
-  --amber-400: #FBBF24;
-  --amber-500: #E8960E;
-  --amber-600: #D97706;
-}
+  /* Бывший soft-UI: теперь тонкие линии */
+  --soft-raised:      var(--shadow-xs);
+  --soft-inset:       inset 0 0 0 1px var(--border-default);
+  --soft-pressed:     inset 0 0 0 1px var(--border-strong);
 
-/* ── Primitive: Red ── */
-:root {
-  --red-50:  #FFF0F0;
-  --red-100: #FEE2E2;
-  --red-400: #F87171;
-  --red-500: #C0392B;
-  --red-600: #991B1B;
-}
+  --status-danger:       var(--error);
+  --status-error:        var(--error);
+  --status-online-soft:  var(--success-soft);
+  --status-info-soft:    var(--info-soft);
+  --danger-soft:         var(--error-soft);
 
-/* ── Primitive: Neutral Warm ── */
-:root {
-  --neutral-0:   #FFFFFF;
-  --neutral-50:  #FAF8F5;
-  --neutral-100: #F4F0EC;
-  --neutral-150: #EDE8E2;
-  --neutral-200: #E4DDD5;
-  --neutral-300: #CEC5BA;
-  --neutral-400: #A89B8C;
-  --neutral-500: #7A6E63;
-  --neutral-600: #544D45;
-  --neutral-700: #3A342E;
-  --neutral-800: #252018;
-  --neutral-900: #1A1510;
-}
+  /* Старые имена, которые ещё встречаются в модулях */
+  --bg:            var(--surface-bg);
+  --bg-deep:       var(--surface-bg-deep);
+  --bg-default:    var(--surface-bg);
+  --bg-primary:    var(--surface-1);
+  --bg-secondary:  var(--surface-2);
+  --bg-tertiary:   var(--surface-3);
+  --bg-subtle:     var(--surface-2);
+  --bg-hover:      var(--surface-hover);
+  --surface-0:     var(--surface-1);
+  --card:          var(--surface-1);
+  --surface:       var(--surface-2);
+  --line:          var(--border-default);
+  --border:        var(--border-default);
+  --border-light:  var(--border-subtle);
+  --text:          var(--text-primary);
+  --text-default:  var(--text-primary);
+  --text-2:        var(--text-secondary);
+  --text-3:        var(--text-muted);
+  --text-4:        var(--text-disabled);
+  --muted:         var(--text-muted);
+  --violet:        var(--accent);
+  --violet-soft:   var(--accent-soft);
+  --gradient:      var(--accent);
+  --green:         var(--success);
+  --amber:         var(--warning);
+  --red:           var(--error);
+  --blue:          var(--info);
+  --neutral-300:   var(--border-strong);
+  --orange-badge:  var(--badge-unread);
 
-/* ═══════════════════════════════════════════════
-   SEMANTIC TOKENS — Light Mode
-   ═══════════════════════════════════════════════ */
-:root {
-  /* Surfaces — чистые прохладные нейтральные (деловой Jivo-стиль) */
-  --surface-bg:       #F3F5F8;
-  --surface-bg-deep:  #E9EDF2;
-  --surface-1:        #FFFFFF;
-  --surface-2:        #F6F8FA;
-  --surface-3:        #EEF1F5;
-
-  /* Text — прохладный графит */
-  --text-primary:     #18212F;
-  --text-secondary:   #56606F;
-  --text-muted:       #8893A2;
-  --text-disabled:    #B6BFCB;
-  --text-on-accent:   #FFFFFF;
-
-  /* Borders — холодные, деликатные */
-  --border-default:   rgba(20, 33, 61, 0.10);
-  --border-subtle:    rgba(20, 33, 61, 0.06);
-  --border-strong:    rgba(20, 33, 61, 0.16);
-  --border-focus:     #2F6FED;
-
-  /* Accent — спокойный деловой синий */
-  --accent:           #2F6FED;
-  --accent-hover:     #2159CE;
-  --accent-soft:      #EAF1FE;
-  --accent-muted:     rgba(47, 111, 237, 0.10);
-
-  /* Gradients */
-  --gradient-accent:  linear-gradient(135deg, #2F6FED 0%, #4C8DF5 100%);
-  --gradient-subtle:  linear-gradient(135deg, rgba(47,111,237,0.10) 0%, rgba(76,141,245,0.06) 100%);
-
-  /* Shadows */
-  --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm:      0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
-  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-xl:      0 16px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-glow:    0 4px 20px rgba(47, 111, 237, 0.26);
-  --shadow-glow-sm: 0 2px 10px rgba(47, 111, 237, 0.18);
-
-  /* Status */
-  --status-online:  var(--green-500);
-  --status-away:    var(--amber-500);
-  --status-dnd:     var(--red-500);
-  --status-offline: var(--neutral-400);
-
-  /* Semantic */
-  --success:        var(--green-500);
-  --success-soft:   var(--green-50);
-  --warning:        var(--amber-500);
-  --warning-soft:   var(--amber-50);
-  --error:          var(--red-500);
-  --error-soft:     var(--red-50);
-  --info:           var(--blue-500);
-  --info-soft:      var(--blue-50);
-
-  /* Chat bubbles */
-  --bubble-operator-bg:   var(--gradient-accent);
-  --bubble-operator-text: #FFFFFF;
-  --bubble-visitor-bg:    var(--neutral-0);
-  --bubble-visitor-text:  var(--text-primary);
-  --bubble-ai-bg:         #EAF1FE;
-  --bubble-ai-text:       #1E3A8A;
-  --bubble-system-bg:     var(--surface-2);
-  --bubble-system-text:   var(--text-muted);
-
-  /* Badge */
-  --badge-unread:   #FF6B35;
-
-  /* Spacing */
+  /* ── Отступы: шкала 4/8/12/16/24/32 ── */
   --space-0:  0px;
   --space-1:  4px;
   --space-2:  8px;
@@ -153,23 +214,23 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Radius */
+  /* ── Форма: мягче снаружи, строже внутри ── */
   --radius-xs:   4px;
   --radius-sm:   6px;
-  --radius-md:   10px;
-  --radius-lg:   14px;
-  --radius-xl:   20px;
-  --radius-2xl:  28px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  20px;
   --radius-full: 9999px;
 
-  /* Typography */
-  --font-sans:  'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Source Serif 4', 'Tiempos', Georgia, serif;  /* à la Claude.ai */
-  --font-display: 'Source Serif 4', 'Tiempos', Georgia, serif;
-  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+  /* ── Типографика ── */
+  --font-sans:    "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif:   "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-display: var(--font-serif);
+  --font-mono:    ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
 
   --text-2xs: 10px;
-  --text-xs:  11px;
+  --text-xs:  11.5px;
   --text-sm:  13px;
   --text-base: 14px;
   --text-md:  15px;
@@ -181,8 +242,8 @@
   --weight-normal:    400;
   --weight-medium:    500;
   --weight-semibold:  600;
-  --weight-bold:      700;
-  --weight-extrabold: 800;
+  --weight-bold:      650;
+  --weight-extrabold: 700;
 
   --leading-none:    1;
   --leading-tight:   1.25;
@@ -190,189 +251,44 @@
   --leading-normal:  1.5;
   --leading-relaxed: 1.625;
 
-  /* Transitions */
+  /* ── Движение: быстро и без пружин ── */
   --duration-instant: 80ms;
-  --duration-fast:    150ms;
-  --duration-normal:  250ms;
-  --duration-slow:    400ms;
-  --duration-slower:  600ms;
+  --duration-fast:    140ms;
+  --duration-normal:  200ms;
+  --duration-slow:    320ms;
+  --duration-slower:  480ms;
 
-  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-default: cubic-bezier(0.2, 0, 0, 1);
   --ease-in:      cubic-bezier(0.4, 0, 1, 1);
   --ease-out:     cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out:  cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring:  cubic-bezier(0.2, 0, 0, 1);
 
-  /* ── LEGACY COMPAT (старые токены → новые, удалить в фазе 11) ── */
-  --violet:      var(--violet-500);
-  --violet-soft: var(--violet-50);
-  --gradient:    var(--gradient-accent);
-  --violet-glow: var(--shadow-glow);
-  --blue:        var(--blue-500);
-  --green:       var(--green-500);
-  --amber:       var(--amber-500);
-  --red:         var(--red-500);
-  --bg:          var(--surface-bg);
-  --bg-deep:     var(--surface-bg-deep);
-  --card:        var(--surface-1);
-  --surface:     var(--surface-2);
-  --border:      var(--border-default);
-  --border-light:var(--border-subtle);
-  --text:        var(--text-primary);
-  --text-2:      var(--text-secondary);
-  --text-3:      var(--text-muted);
-  --text-4:      var(--text-disabled);
-  --red-soft:    var(--red-50);
-  --amber-soft:  var(--amber-50);
-  --green-soft:  var(--green-50);
-  --blue-soft:   var(--blue-50);
-  --violet-mid:  var(--violet-400);
-  --surface-2:   var(--neutral-50);
-  --orange-badge:var(--badge-unread);
+  /* ── Слои ── */
+  --z-sticky:  20;
+  --z-rail:    30;
+  --z-drawer:  90;
+  --z-overlay: 100;
+  --z-modal:   110;
+  --z-popover: 120;
+  --z-toast:   130;
+  --z-tooltip: 140;
+
+  /* ── Каркас ── */
+  --topbar-height:  52px;
+  --sidebar-width:  288px;
+  --details-width:  340px;
+  --thread-max:     760px;
+
+  /* Прозрачные панели больше не используются: сплошные поверхности */
+  --glass-bg:     var(--surface-1);
+  --glass-border: var(--border-default);
+  --glass-blur:   none;
+
+  --accent-hue: 16;
 }
 
-/* ═══════════════════════════════════════════════
-   SEMANTIC TOKENS — Dark Mode
-   ═══════════════════════════════════════════════ */
-:root[data-theme="dark"] {
-  --surface-bg:       #18151F;
-  --surface-bg-deep:  #120F18;
-  --surface-1:        #211D2D;
-  --surface-2:        #2A2538;
-  --surface-3:        #322D42;
-
-  --text-primary:     #F0EDF8;
-  --text-secondary:   #B8B0CC;
-  --text-muted:       #7A7090;
-  --text-disabled:    #4A4560;
-  --text-on-accent:   #FFFFFF;
-
-  --border-default:   rgba(255, 255, 255, 0.08);
-  --border-subtle:    rgba(255, 255, 255, 0.04);
-  --border-strong:    rgba(255, 255, 255, 0.14);
-  --border-focus:     var(--violet-400);
-
-  --accent:           var(--violet-400);
-  --accent-hover:     var(--violet-300);
-  --accent-soft:      rgba(124, 92, 191, 0.15);
-  --accent-muted:     rgba(124, 92, 191, 0.10);
-
-  --gradient-accent:  linear-gradient(135deg, #7C5CBF 0%, #9D6FD8 100%);
-
-  --shadow-sm:  0 2px 6px rgba(0, 0, 0, 0.30);
-  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.40);
-  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.50);
-  --shadow-xl:  0 16px 40px rgba(0, 0, 0, 0.60);
-
-  --bubble-visitor-bg:    var(--surface-2);
-  --bubble-visitor-text:  var(--text-primary);
-  --bubble-ai-bg:         rgba(124, 92, 191, 0.12);
-  --bubble-ai-text:       var(--violet-300);
-  --bubble-system-bg:     var(--surface-3);
-
-  /* Legacy compat dark overrides */
-  --card:        var(--surface-1);
-  --surface:     var(--surface-2);
-  --bg:          var(--surface-bg);
-  --bg-deep:     var(--surface-bg-deep);
-  --text:        var(--text-primary);
-  --text-2:      var(--text-secondary);
-  --text-3:      var(--text-muted);
-  --text-4:      var(--text-disabled);
-  --border:      var(--border-default);
-  --border-light:var(--border-subtle);
-  --red-soft:    rgba(192, 57, 43, 0.15);
-  --amber-soft:  rgba(232, 150, 14, 0.12);
-  --green-soft:  rgba(50, 196, 90, 0.12);
-  --blue-soft:   rgba(59, 125, 216, 0.12);
-  --violet-soft: var(--accent-soft);
-}
-
-/* ═══════════════════════════════════════════════
-   SEMANTIC TOKENS — Fairytale (сказочная тёплая)
-   Палитра лендинга «Живая Сказка»: золото, пергамент, чернила.
-   ═══════════════════════════════════════════════ */
-:root[data-theme="fairytale"] {
-  --surface-bg:       #fef3c7;
-  --surface-bg-deep:  #fde68a;
-  --surface-1:        #fffbeb;
-  --surface-2:        #fef3c7;
-  --surface-3:        #fde68a;
-
-  --text-primary:     #1c1917;
-  --text-secondary:   #57534e;
-  --text-muted:       #92400e;
-  --text-disabled:    #d6d3d1;
-  --text-on-accent:   #fffbeb;
-
-  --border-default:   rgba(146, 64, 14, 0.18);
-  --border-subtle:    rgba(146, 64, 14, 0.10);
-  --border-strong:    rgba(146, 64, 14, 0.30);
-  --border-focus:     var(--amber-600);
-
-  --accent:           var(--amber-600);
-  --accent-hover:     #b45309;
-  --accent-soft:      var(--amber-50);
-  --accent-muted:     rgba(217, 119, 6, 0.10);
-
-  --gradient-accent:  linear-gradient(135deg, #d97706 0%, #fbbf24 100%);
-  --gradient-subtle:  linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
-
-  --shadow-xs:      0 1px 2px rgba(146, 64, 14, 0.08);
-  --shadow-sm:      0 2px 6px rgba(146, 64, 14, 0.10), 0 1px 2px rgba(146, 64, 14, 0.06);
-  --shadow-md:      0 4px 12px rgba(146, 64, 14, 0.12), 0 2px 4px rgba(146, 64, 14, 0.06);
-  --shadow-lg:      0 8px 24px rgba(146, 64, 14, 0.14), 0 2px 8px rgba(146, 64, 14, 0.08);
-  --shadow-xl:      0 24px 64px -16px rgba(217, 119, 6, 0.25);
-  --shadow-glow:    0 4px 24px rgba(251, 191, 36, 0.45);
-  --shadow-glow-sm: 0 2px 12px rgba(251, 191, 36, 0.30);
-
-  --bubble-operator-bg:   var(--gradient-accent);
-  --bubble-operator-text: #fffbeb;
-  --bubble-visitor-bg:    #fffbeb;
-  --bubble-visitor-text:  var(--text-primary);
-  --bubble-ai-bg:         rgba(217, 119, 6, 0.10);
-  --bubble-ai-text:       #92400e;
-  --bubble-system-bg:     rgba(146, 64, 14, 0.06);
-  --bubble-system-text:   var(--text-muted);
-
-  /* Legacy compat */
-  --card:        var(--surface-1);
-  --surface:     var(--surface-2);
-  --bg:          var(--surface-bg);
-  --bg-deep:     var(--surface-bg-deep);
-  --text:        var(--text-primary);
-  --text-2:      var(--text-secondary);
-  --text-3:      var(--text-muted);
-  --text-4:      var(--text-disabled);
-  --border:      var(--border-default);
-  --border-light:var(--border-subtle);
-  --violet:      var(--amber-600);
-  --violet-soft: var(--amber-50);
-  --violet-glow: var(--shadow-glow);
-  --gradient:    var(--gradient-accent);
-}
-
-/* ═══════════════════════════════════════════════
-   BRAND TOKENS (нейтральны к темам)
-   Используются виджетом и сказочной стилистикой.
-   ═══════════════════════════════════════════════ */
-:root {
-  --brand-amber:        #d97706;
-  --brand-amber-soft:   #fbbf24;
-  --brand-amber-glow:   #fde68a;
-  --brand-cream:        #fef3c7;
-  --brand-cream-soft:   #fffbeb;
-  --brand-ink:          #1c1917;
-  --brand-parchment:    linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
-  --brand-edge-glow:    0 24px 64px -16px rgba(217, 119, 6, 0.25);
-
-  /* Live-кастомизация (управляется theme.store) */
-  --accent-hue: 32;
-}
-
-/* ═══════════════════════════════════════════════
-   DENSITY (comfortable | compact)
-   ═══════════════════════════════════════════════ */
+/* Плотность: compact уменьшает отступы и кегль */
 :root[data-density="compact"] {
   --space-2:  6px;
   --space-3:  10px;
@@ -383,22 +299,4 @@
   --text-base: 13px;
   --text-md:  14px;
   --text-lg:  15px;
-}
-
-/* ═══════════════════════════════════════════════
-   GLASS / TOPBAR / TITLEBAR — общие поверхности
-   ═══════════════════════════════════════════════ */
-:root {
-  --glass-bg:        rgba(255, 255, 255, 0.62);
-  --glass-border:    rgba(255, 255, 255, 0.55);
-  --glass-blur:      blur(24px) saturate(140%);
-  --topbar-height:   44px;
-}
-:root[data-theme="dark"] {
-  --glass-bg:        rgba(33, 29, 45, 0.62);
-  --glass-border:    rgba(255, 255, 255, 0.06);
-}
-:root[data-theme="fairytale"] {
-  --glass-bg:        rgba(255, 251, 235, 0.72);
-  --glass-border:    rgba(217, 119, 6, 0.22);
 }

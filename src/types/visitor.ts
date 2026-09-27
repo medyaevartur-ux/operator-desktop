@@ -1,6 +1,7 @@
 export interface SiteVisitor {
   id: string;
   visitor_id: string;
+  visitor_name?: string | null;
   session_count: number;
   current_page: string;
   current_page_title: string;
@@ -52,4 +53,7 @@ export interface VisitorPathStep {
 export interface PagedVisitors {
   items: SiteVisitor[];
   has_more: boolean;
+  total?: number;
+  online_total?: number;
+  with_chat_total?: number;
 }

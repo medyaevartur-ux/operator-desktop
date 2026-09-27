@@ -1,877 +1,330 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useInboxStore } from "@/store/inbox.store";
-import { useNavigationStore } from "@/store/navigation.store";
-import { useAuthStore } from "@/store/auth.store";
-import { useInboxHotkeys } from "@/features/inbox/use-hotkeys";
-import { toggleReaction, editMessage, deleteMessage, leaveChatSession, blockVisitorBySession } from "@/features/inbox/inbox.api";
-import { ChatComposer } from "@/components/layout/chat-composer";
-import { TypingPreview } from "@/components/layout/typing-preview";
-import { Avatar, Button, Tooltip, toast } from "@/components/ui";
-import { SkeletonMessage } from "@/components/ui";
-import { useConfirm } from "@/components/ui";
-import { getSessionDisplayName, getAvatarGradient } from "@/utils/avatar";
-import { motion, AnimatePresence } from "framer-motion";
-import type { ChatMessage } from "@/types/chat";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
-  Search,
-  X,
-  PanelRightOpen,
-  PanelRightClose,
-  UserCheck,
-  XCircle,
-  ArrowDown,
-  SmilePlus,
-  Reply,
-  Pencil,
-  Trash2,
-  Check,
-  Info,
-  Flag,
-  Eye,
-  Clock,
-  MoreHorizontal,
-  LogOut,
-  Ban,
-  MessagesSquare,
+  ArrowDown, ArrowLeft, ArrowRightLeft, Ban, Check, CheckCheck, CircleCheck, FileText, Flag, LockKeyhole, LogOut,
+  MessageCircle, MoreHorizontal, PanelRight, Pencil, Reply, RotateCcw, Search, SmilePlus, Trash2, UserCheck, X,
 } from "lucide-react";
+import { useInboxStore } from "@/store/inbox.store";
+import { useAuthStore } from "@/store/auth.store";
+import { useNavigationStore } from "@/store/navigation.store";
+import { useVisitorsStore } from "@/store/visitors.store";
+import { editMessage, deleteMessage, toggleReaction, leaveChatSession, blockVisitorBySession, markChatSessionRead } from "@/features/inbox/inbox.api";
+import { waitingLabel, waitingMinutes } from "@/features/inbox/conversation-list";
+import { richText } from "@/features/inbox/rich-text";
+import { closeConversation, reopenConversation } from "@/lib/open-conversation";
+import { API_BASE } from "@/lib/api";
+import { offlineQueue } from "@/lib/offline-queue";
+import { Avatar, Button, Modal, Select, toast, useConfirm } from "@/components/ui";
+import { ChatComposer } from "./chat-composer";
+import { ChatDetails } from "./chat-details";
+import { TypingPreview } from "./typing-preview";
+import { getSessionDisplayName } from "@/utils/avatar";
+import type { ChatMessage, ChatSession } from "@/types/chat";
 import s from "./ChatMain.module.css";
 
-/* ── helpers ── */
+const EMOJIS = ["👍", "❤️", "😊", "🔥", "✅", "👀"];
+const RUN_GAP_MS = 5 * 60 * 1000;
+const PRIORITIES = [["urgent", "Срочный"], ["high", "Высокий"], ["normal", "Обычный"], ["low", "Низкий"]] as const;
 
-function formatTime(d: string) {
-  return new Date(d).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+function safeUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  try { const url = new URL(value, API_BASE); return /^https?:$/.test(url.protocol) ? url.href : null; } catch { return null; }
 }
-
-function formatDateLabel(d: string) {
-  const date = new Date(d);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return "Сегодня";
-  if (date.toDateString() === yesterday.toDateString()) return "Вчера";
-  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
-}
-
-function senderLabel(sender: string) {
-  if (sender === "visitor") return "Клиент";
-  if (sender === "ai") return "AI-бот";
-  if (sender === "operator") return "Оператор";
-  return "";
-}
-
-function senderColor(sender: string) {
-  if (sender === "visitor") return "var(--status-info)";
-  if (sender === "ai") return "var(--accent)";
-  if (sender === "operator") return "var(--status-online)";
-  return "var(--text-muted)";
-}
-
-function isImageUrl(str: string): boolean {
-  if (!str) return false;
+function attachments(message: ChatMessage): Array<{ url: string; filename?: string; mime_type?: string }> {
   try {
-    const url = new URL(str);
-    return /\.(jpg|jpeg|png|webp|gif)$/i.test(url.pathname);
-  } catch {
-    return false;
-  }
+    const list = typeof message.attachments === "string" ? JSON.parse(message.attachments) : message.attachments;
+    if (Array.isArray(list)) return list.filter(item => safeUrl(item?.url)).map(item => ({ ...item, url: safeUrl(item.url)! }));
+  } catch { /* старые метаданные вложений могут быть повреждены */ }
+  return message.message_type === "image" && safeUrl(message.message) ? [{ url: safeUrl(message.message)!, mime_type: "image/legacy" }] : [];
+}
+function dateLabel(value: string) {
+  const date = new Date(value), today = new Date(), yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+  return date.toDateString() === today.toDateString() ? "Сегодня" : date.toDateString() === yesterday.toDateString() ? "Вчера" : date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+const messageTime = (value: string) => new Date(value).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+const sameDay = (a: string, b: string) => new Date(a).toDateString() === new Date(b).toDateString();
+
+/** Подпись показываем в начале серии: другой автор, другой тип или пауза больше 5 минут. */
+function startsRun(messages: ChatMessage[], index: number) {
+  if (index === 0) return true;
+  const prev = messages[index - 1], cur = messages[index];
+  return prev.sender !== cur.sender || prev.operator_id !== cur.operator_id || !!prev.is_internal !== !!cur.is_internal
+    || prev.sender === "system" || !sameDay(prev.created_at, cur.created_at) || Date.parse(cur.created_at) - Date.parse(prev.created_at) > RUN_GAP_MS;
 }
 
-function canEditOrDelete(msg: ChatMessage, operatorId: string | undefined): boolean {
-  if (!operatorId) return false;
-  if (msg.sender !== "operator" || msg.operator_id !== operatorId) return false;
-  if (msg.is_deleted) return false;
-  return Date.now() - new Date(msg.created_at).getTime() < 5 * 60 * 1000;
+function statusLine(session: ChatSession, mine: boolean) {
+  if (session.status === "closed") return "Завершён";
+  const wait = waitingMinutes(session);
+  if (!session.operator_id) return wait ? `Ждёт ответа · ${waitingLabel(wait).replace("ждёт ", "")}` : session.status === "ai" ? "Отвечает помощник" : "Ждёт ответа";
+  if (mine) return "Вы отвечаете";
+  return session.operator_name ? `Отвечает ${session.operator_name}` : "У коллеги";
 }
 
-function parseMarkdown(text: string): string {
-  if (!text) return "";
-  let html = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  // Multi-line code
-  html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.15);padding:6px;border-radius:6px;font-family:monospace;font-size:12.5px;margin:4px 0;white-space:pre-wrap;word-break:break-all">$1</pre>');
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.15);padding:2px 4px;border-radius:4px;font-family:monospace;font-size:12px">$1</code>');
-  // Bold
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Italic
-  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-  // Mentions
-  html = html.replace(/@(\S+)/g, '<span style="font-weight:700;background:rgba(139,92,246,0.18);padding:0 4px;border-radius:4px">@$1</span>');
-  // Newlines
-  html = html.replace(/\n/g, "<br>");
-  return html;
+function AttachmentImage({ src, label, refresh, open }: { src: string; label: string; refresh: () => void; open: () => void }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  return failed
+    ? <button type="button" className={s.linkButton} onClick={refresh}>Ссылка на вложение устарела — обновить</button>
+    : <button type="button" className={s.image} onClick={open}><img src={src} alt={label} loading="lazy" onError={() => setFailed(true)} /></button>;
 }
 
-function statusLabel(status: string) {
-  if (status === "ai") return "AI-бот";
-  if (status === "with_operator") return "С оператором";
-  if (status === "closed") return "Закрыт";
-  return status;
-}
-
-function statusDotClass(status: string) {
-  if (status === "closed") return s.headerStatusDotClosed;
-  if (status === "ai") return s.headerStatusDotAi;
-  return s.headerStatusDotOnline;
-}
-
-const QUICK_REACTIONS = ["👍", "❤️", "🥇", "🔥", "✅", "👀"];
-
-const bubbleVariants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-};
-
-const bubbleTransition = { duration: 0.2, ease: [0.16, 1, 0.3, 1] as const };
-
-/* ── Lightbox ── */
-
-function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
-  return (
-    <div className={s.lightbox} onClick={onClose} role="dialog" aria-modal="true">
-      <img
-        src={src}
-        alt=""
-        className={s.lightboxImg}
-        onClick={(e) => e.stopPropagation()}
-      />
-      <button className={s.lightboxClose} onClick={onClose} type="button" aria-label="Закрыть">
-        <X style={{ width: 24, height: 24 }} />
-      </button>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════
-   ChatMain
-   ══════════════════════════════════ */
-
-export function ChatMain() {
-  useInboxHotkeys();
-
-  const activeSession = useInboxStore((st) => st.activeSession);
-  const messages = useInboxStore((st) => st.messages);
-  const isMessagesLoading = useInboxStore((st) => st.isMessagesLoading);
-  const searchQuery = useInboxStore((st) => st.searchQuery);
-  const searchInMessages = useInboxStore((st) => st.searchInMessages);
-  const messageSearchResults = useInboxStore((st) => st.messageSearchResults);
-  const isMessageSearching = useInboxStore((st) => st.isMessageSearching);
-  const setSearchQuery = useInboxStore((st) => st.setSearchQuery);
-  const assignActiveSession = useInboxStore((st) => st.assignActiveSession);
-  const closeActiveSession = useInboxStore((st) => st.closeActiveSession);
-  const loadMessages = useInboxStore((st) => st.loadMessages);
-  const changeActiveSessionPriority = useInboxStore((st) => st.changeActiveSessionPriority);
-
-  const operator = useAuthStore((st) => st.operator);
-  const isDetailsOpen = useNavigationStore((st) => st.isDetailsOpen);
-  const toggleDetails = useNavigationStore((st) => st.toggleDetails);
-  const isVisitorsOpen = useNavigationStore((st) => st.isVisitorsOpen);
-  const toggleVisitors = useNavigationStore((st) => st.toggleVisitors);
-
+export function ChatMain({ mobile = false }: { mobile?: boolean }) {
+  const state = useInboxStore();
+  const { activeSession: session, messages, operators } = state;
+  const operator = useAuthStore(st => st.operator);
+  const nav = useNavigationStore();
+  const visitorOnline = useVisitorsStore(st => !!session && st.visitors.some(item => item.visitor_id === session.visitor_id && item.is_online));
   const { confirm } = useConfirm();
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
-  const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
-  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState("");
-  const [isDragOver, setIsDragOver] = useState(false);
-  const replyTo = useInboxStore((st) => st.replyTo);
-  const setReplyTo = useInboxStore((st) => st.setReplyTo);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer.types.includes("Files")) {
-      setIsDragOver(true);
-    }
+  const [details, setDetails] = useState(false), [search, setSearch] = useState(false), [transfer, setTransfer] = useState(false);
+  const [target, setTarget] = useState(""), [comment, setComment] = useState(""), [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<ChatMessage | null>(null), [editText, setEditText] = useState("");
+  const [image, setImage] = useState<string | null>(null), [below, setBelow] = useState(false), [drop, setDrop] = useState(false);
+  const scroller = useRef<HTMLDivElement>(null), nearBottom = useRef(true), prependHeight = useRef<number | null>(null);
+  const previous = useRef({ session: "", last: "" });
+  const run = useCallback(async (action: () => Promise<unknown>) => {
+    try { await action(); } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось выполнить действие"); }
   }, []);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const event = new CustomEvent("zs-add-files-to-composer", {
-        detail: Array.from(e.dataTransfer.files)
-      });
-      window.dispatchEvent(event);
-    }
-  }, []);
-
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  useEffect(() => {
-    const el = containerRef.current;
+  useLayoutEffect(() => {
+    const el = scroller.current;
     if (!el) return;
-    const handleScroll = () => {
-      setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 300);
+    if (prependHeight.current !== null) { el.scrollTop += el.scrollHeight - prependHeight.current; prependHeight.current = null; }
+    else if (previous.current.session !== session?.id || nearBottom.current) el.scrollTop = el.scrollHeight;
+    else if (previous.current.last !== messages[messages.length - 1]?.id) setBelow(true);
+    previous.current = { session: session?.id || "", last: messages[messages.length - 1]?.id || "" };
+  }, [messages, session?.id]);
+  useEffect(() => { const open = () => setTransfer(true); window.addEventListener("chat-transfer-request", open); return () => window.removeEventListener("chat-transfer-request", open); }, []);
+  useEffect(() => { setSearch(false); setDetails(false); setTransfer(false); setBelow(false); nearBottom.current = true; }, [session?.id]);
+  useEffect(() => { if (state.focusedMessageId) document.getElementById(`message-${state.focusedMessageId}`)?.scrollIntoView({ block: "center" }); }, [state.focusedMessageId, state.isMessagesLoading]);
+  useEffect(() => {
+    const read = () => {
+      if (!state.focusedMessageId && session?.id && document.hasFocus() && !document.hidden && nearBottom.current && (session.unread_count || 0) > 0) {
+        void markChatSessionRead(session.id).then(() => state.loadSessions()).catch(() => undefined);
+      }
     };
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, []);
+    read(); window.addEventListener("focus", read); document.addEventListener("visibilitychange", read);
+    return () => { window.removeEventListener("focus", read); document.removeEventListener("visibilitychange", read); };
+  }, [session?.id, session?.unread_count, messages.length, state.readingLatest, state.focusedMessageId]);
 
-  const handleReaction = async (msgId: string, emoji: string) => {
-    if (!operator?.id) return;
-    await toggleReaction(msgId, operator.id, emoji);
-    setReactionPickerMsgId(null);
-    void loadMessages();
+  if (!session) return <section className={s.placeholder}><img src="/book-mark.svg" alt="" /><h2>Выберите диалог</h2><p>Переписка откроется здесь.</p></section>;
+
+  const name = getSessionDisplayName(session.visitor_name, session.visitor_id);
+  const mine = session.operator_id === operator?.id;
+  const manager = ["admin", "supervisor"].includes(operator?.role || "");
+  const canManage = mine || !session.operator_id || manager;
+  const closed = session.status === "closed";
+  const cardOpen = mobile ? details : nav.isDetailsOpen;
+  const toggleCard = () => (mobile ? setDetails(true) : nav.toggleDetails());
+  const scrollDown = () => { if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; nearBottom.current = true; setBelow(false); };
+  const remove = async (message: ChatMessage) => {
+    if (await confirm({ title: "Удалить сообщение?", message: "В переписке останется отметка об удалении.", confirmText: "Удалить", danger: true })) {
+      await deleteMessage(message.id, operator!.id); await state.loadMessages();
+    }
   };
+  const react = (message: ChatMessage, emoji: string) => void run(async () => { await toggleReaction(message.id, operator!.id, emoji); await state.loadMessages(); });
 
-  const handleEdit = async (msgId: string) => {
-    if (!operator?.id || !editingText.trim()) return;
-    await editMessage(msgId, editingText.trim(), operator.id);
-    setEditingMsgId(null);
-    setEditingText("");
-    void loadMessages();
-  };
-
-  const handleDelete = async (msgId: string) => {
-    if (!operator?.id) return;
-    const ok = await confirm({
-      title: "Удалить сообщение?",
-      message: "Сообщение будет помечено как удалённое для всех участников.",
-      confirmText: "Удалить",
-      cancelText: "Отмена",
-      danger: true,
-    });
-    if (!ok) return;
-    await deleteMessage(msgId, operator.id);
-    void loadMessages();
-  };
-
-  // Group messages by date
-  const groupedMessages = messages.reduce<{ date: string; msgs: typeof messages }[]>((acc, msg) => {
-    const d = new Date(msg.created_at).toDateString();
-    const last = acc[acc.length - 1];
-    if (last && last.date === d) last.msgs.push(msg);
-    else acc.push({ date: d, msgs: [msg] });
-    return acc;
-  }, []);
-
-  // Last operator msg for delivery receipt
-  const lastOperatorMsg = [...messages].reverse().find((m) => m.sender === "operator");
-
-  /* ── No session ── */
-  if (!activeSession) {
-    return (
-      <main className={s.placeholder}>
-        <div className={s.placeholderInner}>
-          <div className={s.placeholderIcon}>
-            <Search style={{ width: 32, height: 32 }} />
-          </div>
-          <div className={s.placeholderTitle}>Выберите диалог</div>
-          <div className={s.placeholderDesc}>Откройте чат слева, чтобы начать общение с клиентом</div>
-        </div>
-      </main>
-    );
-  }
-
-  const displayName = getSessionDisplayName(activeSession.visitor_name, activeSession.visitor_id);
+  const primary = closed
+    ? <Button size="sm" variant="secondary" icon={<RotateCcw size={15} />} onClick={() => void reopenConversation(session.id)}>Открыть снова</Button>
+    : !session.operator_id
+      ? <Button size="sm" icon={<UserCheck size={15} />} onClick={() => void run(state.assignActiveSession)}>Взять диалог</Button>
+      : canManage ? <Button size="sm" variant="secondary" icon={<CircleCheck size={15} />} onClick={() => void closeConversation(session)}>Завершить</Button> : null;
 
   return (
-    <main
-      className={s.main}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+    <section
+      className={`${s.main} ${mobile ? s.mobile : ""}`}
+      aria-label={`Диалог: ${name}`}
+      onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDrop(true); } }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrop(false); }}
+      onDrop={e => { e.preventDefault(); setDrop(false); window.dispatchEvent(new CustomEvent("zs-add-files-to-composer", { detail: Array.from(e.dataTransfer.files) })); }}
     >
-      {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
-
-      {isDragOver && (
-        <div className={s.dragOverlay}>
-          <div className={s.dragOverlayInner}>
-            <ArrowDown style={{ width: 48, height: 48, marginBottom: 16 }} className={s.bounceIcon} />
-            <div style={{ fontSize: 20, fontWeight: 800 }}>Перетащите файлы сюда</div>
-            <div style={{ fontSize: 14, opacity: 0.7 }}>Изображения прикрепятся к сообщению</div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Header ── */}
       <header className={s.header}>
-        <div className={s.headerLeft}>
-          <Avatar name={displayName} size="md" />
-          <div className={s.headerInfo}>
-            <div className={s.headerName}>
-              {activeSession.is_vip && <span className={s.headerVip}>VIP</span>}
-              <Tooltip
-                delayDuration={100}
-                side="bottom"
-                content={
-                  <div className={s.quickInfoTooltip}>
-                    <div className={s.quickInfoTitle}>О посетителе</div>
-                    <div className={s.quickInfoGrid}>
-                      {activeSession.visitor_email && (
-                        <>
-                          <div className={s.quickInfoLabel}>Email:</div>
-                          <div className={s.quickInfoValue}>{activeSession.visitor_email}</div>
-                        </>
-                      )}
-                      {activeSession.visitor_phone && (
-                        <>
-                          <div className={s.quickInfoLabel}>Телефон:</div>
-                          <div className={s.quickInfoValue}>{activeSession.visitor_phone}</div>
-                        </>
-                      )}
-                      {(activeSession.country || activeSession.city) && (
-                        <>
-                          <div className={s.quickInfoLabel}>Локация:</div>
-                          <div className={s.quickInfoValue}>
-                            {[activeSession.country, activeSession.city].filter(Boolean).join(", ")}
-                          </div>
-                        </>
-                      )}
-                      {activeSession.ip_address && (
-                        <>
-                          <div className={s.quickInfoLabel}>IP-адрес:</div>
-                          <div className={s.quickInfoValue}>{activeSession.ip_address}</div>
-                        </>
-                      )}
-                      {activeSession.user_agent && (
-                        <>
-                          <div className={s.quickInfoLabel}>Браузер:</div>
-                          <div className={s.quickInfoValue} title={activeSession.user_agent}>
-                            {activeSession.user_agent.includes("Chrome") ? "Chrome" : activeSession.user_agent.includes("Firefox") ? "Firefox" : activeSession.user_agent.includes("Safari") ? "Safari" : "Другой"}
-                          </div>
-                        </>
-                      )}
-                      {activeSession.visit_count !== undefined && (
-                        <>
-                          <div className={s.quickInfoLabel}>Визитов:</div>
-                          <div className={s.quickInfoValue}>{activeSession.visit_count}</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                }
-              >
-                <span className={s.hoverName}>{displayName}</span>
-              </Tooltip>
-            </div>
-            <div className={s.headerStatus}>
-              <span className={`${s.headerStatusDot} ${statusDotClass(activeSession.status)}`} />
-              {statusLabel(activeSession.status)}
-            </div>
-            {activeSession.current_page && (
-              <div className={s.headerPageBadge} title={activeSession.current_page}>
-                📄 {activeSession.current_page_title || activeSession.current_page}
-              </div>
-            )}            
-          </div>
-        </div>
-
+        {mobile && <button type="button" className={s.icon} aria-label="К диалогам" onClick={() => nav.setMobileView("chat-list")}><ArrowLeft /></button>}
+        <button type="button" className={s.identity} onClick={toggleCard} aria-label="Открыть карточку клиента">
+          <Avatar name={name} size="sm" status={visitorOnline ? "online" : undefined} />
+          <span className={s.identityText}>
+            <span className={s.name}>{name}</span>
+            <span className={s.status} data-state={closed ? "closed" : !session.operator_id ? "waiting" : mine ? "mine" : "other"}>{statusLine(session, mine)}{visitorOnline && !closed ? " · на сайте" : ""}</span>
+          </span>
+        </button>
         <div className={s.headerActions}>
-          <DropdownMenu.Root>
-            <Tooltip content="Приоритет чата" side="bottom">
-              <DropdownMenu.Trigger asChild>
-                <button type="button" className={s.ghostBtn}>
-                  <Flag
-                    style={{
-                      width: 16,
-                      height: 16,
-                      fill: activeSession.priority === "urgent" ? "#ef4444" : activeSession.priority === "high" ? "#f59e0b" : activeSession.priority === "low" ? "var(--text-disabled)" : "transparent",
-                      color: activeSession.priority === "urgent" ? "#ef4444" : activeSession.priority === "high" ? "#f59e0b" : activeSession.priority === "low" ? "var(--text-disabled)" : "#10b981"
-                    }}
-                  />
-                </button>
-              </DropdownMenu.Trigger>
-            </Tooltip>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content className={s.dropdownContent} side="bottom" align="end" sideOffset={6}>
-                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("urgent")}>
-                  <span style={{ color: "#ef4444", marginRight: 8 }}>🔴</span> Срочный
-                </DropdownMenu.Item>
-                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("high")}>
-                  <span style={{ color: "#f59e0b", marginRight: 8 }}>🟡</span> Высокий
-                </DropdownMenu.Item>
-                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("normal")}>
-                  <span style={{ color: "#10b981", marginRight: 8 }}>🟢</span> Обычный
-                </DropdownMenu.Item>
-                <DropdownMenu.Item className={s.dropdownItem} onClick={() => void changeActiveSessionPriority("low")}>
-                  <span style={{ color: "var(--text-disabled)", marginRight: 8 }}>⚪</span> Низкий
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-
-          <Tooltip content="Забрать" side="bottom">
-            <button type="button" className={s.ghostBtn} onClick={() => void assignActiveSession()}>
-              <UserCheck style={{ width: 16, height: 16 }} />
-            </button>
-          </Tooltip>
-
-          <Tooltip content="Закрыть диалог" side="bottom">
-            <button
-              type="button"
-              className={s.ghostBtn}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Закрыть диалог?",
-                  message: "Клиент не сможет продолжить переписку в этом чате.",
-                  confirmText: "Закрыть",
-                  danger: true,
-                });
-                if (ok) void closeActiveSession();
-              }}
-            >
-              <XCircle style={{ width: 16, height: 16 }} />
-            </button>
-          </Tooltip>
-
-          <DropdownMenu.Root>
-            <Tooltip content="Ещё" side="bottom">
-              <DropdownMenu.Trigger asChild>
-                <button type="button" className={s.ghostBtn}>
-                  <MoreHorizontal style={{ width: 16, height: 16 }} />
-                </button>
-              </DropdownMenu.Trigger>
-            </Tooltip>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content className={s.dropdownContent} side="bottom" align="end" sideOffset={6}>
-                <DropdownMenu.Item
-                  className={s.dropdownItem}
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: "Уйти из диалога?",
-                      message: "Чат вернётся в очередь и станет доступен другим операторам.",
-                      confirmText: "Уйти",
-                    });
-                    if (!ok) return;
-                    try {
-                      await leaveChatSession(activeSession.id);
-                      toast.success("Вы вышли из диалога");
-                      await useInboxStore.getState().loadSessions();
-                    } catch (e: any) {
-                      toast.error("Не удалось выйти из диалога", e?.message || "");
-                    }
-                  }}
-                >
-                  <LogOut style={{ width: 15, height: 15, marginRight: 8 }} /> Уйти из диалога
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  className={s.dropdownItem}
-                  style={{ color: "var(--md-sys-color-error)" }}
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: "Отправить в спам?",
-                      message: "Посетитель будет заблокирован и больше не сможет писать. Диалог закроется.",
-                      confirmText: "В спам",
-                      danger: true,
-                    });
-                    if (!ok) return;
-                    try {
-                      await blockVisitorBySession(activeSession.visitor_id);
-                      toast.success("Посетитель заблокирован");
-                      await useInboxStore.getState().loadSessions();
-                    } catch (e: any) {
-                      toast.error("Не удалось заблокировать", e?.message || "");
-                    }
-                  }}
-                >
-                  <Ban style={{ width: 15, height: 15, marginRight: 8 }} /> В спам
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-
-          <div className={s.headerSearch}>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void searchInMessages();
-                if (e.key === "Escape") setSearchQuery("");
-              }}
-              placeholder="Поиск..."
-              className={s.headerSearchInput}
-            />
-            {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery("")} className={s.headerSearchClear}>
-                <X style={{ width: 14, height: 14 }} />
-              </button>
-            )}
-          </div>
-
-          <Tooltip content={isVisitorsOpen ? "Скрыть посетителей" : "Показать посетителей"} side="bottom">
-            <button type="button" className={`${s.ghostBtn} ${isVisitorsOpen ? s.activeBtn : ""}`} onClick={toggleVisitors}>
-              <Eye style={{ width: 16, height: 16 }} />
-            </button>
-          </Tooltip>
-
-          <Tooltip content={isDetailsOpen ? "Скрыть панель" : "Показать панель"} side="bottom">
-            <button type="button" className={s.ghostBtn} onClick={toggleDetails}>
-              {isDetailsOpen
-                ? <PanelRightClose style={{ width: 16, height: 16 }} />
-                : <PanelRightOpen style={{ width: 16, height: 16 }} />}
-            </button>
-          </Tooltip>
+          {!mobile && primary}
+          <button type="button" className={s.icon} aria-label="Поиск по переписке" aria-pressed={search} onClick={() => setSearch(!search)}><Search /></button>
+          <button type="button" className={s.icon} aria-label="Карточка клиента" aria-pressed={cardOpen} onClick={toggleCard}><PanelRight /></button>
+          <Dropdown.Root>
+            <Dropdown.Trigger asChild><button type="button" className={s.icon} aria-label="Действия с диалогом"><MoreHorizontal /></button></Dropdown.Trigger>
+            <Dropdown.Portal>
+              <Dropdown.Content className={s.menu} align="end" sideOffset={6}>
+                {!session.operator_id && !closed && <Dropdown.Item onSelect={() => void run(state.assignActiveSession)}><UserCheck />Взять диалог</Dropdown.Item>}
+                {canManage && !closed && <Dropdown.Item onSelect={() => setTransfer(true)}><ArrowRightLeft />Передать коллеге</Dropdown.Item>}
+                {canManage && !closed && <Dropdown.Item onSelect={() => void closeConversation(session)}><CircleCheck />Завершить диалог</Dropdown.Item>}
+                {closed && <Dropdown.Item onSelect={() => void reopenConversation(session.id)}><RotateCcw />Открыть снова</Dropdown.Item>}
+                <Dropdown.Item onSelect={() => void run(state.markActiveSessionUnread)}><MessageCircle />Отметить непрочитанным</Dropdown.Item>
+                {canManage && (
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger><Flag />Приоритет</Dropdown.SubTrigger>
+                    <Dropdown.Portal>
+                      <Dropdown.SubContent className={s.menu} sideOffset={4}>
+                        {PRIORITIES.map(([value, label]) => <Dropdown.Item key={value} onSelect={() => void run(() => state.changeActiveSessionPriority(value))}>{label}{session.priority === value && <Check className={s.menuCheck} />}</Dropdown.Item>)}
+                      </Dropdown.SubContent>
+                    </Dropdown.Portal>
+                  </Dropdown.Sub>
+                )}
+                {mine && !closed && <Dropdown.Item onSelect={() => void run(async () => { await leaveChatSession(session.id); await state.loadSessions(); })}><LogOut />Вернуть в очередь</Dropdown.Item>}
+                <Dropdown.Separator />
+                <Dropdown.Item className={s.danger} onSelect={() => void run(async () => {
+                  if (await confirm({ title: "Заблокировать посетителя?", message: "Он не сможет писать с этого устройства. Историю диалога это не удалит.", confirmText: "Заблокировать", danger: true })) {
+                    await blockVisitorBySession(session.visitor_id); await state.loadSessions();
+                  }
+                })}><Ban />Заблокировать спам</Dropdown.Item>
+              </Dropdown.Content>
+            </Dropdown.Portal>
+          </Dropdown.Root>
         </div>
       </header>
 
-      {/* Search results banner */}
-      {messageSearchResults.length > 0 && (
-        <div className={s.searchBanner}>Найдено: {messageSearchResults.length} сообщений</div>
-      )}
-      {isMessageSearching && <div className={s.searchingBanner}>Ищем...</div>}
+      {mobile && primary && (closed || !session.operator_id) && <div className={s.mobileAction}>{primary}</div>}
 
-      {/* Reply bar */}
-      {replyTo && (
-        <div className={s.replyBar}>
-          <Reply style={{ width: 16, height: 16, color: "var(--accent)" }} />
-          <div className={s.replyInfo}>
-            <div className={s.replySender}>{senderLabel(replyTo.sender)}</div>
-            <div className={s.replyText}>{replyTo.message}</div>
-          </div>
-          <button type="button" onClick={() => setReplyTo(null)} className={s.replyClose}>
-            <X style={{ width: 14, height: 14 }} />
-          </button>
+      {search && (
+        <form className={s.search} onSubmit={e => { e.preventDefault(); void state.searchInMessages(); }}>
+          <Search aria-hidden="true" />
+          <input autoFocus aria-label="Поиск по переписке" placeholder="Слово, фраза или номер заказа" value={state.messageSearchQuery} onChange={e => state.setMessageSearchQuery(e.target.value)} />
+          <Button size="sm" variant="secondary" type="submit" loading={state.isMessageSearching}>Найти</Button>
+          <button className={s.icon} type="button" aria-label="Закрыть поиск" onClick={() => { setSearch(false); state.clearMessageSearch(); }}><X /></button>
+        </form>
+      )}
+      {search && state.messageSearchError && <div role="alert" className={s.notice}>{state.messageSearchError}</div>}
+      {search && state.hasMessageSearch && (
+        <div className={s.results}>
+          <p className={s.searchSummary}>{state.messageSearchTotal ? `Найдено сообщений: ${state.messageSearchTotal}` : "По этой фразе ничего не найдено"}</p>
+          {state.messageSearchResults.map(result => (
+            <button type="button" key={result.id} onClick={() => { void state.goToSearchResult(result); setSearch(false); }}>
+              <span>{messageTime(result.created_at)} · {dateLabel(result.created_at)}</span><p>{result.message}</p>
+            </button>
+          ))}
+          {state.messageSearchPage < state.messageSearchPages && <button type="button" disabled={state.isMessageSearching} onClick={() => void state.searchInMessages(true)}>{state.isMessageSearching ? "Загружаем…" : "Показать ещё"}</button>}
         </div>
       )}
+      {state.focusedMessageId && <div className={s.notice}>Вы смотрите найденное сообщение в истории<button type="button" onClick={() => { useInboxStore.setState({ focusedMessageId: null, messages: [], olderCursor: null }); void state.loadMessages(); }}>К последним сообщениям</button></div>}
+      {state.messagesError && <div className={s.notice} role="status">{state.messagesError}<button type="button" onClick={() => void state.loadMessages()}>Обновить</button></div>}
 
-      {/* ── Messages ── */}
-      <div ref={containerRef} className={`${s.messages} scrollbar-thin`}>
-        {/* Skeleton loading */}
-        {isMessagesLoading && (
-          <div className={s.loadingWrap}>
-            <SkeletonMessage align="left" />
-            <SkeletonMessage align="right" />
-            <SkeletonMessage align="left" />
-            <SkeletonMessage align="right" />
-          </div>
-        )}
-
-        {!isMessagesLoading && messages.length === 0 && (
-          <div className={s.emptyMessages}>
-            <div className={s.emptyMessagesIcon}>
-              <MessagesSquare style={{ width: 26, height: 26 }} />
-            </div>
-            <div className={s.emptyMessagesTitle}>Пока нет сообщений</div>
-            <div className={s.emptyMessagesDesc}>
-              Напишите первым — клиент получит ваше сообщение в виджете на сайте
-            </div>
-          </div>
-        )}
-
-        {groupedMessages.map((group) => (
-          <div key={group.date}>
-            {/* Date separator */}
-            <div className={s.dateSep}>
-              <div className={s.dateLine} />
-              <span className={s.dateLabel}>{formatDateLabel(group.msgs[0].created_at)}</span>
-              <div className={s.dateLine} />
-            </div>
-
-            {group.msgs.map((msg, idx) => {
-              const prev = idx > 0 ? group.msgs[idx - 1] : null;
-              const showHeader = !prev || prev.sender !== msg.sender;
-              const isHovered = hoveredMsgId === msg.id;
-              const canModify = canEditOrDelete(msg, operator?.id);
-              const isEditing = editingMsgId === msg.id;
-              const isLastOperatorMsg = msg.id === lastOperatorMsg?.id;
-              const isOperator = msg.sender === "operator";
-              const isVisitor = msg.sender === "visitor";
-
-              // System message
-              if (msg.sender === "system") {
-                const isAutoResponse = msg.message_type === "auto_response";
-                return (
-                  <div key={msg.id} className={`${s.systemMsg} ${isAutoResponse ? s.systemMsgAuto : ""}`}>
-                    <div className={`${s.systemBubble} ${isAutoResponse ? s.systemBubbleAuto : ""}`}>
-                      {isAutoResponse ? (
-                        <span style={{ fontSize: 14 }}>⚡</span>
-                      ) : (
-                        <Info style={{ width: 14, height: 14 }} />
-                      )}
-                      {isAutoResponse && <span className={s.autoTag}>Автоответ</span>}
-                      {msg.message}
-                    </div>
-                  </div>
-                );
-              }
-
-              // Deleted message
-              if (msg.is_deleted) {
-                const isDeletedByOperator = msg.sender === "operator";
-                return (
-                  <div key={msg.id} className={`${s.deletedMsg} ${isOperator ? s.deletedMsgRight : s.deletedMsgLeft}`} style={{ marginBottom: 8 }}>
-                    <div className={s.deletedBubble}>
-                      <Trash2 style={{ width: 14, height: 14, opacity: 0.6 }} />
-                      {isDeletedByOperator ? "Сообщение удалено оператором" : "Сообщение удалено клиентом"}
-                    </div>
-                  </div>
-                );
-              }
-
-              const messageIsImage = msg.message_type === "image" || isImageUrl(msg.message);
-              const attachments: { url: string; filename?: string }[] = (() => {
-                try {
-                  if (msg.attachments && typeof msg.attachments === "string") return JSON.parse(msg.attachments);
-                  if (Array.isArray(msg.attachments)) return msg.attachments;
-                } catch { /* */ }
-                return [];
-              })();
-              const imageUrl = messageIsImage ? (attachments[0]?.url || msg.message) : null;
-              const allImages = attachments.length > 0
-                ? attachments.map((a: { url: string }) => a.url)
-                : imageUrl ? [imageUrl] : [];
-              const replyRef = msg.reply_to_id
-                ? (msg.reply_to_message
-                  ? { sender: msg.reply_to_sender || "visitor", message: msg.reply_to_message }
-                  : messages.find((m) => m.id === msg.reply_to_id))
-                : null;
-
+      <div className={s.timelineWrap}>
+        <div
+          className={`${s.timeline} scrollbar-thin`}
+          ref={scroller}
+          onScroll={e => {
+            const el = e.currentTarget;
+            nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+            if (useInboxStore.getState().readingLatest !== nearBottom.current) useInboxStore.setState({ readingLatest: nearBottom.current });
+            if (nearBottom.current) setBelow(false);
+          }}
+        >
+          <div className={s.thread}>
+            {state.olderCursor && <button type="button" className={s.older} disabled={state.isLoadingOlder} onClick={() => { prependHeight.current = scroller.current?.scrollHeight || null; void state.loadOlderMessages(); }}>{state.isLoadingOlder ? "Загружаем…" : "Показать предыдущие сообщения"}</button>}
+            {!messages.length && <div className={s.empty}>{state.isMessagesLoading ? "Загружаем переписку…" : "Сообщений пока нет"}</div>}
+            {messages.map((message, index) => {
+              const own = message.sender === "operator", system = message.sender === "system", files = attachments(message);
+              const internal = !!message.is_internal;
+              const author = own ? (message.operator_id === operator?.id ? "Вы" : operators.find(item => item.id === message.operator_id)?.name || "Оператор") : message.sender === "visitor" ? name : "Помощник";
+              const day = index === 0 || !sameDay(messages[index - 1].created_at, message.created_at);
+              const first = startsRun(messages, index);
+              const canEdit = own && message.operator_id === operator?.id && !message.isPending && !message.is_deleted && Date.now() - Date.parse(message.created_at) < 5 * 60 * 1000;
+              const side = own || internal ? "out" : "in";
               return (
-                <motion.div
-                  key={msg.id}
-                  variants={bubbleVariants}
-                  initial="initial"
-                  animate="animate"
-                  transition={bubbleTransition}
-                  className={`${s.msgRow} ${isOperator ? s.msgRowRight : s.msgRowLeft} ${showHeader ? s.msgRowSpaced : s.msgRowTight}`}
-                  onMouseEnter={() => setHoveredMsgId(msg.id)}
-                  onMouseLeave={() => {
-                    setHoveredMsgId(null);
-                    if (reactionPickerMsgId === msg.id) setReactionPickerMsgId(null);
-                  }}
-                >
-                  {/* Message header */}
-                  {showHeader && (
-                    <div className={`${s.msgHeader} ${isOperator ? s.msgHeaderReverse : ""}`}>
-                      <Avatar name={senderLabel(msg.sender)} size="sm" />
-                      <span className={s.msgSender} style={{ color: senderColor(msg.sender) }}>
-                        {senderLabel(msg.sender)}
-                      </span>
-                      <span className={s.msgTime}>{formatTime(msg.created_at)}</span>
-                    </div>
-                  )}
-
-                  {/* Reply reference */}
-                  {replyRef && (
-                    <div className={s.replyRef}>
-                      <span className={s.replyRefSender}>{senderLabel(replyRef.sender)}: </span>
-                      {replyRef.message.slice(0, 100)}{replyRef.message.length > 100 ? "..." : ""}
-                    </div>
-                  )}
-
-                  {/* Action bar on hover — positioned ABOVE bubble */}
-                  {isHovered && !isEditing && (
-                    <div className={`${s.actionBar} ${isOperator ? s.actionBarRight : s.actionBarLeft}`}>
-                      <button type="button" className={s.msgAction} onClick={() => setReactionPickerMsgId(msg.id)}>
-                        <SmilePlus style={{ width: 14, height: 14 }} />
-                      </button>
-                      <button type="button" className={s.msgAction} onClick={() => setReplyTo(msg)}>
-                        <Reply style={{ width: 14, height: 14 }} />
-                      </button>
-                      {canModify && (
-                        <>
-                          <button
-                            type="button"
-                            className={s.msgAction}
-                            onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message); }}
-                          >
-                            <Pencil style={{ width: 14, height: 14 }} />
-                          </button>
-                          <button
-                            type="button"
-                            className={`${s.msgAction} ${s.msgActionDanger}`}
-                            onClick={() => void handleDelete(msg.id)}
-                          >
-                            <Trash2 style={{ width: 14, height: 14 }} />
-                          </button>
-                        </>
+                <div key={message.id} id={`message-${message.id}`} className={s.entry} data-focused={state.focusedMessageId === message.id || undefined}>
+                  {day && <div className={s.day}><span>{dateLabel(message.created_at)}</span></div>}
+                  {system ? <div className={s.system}>{message.message}<time dateTime={message.created_at}>{messageTime(message.created_at)}</time></div> : (
+                    <div className={s.message} data-side={side} data-kind={internal ? "note" : message.sender} data-first={first || undefined}>
+                      {first && (
+                        <div className={s.meta}>
+                          {internal && <LockKeyhole aria-hidden="true" />}
+                          <span>{internal ? `Заметка для команды · ${author}` : author}</span>
+                          <time dateTime={message.created_at}>{messageTime(message.created_at)}</time>
+                        </div>
                       )}
-                    </div>
-                  )}
-
-                  {/* Reaction picker */}
-                  {reactionPickerMsgId === msg.id && (
-                    <div className={s.reactionPicker}>
-                      {QUICK_REACTIONS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className={s.reactionBtn}
-                          onClick={() => void handleReaction(msg.id, emoji)}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Image grid or message */}
-                  {allImages.length > 0 ? (
-                    allImages.length === 1 ? (
-                      <div className={s.imageMsg} onClick={() => setLightboxSrc(allImages[0])}>
-                        <img src={allImages[0]} alt="Фото" className={s.imageMain} loading="lazy" />
+                      <div className={s.bubbleRow}>
+                        <div className={s.bubble} title={first ? undefined : messageTime(message.created_at)}>
+                          {message.reply_to_id && (
+                            <button type="button" className={s.quote} onClick={() => document.getElementById(`message-${message.reply_to_id}`)?.scrollIntoView({ block: "center" })}>
+                              <Reply aria-hidden="true" />{message.reply_to_message || messages.find(item => item.id === message.reply_to_id)?.message || "Ответ на сообщение"}
+                            </button>
+                          )}
+                          {message.is_deleted ? <span className={s.deleted}>Сообщение удалено</span> : <>
+                            {files.map((file, i) => file.mime_type?.startsWith("image/") || message.message_type === "image"
+                              ? <AttachmentImage key={i} src={file.url} label={file.filename || "Вложение"} refresh={() => void state.loadMessages()} open={() => setImage(file.url)} />
+                              : <a key={i} className={s.file} href={`${file.url}${file.url.includes("?") ? "&" : "?"}download=1`} target="_blank" rel="noreferrer noopener"><FileText /><span>{file.filename || "Документ"}<small>Открыть файл</small></span></a>)}
+                            {(!files.length || message.message_type === "text") && message.message && <div className={s.text}>{richText(message.message)}</div>}
+                          </>}
+                          {own && !internal && !message.is_deleted && (
+                            <span className={s.receipt} title={message.isPending ? "Ожидает отправки" : message.status === "read" ? "Прочитано" : message.status === "delivered" ? "Доставлено" : "Отправлено"}>
+                              {message.is_edited && <span>изменено</span>}
+                              {message.isPending ? <span>в очереди</span> : message.status === "read" ? <CheckCheck className={s.read} /> : message.status === "delivered" ? <CheckCheck /> : <Check />}
+                            </span>
+                          )}
+                        </div>
+                        {!message.isPending && !message.is_deleted && (
+                          <Dropdown.Root>
+                            <Dropdown.Trigger asChild><button type="button" className={s.messageMore} aria-label="Действия с сообщением"><MoreHorizontal /></button></Dropdown.Trigger>
+                            <Dropdown.Portal>
+                              <Dropdown.Content className={s.menu} sideOffset={4} align={side === "out" ? "end" : "start"}>
+                                <Dropdown.Item onSelect={() => state.setReplyTo(message)}><Reply />Ответить</Dropdown.Item>
+                                <Dropdown.Sub>
+                                  <Dropdown.SubTrigger><SmilePlus />Реакция</Dropdown.SubTrigger>
+                                  <Dropdown.Portal><Dropdown.SubContent className={`${s.menu} ${s.emojiMenu}`} sideOffset={4}>{EMOJIS.map(emoji => <Dropdown.Item key={emoji} onSelect={() => react(message, emoji)}>{emoji}</Dropdown.Item>)}</Dropdown.SubContent></Dropdown.Portal>
+                                </Dropdown.Sub>
+                                {canEdit && <Dropdown.Item onSelect={() => { setEditing(message); setEditText(message.message); }}><Pencil />Редактировать</Dropdown.Item>}
+                                {canEdit && <Dropdown.Item className={s.danger} onSelect={() => void run(() => remove(message))}><Trash2 />Удалить</Dropdown.Item>}
+                              </Dropdown.Content>
+                            </Dropdown.Portal>
+                          </Dropdown.Root>
+                        )}
                       </div>
-                    ) : (
-                      <div className={s.imageGridContainer}>
-                        <div className={`${s.imageGrid} ${
-                          allImages.length === 2 ? s.grid2 : allImages.length === 3 ? s.grid3 : s.grid4
-                        }`}>
-                          {allImages.slice(0, 4).map((imgUrl, idx) => (
-                            <img
-                              key={idx}
-                              src={imgUrl}
-                              alt=""
-                              className={s.imageGridImg}
-                              onClick={() => setLightboxSrc(imgUrl)}
-                              loading="lazy"
-                            />
+                      {message.sendError && (
+                        <div className={s.sendError} role="status">
+                          {message.sendError}
+                          <button type="button" onClick={() => void run(() => offlineQueue.retry(message.id))}>Повторить</button>
+                          <button type="button" onClick={() => void run(() => offlineQueue.cancel(message.id))}>Убрать</button>
+                        </div>
+                      )}
+                      {!!message.reactions?.length && (
+                        <div className={s.reactions}>
+                          {Array.from(new Set(message.reactions.map(item => item.emoji))).map(emoji => (
+                            <button type="button" key={emoji} onClick={() => react(message, emoji)}>{emoji} {message.reactions!.filter(item => item.emoji === emoji).length}</button>
                           ))}
                         </div>
-                      </div>
-                    )
-                  ) : isEditing ? (
-                    /* Edit mode */
-                    <div className={s.editWrap}>
-                      <textarea
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                        autoFocus
-                        className={s.editTextarea}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleEdit(msg.id); }
-                          if (e.key === "Escape") { setEditingMsgId(null); setEditingText(""); }
-                        }}
-                      />
-                      <div className={s.editActions}>
-                        <Button variant="secondary" size="sm" onClick={() => { setEditingMsgId(null); setEditingText(""); }}>
-                          Отмена
-                        </Button>
-                        <Button variant="primary" size="sm" onClick={() => void handleEdit(msg.id)}>
-                          Сохранить
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Text bubble */
-                    <div
-                      className={`${s.bubble} ${
-                        isOperator ? s.bubbleOperator : isVisitor ? s.bubbleVisitor : s.bubbleAi
-                      }`}
-                    >
-                      <div dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.message) }} />
-                      {msg.is_edited && (
-                        <Tooltip
-                          content={`Изменено${msg.updated_at ? ` в ${formatTime(msg.updated_at)}` : ""}`}
-                          side="top"
-                        >
-                          <span className={s.bubbleEdited} style={{ cursor: "help", textDecoration: "underline dashed", opacity: 0.8 }}>(ред.)</span>
-                        </Tooltip>
-                      )}
-                      {!showHeader && (
-                        <div className={`${s.bubbleTimeSub} ${isOperator ? s.operator : s.other}`}>
-                          {formatTime(msg.created_at)}
-                        </div>
                       )}
                     </div>
                   )}
-
-                  {/* Reactions display */}
-                  {msg.reactions && msg.reactions.length > 0 && (
-                    <div className={`${s.reactionsRow} ${isOperator ? s.reactionsRight : s.reactionsLeft}`}>
-                      {Object.entries(
-                        msg.reactions.reduce<Record<string, { emoji: string; count: number; operators: string[]; hasOwn: boolean }>>((acc, r) => {
-                          if (!acc[r.emoji]) acc[r.emoji] = { emoji: r.emoji, count: 0, operators: [], hasOwn: false };
-                          acc[r.emoji].count++;
-                          acc[r.emoji].operators.push(r.operator_name || "Оператор");
-                          if (r.operator_id === operator?.id) acc[r.emoji].hasOwn = true;
-                          return acc;
-                        }, {})
-                      ).map(([emoji, data]) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className={`${s.reactionPill} ${data.hasOwn ? s.reactionPillActive : ""}`}
-                          title={data.operators.join(", ")}
-                          onClick={() => void handleReaction(msg.id, emoji)}
-                        >
-                          <span>{emoji}</span>
-                          {data.count > 1 && <span className={s.reactionCount}>{data.count}</span>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Delivery receipt — only "Доставлено" */}
-                  {isOperator && (
-                    <div className={s.receipt}>
-                      {msg.isPending ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-muted)" }}>
-                          <Clock style={{ width: 12, height: 12, color: "var(--color-warning)" }} />
-                          <span style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic" }}>
-                            Ожидает отправки (оффлайн)
-                          </span>
-                        </div>
-                      ) : msg.status === "read" ? (
-                        <>
-                          <span className={s.receiptChecksRead}>✓✓</span>
-                          <span className={s.receiptTextRead}>Прочитано</span>
-                        </>
-                      ) : msg.status === "delivered" ? (
-                        <>
-                          <span className={s.receiptChecks}>✓✓</span>
-                          <span className={s.receiptText}>Доставлено</span>
-                        </>
-                      ) : isLastOperatorMsg ? (
-                        <>
-                          <Check style={{ width: 14, height: 14, color: "var(--text-disabled)" }} />
-                          <span className={s.receiptText}>Отправлено</span>
-                        </>
-                      ) : null}
-                    </div>
-                  )}
-                </motion.div>
+                </div>
               );
             })}
           </div>
-        ))}
-
-        {/* Scroll-to-bottom (sticky inside scroll container) */}
-        {showScrollBtn && (
-          <button type="button" onClick={scrollToBottom} className={s.scrollBtn}>
-            <ArrowDown style={{ width: 18, height: 18 }} />
-          </button>
-        )}
-
-        <div ref={bottomRef} />
+        </div>
+        {below && <button type="button" className={s.down} onClick={scrollDown}><ArrowDown />Новые сообщения</button>}
       </div>
 
-      {/* ── Typing preview ── */}
-      {activeSession && <TypingPreview sessionId={activeSession.id} />}
+      <footer className={s.composer}>
+        <div className={s.composerInner}>
+          <TypingPreview sessionId={session.id} />
+          {closed
+            ? <div className={s.closed}><CircleCheck aria-hidden="true" /><span>Диалог завершён. Клиент может написать снова — диалог вернётся в работу.</span><Button size="sm" variant="secondary" onClick={() => void reopenConversation(session.id)}>Открыть снова</Button></div>
+            : <ChatComposer key={session.id} />}
+        </div>
+      </footer>
 
-      {/* ── Composer ── */}
-      <div className={s.composerArea}>
-        <ChatComposer />
-      </div>
-    </main>
+      {drop && <div className={s.drop}><FileText />Отпустите файлы здесь<span>Фото и документы до 10 МБ</span></div>}
+
+      <Modal open={transfer} onClose={() => setTransfer(false)} title="Передать диалог" footer={<Button disabled={!target || busy} loading={busy} onClick={() => void run(async () => { setBusy(true); try { await state.transferActiveSession(target, comment); setTransfer(false); setTarget(""); setComment(""); } finally { setBusy(false); } })}>Передать</Button>}>
+        <div className={s.transfer}>
+          <p>Коллега получит переписку и ваш комментарий. Клиент комментарий не увидит.</p>
+          <Select value={target} onChange={setTarget} options={operators.filter(item => item.is_active && item.id !== session.operator_id).map(item => ({ value: item.id, label: `${item.name || item.email}${item.status === "online" ? " · на связи" : item.status === "away" ? " · отошёл" : ""}` }))} placeholder="Выберите коллегу" label="Кому передать" />
+          <label>Комментарий для коллеги<textarea value={comment} maxLength={2000} onChange={e => setComment(e.target.value)} placeholder="Что уже обсудили и чем нужно помочь" /></label>
+        </div>
+      </Modal>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Изменить сообщение" footer={<Button disabled={!editText.trim()} onClick={() => void run(async () => { await editMessage(editing!.id, editText, operator!.id); setEditing(null); await state.loadMessages(); })}>Сохранить</Button>}>
+        <textarea className={s.edit} aria-label="Текст сообщения" value={editText} maxLength={10000} onChange={e => setEditText(e.target.value)} />
+      </Modal>
+      <Modal open={!!image} onClose={() => setImage(null)} title="Вложение" width={860}>{image && <img className={s.fullImage} src={image} alt="Вложение в переписке" />}</Modal>
+      <Modal open={details && mobile} onClose={() => setDetails(false)} title="Карточка клиента" width={520}><div className={s.mobileDetails}><ChatDetails key={session.id} /></div></Modal>
+    </section>
   );
 }

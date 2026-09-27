@@ -1,117 +1,90 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type Theme = "light" | "dark" | "fairytale" | "system";
-export type ResolvedTheme = "light" | "dark" | "fairytale";
+// "fairytale" остаётся только для чтения старых сохранений: теперь это светлая тема.
+export type Theme = "light" | "dark" | "system" | "fairytale";
+export type ResolvedTheme = "light" | "dark";
 
 interface ThemeState {
   theme: Theme;
   resolved: ResolvedTheme;
-  accentHue: number;        // 0..360, для live-кастомизации акцента
   density: "comfortable" | "compact";
-  autoTimeTheme: boolean;   // Автоматическая смена по времени суток (19:00 - 07:00)
+  autoTimeTheme: boolean;   // тёмная тема с 19:00 до 07:00
   setTheme: (theme: Theme) => void;
-  setAccentHue: (hue: number) => void;
   setDensity: (density: "comfortable" | "compact") => void;
   setAutoTimeTheme: (enabled: boolean) => void;
 }
 
-function getSystemTheme(): ResolvedTheme {
-  if (typeof window === "undefined") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
+const SURFACE: Record<ResolvedTheme, string> = { light: "#FAF9F5", dark: "#262624" };
 
-function getAutoTimeThemeResolved(baseTheme: Theme): ResolvedTheme {
-  if (typeof window === "undefined") return "light";
-  const hour = new Date().getHours();
-  // С 19:00 до 07:00 включаем темную тему
-  if (hour >= 19 || hour < 7) {
-    return "dark";
-  }
-  // В светлое время суток возвращаем базовую выбранную светлую тему, если она не тёмная
-  if (baseTheme === "light" || baseTheme === "fairytale") {
-    return baseTheme;
-  }
-  return "fairytale"; // Сказочная по умолчанию
+function systemTheme(): ResolvedTheme {
+  if (typeof window === "undefined" || !window.matchMedia) return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function resolveTheme(theme: Theme, autoTimeTheme: boolean): ResolvedTheme {
   if (autoTimeTheme) {
-    return getAutoTimeThemeResolved(theme);
+    const hour = new Date().getHours();
+    return hour >= 19 || hour < 7 ? "dark" : "light";
   }
-  if (theme === "system") {
-    return getSystemTheme();
-  }
-  return theme;
+  if (theme === "system") return systemTheme();
+  return theme === "dark" ? "dark" : "light";
 }
 
-function applyTheme(resolved: ResolvedTheme, accentHue: number, density: "comfortable" | "compact") {
+function applyTheme(resolved: ResolvedTheme, density: "comfortable" | "compact") {
+  if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.setAttribute("data-theme", resolved);
   root.setAttribute("data-density", density);
-  root.style.setProperty("--accent-hue", String(accentHue));
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", SURFACE[resolved]);
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: "light",
-      resolved: "light",
-      accentHue: 222,        // деловой синий по умолчанию (сказочная/тёмная — в настройках)
+      theme: "system",
+      resolved: resolveTheme("system", false),
       density: "comfortable",
       autoTimeTheme: false,
 
       setTheme: (theme) => {
         const resolved = resolveTheme(theme, get().autoTimeTheme);
-        applyTheme(resolved, get().accentHue, get().density);
+        applyTheme(resolved, get().density);
         set({ theme, resolved });
       },
-      setAccentHue: (accentHue) => {
-        applyTheme(get().resolved, accentHue, get().density);
-        set({ accentHue });
-      },
       setDensity: (density) => {
-        applyTheme(get().resolved, get().accentHue, density);
+        applyTheme(get().resolved, density);
         set({ density });
       },
       setAutoTimeTheme: (autoTimeTheme) => {
         const resolved = resolveTheme(get().theme, autoTimeTheme);
-        applyTheme(resolved, get().accentHue, get().density);
+        applyTheme(resolved, get().density);
         set({ autoTimeTheme, resolved });
       },
     }),
     {
       name: "zhivaya-skazka-theme",
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          const resolved = resolveTheme(state.theme, state.autoTimeTheme);
-          applyTheme(resolved, state.accentHue, state.density);
-          state.resolved = resolved;
-        }
+      version: 2,
+      partialize: ({ theme, density, autoTimeTheme }) => ({ theme, density, autoTimeTheme }),
+      migrate: (persisted) => {
+        const previous = (persisted ?? {}) as Partial<ThemeState>;
+        return { ...previous, theme: previous.theme === "fairytale" ? "light" : (previous.theme ?? "system") } as ThemeState;
       },
-    }
-  )
+    },
+  ),
 );
 
-if (typeof window !== "undefined") {
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    const state = useThemeStore.getState();
-    if (state.theme === "system" && !state.autoTimeTheme) {
-      const resolved = getSystemTheme();
-      applyTheme(resolved, state.accentHue, state.density);
-      useThemeStore.setState({ resolved });
-    }
-  });
+function sync() {
+  const state = useThemeStore.getState();
+  const resolved = resolveTheme(state.theme, state.autoTimeTheme);
+  applyTheme(resolved, state.density);
+  if (resolved !== state.resolved) useThemeStore.setState({ resolved });
+}
 
-  // Автоматический мониторинг времени раз в минуту
-  setInterval(() => {
-    const state = useThemeStore.getState();
-    if (state.autoTimeTheme) {
-      const resolved = resolveTheme(state.theme, true);
-      if (resolved !== state.resolved) {
-        applyTheme(resolved, state.accentHue, state.density);
-        useThemeStore.setState({ resolved });
-      }
-    }
-  }, 60000);
+if (typeof window !== "undefined") {
+  sync();
+  useThemeStore.persist.onFinishHydration(sync);
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", sync);
+  // Переключение по времени суток проверяется раз в минуту.
+  setInterval(() => { if (useThemeStore.getState().autoTimeTheme) sync(); }, 60_000);
 }
