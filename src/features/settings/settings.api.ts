@@ -1,5 +1,4 @@
 import { api } from "@/lib/api";
-import { toast } from "@/components/ui";
 
 /* ── Pre-chat form ── */
 
@@ -73,7 +72,8 @@ export interface WidgetConfig {
   edge_margin: number;             // 16/24/32/40
   bubble_radius: "soft" | "round" | "sharp";         // 12 / 18 / 6 px
   shadow_intensity: "subtle" | "medium" | "strong"; // тень FAB и окна
-  show_powered_by: boolean;        // «✨ Живая Сказка» в подвале
+  header_style: "light" | "accent"; // шапка окна: светлая или в цвет бренда
+  show_powered_by: boolean;        // «Живая Сказка» в подвале
   // 2.4 Поведение клиента
   remember_open_state: boolean;    // запоминать «открыто/свёрнуто» между визитами
   greet_once: boolean;             // показать greeting только один раз на визитёра
@@ -203,6 +203,7 @@ export const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
   edge_margin: 24,
   bubble_radius: "round",
   shadow_intensity: "medium",
+  header_style: "light",
   show_powered_by: true,
   remember_open_state: true,
   greet_once: false,
@@ -249,14 +250,13 @@ export async function getWidgetConfig(): Promise<WidgetConfig> {
   return api<WidgetConfig>("/api/widget-settings/config");
 }
 
-export async function saveWidgetConfig(config: Partial<WidgetConfig>): Promise<WidgetConfig> {
+/** Сервер сохраняет всё корректное; поля, которые он не принял, возвращаются в `dropped` (итог показывает экран). */
+export async function saveWidgetConfig(config: Partial<WidgetConfig>): Promise<{ config: WidgetConfig; dropped: string[] }> {
   const res = await api<{ ok: boolean; config: WidgetConfig; dropped?: string[] }>("/api/widget-settings/config", {
     method: "PUT",
     body: JSON.stringify(config),
   });
-  // Сервер сохраняет всё корректное; ошибочные поля возвращает к значениям по умолчанию и называет их.
-  if (res.dropped?.length) toast.warning("Часть настроек не сохранена", `Проверьте поля: ${res.dropped.join(", ")}. Остальное сохранено.`);
-  return res.config;
+  return { config: res.config, dropped: res.dropped ?? [] };
 }
 
 /* ── Business hours ── */

@@ -361,6 +361,22 @@ test('widget settings keep valid fields when one is invalid and page rules canno
     assert.deepEqual(settings.hidden_paths,['/admin','/upload']);
   } finally { await pool.query("DELETE FROM chat_settings WHERE key='widget_config'"); }
 });
+test('widget values the constructor sends are kept: widget shadows, numbers outside the range are clamped',async()=>{
+  const admin=await actor('admin');
+  try {
+    const autoMessage={id:'am1',enabled:true,trigger:'on_page',delay_seconds:900,message:'Привет',sender_name:'Команда',show_once:true};
+    const response=await app.inject({method:'PUT',url:'/api/widget-settings/config',headers:headers(admin),payload:{
+      shadow_intensity:'subtle',auto_messages:[autoMessage],triggers:{exit_intent:true,time_on_page:5000,scroll_percent:null,inactivity_seconds:2,page_url_contains:''},
+      mobile_invitation_delay:9999,auto_minimize_after:-5,team_avatars_count:40}});
+    assert.equal(response.statusCode,200);
+    const {config,dropped}=response.json();
+    assert.deepEqual(dropped,[],'nothing the constructor offers may be thrown away');
+    assert.equal(config.shadow_intensity,'subtle');
+    assert.equal(config.auto_messages[0].delay_seconds,300);
+    assert.equal(config.triggers.time_on_page,600);assert.equal(config.triggers.inactivity_seconds,5);assert.equal(config.triggers.exit_intent,true);
+    assert.equal(config.mobile_invitation_delay,600);assert.equal(config.auto_minimize_after,0);assert.equal(config.team_avatars_count,10);
+  } finally { await pool.query("DELETE FROM chat_settings WHERE key='widget_config'"); }
+});
 test('starting a visitor chat concurrently creates one assigned conversation',async()=>{
   const op=await actor(),visitor=randomUUID();
   await pool.query("INSERT INTO site_visitors(visitor_id,current_page) VALUES($1,'https://zhivaya-skazka.ru/')",[visitor]);

@@ -309,3 +309,16 @@ test('a notification opens an older conversation even before the inbox list load
   const module=await loadModule('src/lib/open-conversation.ts',{...browser(),getChatSession:async value=>({id:value}),useInboxStore:{getState:()=>inbox},useNavigationStore:{setState:value=>{screen=value}},authEpoch:()=>1,isMobile:()=>true,toast:{error(){}}});
   assert.equal(await module.openConversationFromNotification(id),true);assert.equal(selected.id,id);assert.equal(loaded,id);assert.equal(screen.mobileView,'chat-conversation');
 });
+test('the widget constructor stops settings that would break the site before saving',async()=>{
+  const {firstProblem,hostOnly,pathOnly,sameKind}=await loadModule('src/features/widget-settings/use-widget-settings.ts',browser());
+  const draft=patch=>({config:{auto_invite_enabled:false,auto_invite_message:'',offline_mode:'form',offline_redirect_url:'',page_rules:[],...patch.config},prechat:{enabled:false,fields:[],...patch.prechat},hours:{schedule:{mon:{from:'09:00',to:'18:00'}},...patch.hours},domains:{}});
+  assert.equal(firstProblem(draft({})),null);
+  assert.match(firstProblem(draft({prechat:{enabled:true}})),/форм/);
+  assert.match(firstProblem(draft({config:{page_rules:[{enabled:true,pattern:' '}]}})),/Поведение/);
+  assert.equal(firstProblem(draft({config:{page_rules:[{enabled:false,pattern:''}]}})),null);
+  assert.match(firstProblem(draft({hours:{schedule:{mon:{from:'9',to:'18:00'}}}})),/Часы работы/);
+  assert.match(firstProblem(draft({config:{offline_mode:'redirect',offline_redirect_url:'site.ru/contacts'}})),/https:/);
+  assert.equal(hostOnly('https://www.Zhivaya-Skazka.ru/page?x=1'),'zhivaya-skazka.ru');
+  assert.equal(pathOnly('admin'),'/admin');assert.equal(pathOnly('  '),'');
+  assert.deepEqual({...sameKind({hidden_paths:[],color:'#aa5129',avatar_url:null},{hidden_paths:null,color:'#1f2937',avatar_url:'/a.png',unknown:1})},{color:'#1f2937',avatar_url:'/a.png'});assert.deepEqual({...sameKind({a:1},'text')},{});
+});

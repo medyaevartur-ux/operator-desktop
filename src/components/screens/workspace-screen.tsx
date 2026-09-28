@@ -6,7 +6,7 @@ const Operators=lazy(()=>import("./operators-screen").then(m=>({default:m.Operat
 const Settings=lazy(()=>import("./settings-screen").then(m=>({default:m.SettingsScreen})));
 const Queue=lazy(()=>import("./queue-screen").then(m=>({default:m.QueueScreen})));
 const Visitors=lazy(()=>import("./visitors-screen").then(m=>({default:m.VisitorsScreen})));
-const Widget=lazy(()=>import("./widget-settings-screen").then(m=>({default:m.WidgetSettingsScreen})));
+const Widget=lazy(()=>import("@/features/widget-settings/widget-settings-screen").then(m=>({default:m.WidgetSettingsScreen})));
 const Templates=lazy(()=>import("./templates-screen").then(m=>({default:m.TemplatesScreen})));
 const Dashboard=lazy(()=>import("./dashboard-screen").then(m=>({default:m.DashboardScreen})));
 const Logs=lazy(()=>import("@/pages/LogsPage"));

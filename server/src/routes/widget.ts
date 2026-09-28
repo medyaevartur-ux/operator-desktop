@@ -54,12 +54,14 @@ const ratingSchema = z.object({
 });
 
 const colorRegex = /^#[0-9a-fA-F]{3,8}$/;
+/** Число вне диапазона приводится к ближайшей границе: одно лишнее значение не должно выбрасывать всю настройку. */
+const within = (min: number, max: number) => z.number().transform(value => Math.min(max, Math.max(min, Math.round(value))));
 
 const autoMessageSchema = z.object({
   id: z.string().max(50),
   enabled: z.boolean(),
   trigger: z.enum(["first_visit", "return_visit", "on_page", "after_idle", "cart_abandon"]),
-  delay_seconds: z.number().min(0).max(300),
+  delay_seconds: within(0, 300),
   message: z.string().max(1000),
   sender_name: z.string().max(100),
   sender_avatar: z.string().max(500).optional(),
@@ -69,15 +71,15 @@ const autoMessageSchema = z.object({
 
 const abVariantSchema = z.object({
   greeting: z.string().max(1000),
-  weight: z.number().min(0).max(100),
+  weight: within(0, 100),
 });
 
 const triggersSchema = z.object({
   exit_intent: z.boolean().optional(),
-  scroll_percent: z.number().min(1).max(100).nullable().optional(),
-  time_on_page: z.number().min(1).max(600).nullable().optional(),
+  scroll_percent: within(1, 100).nullable().optional(),
+  time_on_page: within(1, 600).nullable().optional(),
   page_url_contains: z.string().max(500).optional(),
-  inactivity_seconds: z.number().min(5).max(600).nullable().optional(),
+  inactivity_seconds: within(5, 600).nullable().optional(),
 }).optional();
 
 const widgetConfigSchema = z.object({
@@ -92,14 +94,14 @@ const widgetConfigSchema = z.object({
   button_text: z.string().max(100).optional(),
   button_size: z.enum(["small", "medium", "large"]).optional(),
   button_radius: z.enum(["round", "rounded", "square"]).optional(),
-  auto_open_delay: z.number().min(0).max(600).optional(),
+  auto_open_delay: within(0, 600).optional(),
   hide_on_mobile: z.boolean().optional(),
   custom_css: z.string().max(10000).optional(),
   // 1.1 Gradient
   gradient_type: z.enum(["solid", "gradient", "glass", "animated"]).optional(),
   gradient_from: z.string().regex(colorRegex).optional(),
   gradient_to: z.string().regex(colorRegex).optional(),
-  gradient_angle: z.number().min(0).max(360).optional(),
+  gradient_angle: within(0, 360).optional(),
   // 1.2 Theme
   theme: z.enum(["light", "dark", "auto", "custom"]).optional(),
   custom_bg: z.string().regex(colorRegex).optional(),
@@ -127,7 +129,7 @@ const widgetConfigSchema = z.object({
   response_time_label: z.string().max(200).optional(),
   // 3.1 Team
   team_mode: z.boolean().optional(),
-  team_avatars_count: z.number().min(1).max(10).optional(),
+  team_avatars_count: within(1, 10).optional(),
   team_label: z.string().max(200).optional(),
   team_online_text: z.string().max(200).optional(),
   // 4.1 Offline
@@ -153,14 +155,15 @@ const widgetConfigSchema = z.object({
   // 6.3 Identity
   identity_verification: z.boolean().optional(),
   // ═══ Layout / appearance (parity keys, ранее жили только через .passthrough()) ═══
-  font_size_base: z.number().min(8).max(32).optional(),
+  font_size_base: within(8, 32).optional(),
   window_width: z.enum(["narrow", "normal", "wide"]).optional(),
-  edge_margin: z.number().min(0).max(200).optional(),
+  edge_margin: within(0, 200).optional(),
   bubble_radius: z.enum(["sharp", "round", "soft"]).optional(),
-  shadow_intensity: z.enum(["none", "soft", "medium", "strong"]).optional(),
+  // Ровно те значения, которые рисует widget.js (buildCss): subtle / medium / strong.
+  shadow_intensity: z.enum(["subtle", "medium", "strong"]).optional(),
   remember_open_state: z.boolean().optional(),
   greet_once: z.boolean().optional(),
-  auto_minimize_after: z.number().min(0).max(3600).optional(),
+  auto_minimize_after: within(0, 3600).optional(),
   hide_unread_badge: z.boolean().optional(),
   disable_sound_for_visitor: z.boolean().optional(),
   // ═══ Mobile ═══
@@ -168,7 +171,7 @@ const widgetConfigSchema = z.object({
   mobile_window_mode: z.enum(["fullscreen", "bottom_sheet", "popup"]).optional(),
   mobile_invitation_enabled: z.boolean().optional(),
   mobile_invitation_text: z.string().max(500).optional(),
-  mobile_invitation_delay: z.number().min(0).max(600).optional(),
+  mobile_invitation_delay: within(0, 600).optional(),
   mobile_hide_unread_badge: z.boolean().optional(),
   // ═══ Display rules ═══
   display_pages: z.string().max(5000).optional(),
@@ -178,9 +181,9 @@ const widgetConfigSchema = z.object({
   show_powered_by: z.boolean().optional(),
   // ═══ Автоматические приглашения: одна явная настройка ═══
   auto_invite_enabled: z.boolean().optional(),
-  auto_invite_delay: z.number().int().min(15).max(3600).optional(),
+  auto_invite_delay: within(15, 3600).optional(),
   auto_invite_message: z.string().trim().min(1).max(500).optional(),
-  auto_invite_cooldown_hours: z.number().int().min(1).max(720).optional(),
+  auto_invite_cooldown_hours: within(1, 720).optional(),
   hidden_paths: z.array(z.string().max(200)).max(50).optional(),
 }).passthrough();
 
@@ -247,7 +250,7 @@ const businessHoursSchema = z.object({
 const domainSettingsSchema = z.object({
   enabled: z.boolean(),
   domains: z.array(z.string().max(200)).max(100),
-  rate_limit: z.number().min(1).max(1000),
+  rate_limit: within(1, 1000),
 });
 
 // ═══ OPERATOR CACHE (fix N+1) ═══
