@@ -7,6 +7,7 @@ import { hashToken, openRotation, sealRotation } from '../core/security.js';
 export type PublicOperator = { id: string; name: string; email: string; role: string; avatar_url: string | null; status: string; is_online: boolean; is_active: boolean };
 const columns = 'id, name, email, role, avatar_url, status, is_online, is_active';
 const unauthorized = () => Object.assign(new Error('Сеанс завершён. Войдите снова.'), { statusCode: 401 });
+const ROTATION_GRACE_MS = 5 * 60 * 1000;
 
 export async function activeOperator(id: string, client: Pick<PoolClient, 'query'> = pool): Promise<PublicOperator | null> {
   const { rows } = await client.query(`SELECT ${columns} FROM chat_operators WHERE id=$1 AND is_active=true AND role IN ('admin','supervisor','operator')`, [id]);
@@ -54,9 +55,11 @@ export async function rotateAuthSession(app: FastifyInstance, token: string, ins
     const operator = await activeOperator(session.operator_id, client);
     if (!operator) return null;
     if (session.replaced_by) {
-      // Brief encrypted grace window handles an interrupted HTTP response or
-      // simultaneous tabs. Outside it, reuse revokes the complete token family.
-      if (session.rotation_envelope && Date.now() - new Date(session.rotated_at).getTime() <= 10000) {
+      // Encrypted grace window: the server may commit a rotation whose response never
+      // reaches the device (slow disk, dropped network, simultaneous tabs). A retry with
+      // the old token gets the same still-unused successor. After the window, or once the
+      // successor has been used, reuse revokes the complete token family.
+      if (session.rotation_envelope && Date.now() - new Date(session.rotated_at).getTime() <= ROTATION_GRACE_MS) {
         const next = await client.query('SELECT * FROM chat_v8_auth_sessions WHERE id=$1 AND revoked_at IS NULL', [session.replaced_by]);
         if (next.rows[0] && !next.rows[0].replaced_by) return makePair(app, operator, next.rows[0], openRotation(session.rotation_envelope));
       }

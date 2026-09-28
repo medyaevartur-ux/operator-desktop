@@ -28,7 +28,9 @@ export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   add: (toast) => {
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2);
-    set((state) => ({ toasts: [...state.toasts, { ...toast, id }] }));
+    // Один сбой из нескольких мест сразу — одно уведомление, а не стопка одинаковых.
+    const same = (t: ToastItem) => !toast.action && t.type === toast.type && t.title === toast.title && t.message === toast.message;
+    set((state) => (state.toasts.some(same) ? state : { toasts: [...state.toasts, { ...toast, id }] }));
   },
   remove: (id) => {
     set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));

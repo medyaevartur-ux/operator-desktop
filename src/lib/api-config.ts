@@ -17,11 +17,17 @@ export async function fetchWithDeadline(path: string, options: RequestInit = {},
   if (!path.startsWith("/api/") || path.includes("..")) throw new Error("Недопустимый адрес запроса");
   const controller = new AbortController();
   const abort = () => controller.abort();
-  const timer = setTimeout(abort, timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; abort(); }, timeoutMs);
   options.signal?.addEventListener("abort", abort, { once: true });
   if (options.signal?.aborted) abort();
   try {
     return await fetch(`${API_BASE}${path}`, { ...options, signal: controller.signal, credentials: options.credentials ?? "include", redirect: "error" });
+  } catch (error) {
+    // Status 0 = no answer at all: callers (the outbox) retry it like a lost network.
+    if (timedOut) throw new ApiError("Сервер не ответил вовремя. Повторим автоматически.", 0, "timeout");
+    if (error instanceof TypeError) throw new ApiError("Нет связи с сервером. Повторим автоматически.", 0, "network");
+    throw error;
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);

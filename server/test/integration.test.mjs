@@ -61,10 +61,21 @@ test('refresh tokens are hashed, rotate, and revoke a family on late replay',asy
   assert.notEqual(saved.rows[0].token_hash,op.refresh_token);
   const refreshed=await app.inject({method:'POST',url:'/api/chat-v8/auth/refresh',payload:{refresh_token:op.refresh_token,installation_id:op.installation_id}});
   assert.equal(refreshed.statusCode,200);assert.notEqual(refreshed.json().refresh_token,op.refresh_token);
-  await pool.query("UPDATE chat_v8_auth_sessions SET rotated_at=now()-interval '1 minute' WHERE operator_id=$1 AND replaced_by IS NOT NULL",[op.id]);
+  await pool.query("UPDATE chat_v8_auth_sessions SET rotated_at=now()-interval '6 minutes' WHERE operator_id=$1 AND replaced_by IS NOT NULL",[op.id]);
   const replay=await app.inject({method:'POST',url:'/api/chat-v8/auth/refresh',payload:{refresh_token:op.refresh_token,installation_id:op.installation_id}});
   assert.equal(replay.statusCode,401);
   assert.equal((await app.inject({url:'/api/auth/me',headers:{authorization:'Bearer '+refreshed.json().token}})).statusCode,401);
+});
+test('a lost refresh response keeps the device signed in; replay after the successor is used is theft',async()=>{
+  const op=await actor();
+  const refresh=token=>app.inject({method:'POST',url:'/api/chat-v8/auth/refresh',payload:{refresh_token:token,installation_id:op.installation_id}});
+  const lost=await refresh(op.refresh_token);assert.equal(lost.statusCode,200);
+  // The server rotated, the device never saw the answer and retries a minute later (28.09 slow-disk case).
+  await pool.query("UPDATE chat_v8_auth_sessions SET rotated_at=now()-interval '1 minute' WHERE operator_id=$1 AND replaced_by IS NOT NULL",[op.id]);
+  const retried=await refresh(op.refresh_token);
+  assert.equal(retried.statusCode,200);assert.equal(retried.json().refresh_token,lost.json().refresh_token);
+  assert.equal((await refresh(retried.json().refresh_token)).statusCode,200,'the device continues with the successor');
+  assert.equal((await refresh(op.refresh_token)).statusCode,401,'the old token after its successor was used revokes the family');
 });
 test('concurrent identical visitor sends create exactly one row, counter and event',async()=>{
   const s=await session(),cid=randomUUID();

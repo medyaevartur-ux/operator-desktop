@@ -1244,7 +1244,7 @@ ${safeCss}`;
         }
       }
 
-      if (state.isOffline) {
+      if (offlineNow()) {
         win.appendChild(mkOfflineBanner());
       }
 
@@ -1254,7 +1254,7 @@ ${safeCss}`;
 
       // Composer logic
       const offMode = cfg.offline_mode || "message_only";
-      if (state.isOffline && (offMode === "email_capture" || offMode === "callback_request" || offMode === "redirect")) {
+      if (offlineNow() && (offMode === "email_capture" || offMode === "callback_request" || offMode === "redirect")) {
         // no composer
       } else {
         win.appendChild(mkComposer(cfg));
@@ -1595,7 +1595,7 @@ ${safeCss}`;
     h.className = "zw-hdr";
 
     // Team avatars (only when online)
-    if (cfg.team_mode && state.teamOperators?.length > 0 && !state.isOffline) {
+    if (cfg.team_mode && state.teamOperators?.length > 0 && !offlineNow()) {
       const teamW = document.createElement("div");
       teamW.className = "zw-team";
       const maxAva = cfg.team_avatars_count || 3;
@@ -1635,7 +1635,7 @@ ${safeCss}`;
     state.refs.headerName = name;
     const s2 = state.session;
 
-    if (state.isOffline) {
+    if (offlineNow()) {
       name.textContent = cfg.header_title || "Мы офлайн";
     } else if (cfg.team_mode) {
       name.textContent = cfg.team_label || "Команда поддержки";
@@ -1655,7 +1655,7 @@ ${safeCss}`;
     dot.className = "zw-dot";
     state.refs.headerDot = dot;
 
-    if (state.isOffline) {
+    if (offlineNow()) {
       dot.classList.add("offline");
       st.appendChild(dot);
       st.appendChild(document.createTextNode("Офлайн"));
@@ -3263,6 +3263,12 @@ ${safeCss}`;
   }
 
   // ═══ BUSINESS HOURS ═══
+  // Нерабочие часы не касаются посетителя, с которым оператор уже разговаривает:
+  // «Мы офлайн» рядом с живыми ответами сбивает с толку.
+  function offlineNow() {
+    return state.isOffline && state.session?.status !== "with_operator";
+  }
+
   function checkOffline() {
     const bh = state.businessHours;
     if (!bh || !bh.enabled) return false;
