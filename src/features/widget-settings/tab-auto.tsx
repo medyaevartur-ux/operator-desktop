@@ -73,7 +73,10 @@ export function AutoTab({ w }: { w: WidgetEditor }) {
         )}
       </Section>
 
-      <Section title="Автосообщения" description="Появляются в окне чата, пока посетитель ещё не писал. Если он ответит, сообщение станет началом диалога — вы увидите то же, что и он." inactive={!on} inactiveNote={OFF_NOTE}>
+      <Section title="Автосообщения" description="Первое сообщение от команды: посетитель видит «печатает…», потом текст. Если он ответит, сообщение станет началом диалога — вы увидите то же, что и он." inactive={!on} inactiveNote={OFF_NOTE}>
+        {messages.length > 0 && (
+          <Note>В срок окно откроется само и пару секунд «печатает». Открыл чат раньше — видит «печатает…» до срока, но не дольше 10 секунд. Если посетитель уже отказался от приглашений, окно само не откроется: сообщение дождётся, когда он откроет чат.</Note>
+        )}
         {messages.map((message, index) => (
           <div key={message.id} className={s.item} data-off={!message.enabled || undefined}>
             <div className={s.itemHead}>
@@ -84,16 +87,16 @@ export function AutoTab({ w }: { w: WidgetEditor }) {
               <Select value={message.trigger} onChange={trigger => setMessage(index, { trigger: trigger as AutoMessage["trigger"] })} options={AUTO_MESSAGE_TRIGGERS.map(item => ({ ...item }))} />
             </Row>
             <Row label="Текст" stack>
-              <TextField label="Текст автосообщения" multiline rows={2} value={message.message} maxLength={1000} onChange={text => setMessage(index, { message: text })} />
+              <TextField label="Текст автосообщения" multiline rows={2} value={message.message} maxLength={1000} placeholder="Здравствуйте! Помочь подобрать сказку для вашего ребёнка?" onChange={text => setMessage(index, { message: text })} />
             </Row>
             <div className={s.grid2}>
-              <Row label="Задержка"><NumberField label="Задержка" value={message.delay_seconds} min={0} max={300} unit="сек" onChange={delay_seconds => setMessage(index, { delay_seconds })} /></Row>
+              <Row label={message.trigger === "after_idle" ? "После паузы" : "Через"}><NumberField label="Через сколько секунд" value={message.delay_seconds} min={0} max={300} unit="сек" onChange={delay_seconds => setMessage(index, { delay_seconds })} /></Row>
               <Row label="От имени"><TextField label="От имени" value={message.sender_name} maxLength={100} placeholder="Команда" onChange={sender_name => setMessage(index, { sender_name })} /></Row>
             </div>
             <Row label="Только на страницах" hint="Пусто — на всех" stack>
               <TextField label="Страницы автосообщения" value={message.page_filter ?? ""} maxLength={500} placeholder="/catalog, /checkout" onChange={page_filter => setMessage(index, { page_filter })} />
             </Row>
-            <Toggle label="Показывать один раз" checked={message.show_once} onChange={show_once => setMessage(index, { show_once })} />
+            <Toggle label="Один раз в этом браузере" description="Вернувшийся посетитель его больше не увидит, с другого устройства — увидит. Выключено — раз за каждый визит." checked={message.show_once} onChange={show_once => setMessage(index, { show_once })} />
           </div>
         ))}
         {messages.length < 20 && (

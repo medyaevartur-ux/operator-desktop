@@ -10,6 +10,7 @@ import { useNavigationStore } from "@/store/navigation.store";
 import { useVisitorsStore } from "@/store/visitors.store";
 import { editMessage, deleteMessage, toggleReaction, leaveChatSession, blockVisitorBySession, markChatSessionRead } from "@/features/inbox/inbox.api";
 import { waitingLabel, waitingMinutes } from "@/features/inbox/conversation-list";
+import { autoMessageSender } from "@/features/inbox/inbox.utils";
 import { richText } from "@/features/inbox/rich-text";
 import { closeConversation, reopenConversation } from "@/lib/open-conversation";
 import { API_BASE } from "@/lib/api";
@@ -224,11 +225,13 @@ export function ChatMain({ mobile = false }: { mobile?: boolean }) {
             {messages.map((message, index) => {
               const own = message.sender === "operator", system = message.sender === "system", files = attachments(message);
               const internal = !!message.is_internal;
-              const author = own ? (message.operator_id === operator?.id ? "Вы" : operators.find(item => item.id === message.operator_id)?.name || "Оператор") : message.sender === "visitor" ? name : "Помощник";
+              // Автосообщение сайта — от нашей стороны, под тем именем, которое видел посетитель.
+              const autoFrom = autoMessageSender(message);
+              const author = own ? (message.operator_id === operator?.id ? "Вы" : operators.find(item => item.id === message.operator_id)?.name || "Оператор") : message.sender === "visitor" ? name : autoFrom ? `Автосообщение · ${autoFrom}` : "Помощник";
               const day = index === 0 || !sameDay(messages[index - 1].created_at, message.created_at);
               const first = startsRun(messages, index);
               const canEdit = own && message.operator_id === operator?.id && !message.isPending && !message.is_deleted && Date.now() - Date.parse(message.created_at) < 5 * 60 * 1000;
-              const side = own || internal ? "out" : "in";
+              const side = own || internal || autoFrom ? "out" : "in";
               return (
                 <div key={message.id} id={`message-${message.id}`} className={s.entry} data-focused={state.focusedMessageId === message.id || undefined}>
                   {day && <div className={s.day}><span>{dateLabel(message.created_at)}</span></div>}

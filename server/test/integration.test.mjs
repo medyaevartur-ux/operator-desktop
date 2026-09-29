@@ -377,6 +377,28 @@ test('widget values the constructor sends are kept: widget shadows, numbers outs
     assert.equal(config.mobile_invitation_delay,600);assert.equal(config.auto_minimize_after,0);assert.equal(config.team_avatars_count,10);
   } finally { await pool.query("DELETE FROM chat_settings WHERE key='widget_config'"); }
 });
+test('a chat started by answering an auto message opens with it, signed as the visitor saw it',async()=>{
+  const admin=await actor('admin');
+  try {
+    const autoMessage={id:'am_intro',enabled:true,trigger:'on_page',delay_seconds:8,message:'Здравствуйте! Подсказать с выбором?',sender_name:'Команда',show_once:true};
+    assert.equal((await app.inject({method:'PUT',url:'/api/widget-settings/config',headers:headers(admin),payload:{auto_messages:[autoMessage]}})).statusCode,200);
+    const start=async shownAt=>{
+      const identity=(await app.inject({method:'POST',url:'/api/widget/identity',remoteAddress:'203.0.113.'+ip++,payload:{}})).json();
+      const auth={'x-visitor-id':identity.visitor_id,'x-visitor-token':identity.visitor_token};
+      const created=await app.inject({method:'POST',url:'/api/widget/sessions',headers:auth,payload:{visitor_id:identity.visitor_id,auto_message_id:'am_intro',auto_message_shown_at:shownAt}});
+      assert.equal(created.statusCode,200);
+      return (await app.inject({url:`/api/widget/sessions/${created.json().id}/messages`,headers:auth})).json()[0];
+    };
+    const shownAt=new Date(Date.now()-5*60_000).toISOString();
+    const first=await start(shownAt);
+    assert.equal(first.message,autoMessage.message);
+    assert.equal(first.sender,'ai');
+    assert.deepEqual(typeof first.metadata==='string'?JSON.parse(first.metadata):first.metadata,{kind:'auto_message',auto_message_id:'am_intro',sender_name:'Команда'});
+    assert.ok(Math.abs(Date.parse(first.created_at)-Date.parse(shownAt))<1000,'the history keeps the moment the visitor saw the message');
+    const future=await start(new Date(Date.now()+3_600_000).toISOString());
+    assert.ok(Date.parse(future.created_at)<=Date.now(),'an implausible time from the browser never puts the message after the reply');
+  } finally { await pool.query("DELETE FROM chat_settings WHERE key='widget_config'"); }
+});
 test('starting a visitor chat concurrently creates one assigned conversation',async()=>{
   const op=await actor(),visitor=randomUUID();
   await pool.query("INSERT INTO site_visitors(visitor_id,current_page) VALUES($1,'https://zhivaya-skazka.ru/')",[visitor]);

@@ -186,6 +186,85 @@ test("an automatic invitation after a refusal is declined on the server instead 
   assert.equal(manual.state.pendingInvitation, null);
   assert.equal(manual.localStorage.getItem("zs_invitation_resolved"), "inv-2", "other tabs hide the same invitation");
 });
+function autoMessages(config = {}, extra = {}) {
+  const state = { open: false, openReason: null, session: null, prechatDone: true, prechat: { enabled: false }, autoWelcome: null, autoTyping: null, autoDue: {}, autoVisits: 1,
+    config: { auto_invite_enabled: true, header_title: "Живая Сказка", ...config } };
+  const timers = new Map(); let nextTimer = 0;
+  const ctx = { state, sounds: 0, localStorage: storage(), sessionStorage: storage(), window: {}, location: { href: "https://zhivaya-skazka.ru/catalog/skazka" }, Date, Number, String, Math,
+    AUTO_SEEN_PREFIX: "zw_automsg_", AUTO_VISIT_KEY: "zw_automsg_visit", AUTO_TYPING_MIN_MS: 1500, AUTO_TYPING_POPUP_MS: 2000, AUTO_TYPING_MAX_MS: 10000, CART_PAGE: /cart|checkout|корзин/i,
+    playSound: () => { ctx.sounds++; }, scheduleRender() {}, scrollBottom() {},
+    setTimeout: (fn, ms) => { timers.set(++nextTimer, { fn, ms }); return nextTimer; }, clearTimeout: (id) => { timers.delete(id); },
+    autoShowAllowed: () => !state.open && !state.session,
+    openChat: (reason, am) => { state.open = true; state.openReason = reason; ctx.autoMessageOnOpen(am || null, reason === "auto"); },
+    ...extra };
+  for (const name of ["autoMessageText", "autoMessageSender", "autoMessageSeen", "markAutoMessageSeen", "autoMessageOnThisPage", "autoMessageForOpen", "deliverAutoMessage",
+    "startAutoTyping", "stopAutoTyping", "autoMessageOnOpen", "fireAutoMessage", "restoreVisitAutoMessage", "autoSenderName"]) ctx[name] = widgetFunction(name, ctx);
+  // Выполняет накопленные таймеры и возвращает их задержки.
+  ctx.run = () => { const due = [...timers.values()]; timers.clear(); due.forEach((timer) => timer.fn()); return due.map((timer) => timer.ms); };
+  ctx.timers = timers;
+  return ctx;
+}
+const greeting = { id: "am_1", enabled: true, trigger: "on_page", delay_seconds: 8, message: "Здравствуйте! Подсказать с выбором?", sender_name: "Команда", show_once: true };
+test("the team types the first message, then it stays for the visit and never repeats in this browser", () => {
+  const first = autoMessages({ auto_messages: [greeting] });
+  first.state.autoDue.am_1 = Date.now() + 7000;
+  first.state.open = true;
+  first.autoMessageOnOpen(null, false);
+  assert.equal(first.state.autoTyping.sender, "Команда");
+  assert.equal(first.state.autoWelcome, null, "the text waits for the typing to finish");
+  assert.ok(first.run().some((ms) => ms > 6000 && ms <= 7000), "a visitor who opened the chat early sees typing until the rule's time");
+  assert.equal(first.state.autoWelcome.text, greeting.message);
+  assert.equal(first.sounds, 1);
+  assert.equal(first.localStorage.getItem("zw_automsg_am_1"), "1");
+  const nextPage = autoMessages({ auto_messages: [greeting] }, { localStorage: first.localStorage, sessionStorage: first.sessionStorage });
+  nextPage.restoreVisitAutoMessage(nextPage.state.config);
+  assert.equal(nextPage.state.autoWelcome.text, greeting.message, "the next page of the same visit keeps the message to reply to");
+  assert.equal(nextPage.state.autoWelcome.at, first.state.autoWelcome.at, "and keeps the moment it was shown");
+  const tomorrow = autoMessages({ auto_messages: [greeting] }, { localStorage: first.localStorage });
+  tomorrow.restoreVisitAutoMessage(tomorrow.state.config);
+  tomorrow.fireAutoMessage(greeting);
+  tomorrow.state.open = true;
+  tomorrow.autoMessageOnOpen(null, false);
+  assert.equal(tomorrow.state.autoWelcome, null);
+  assert.equal(tomorrow.state.autoTyping, null, "the same browser never sees the same message twice");
+  const visitOnly = { ...greeting, id: "am_2", show_once: false };
+  const visit = autoMessages({ auto_messages: [visitOnly] });
+  visit.state.open = true; visit.autoMessageOnOpen(null, false); visit.run();
+  assert.equal(visit.localStorage.getItem("zw_automsg_am_2"), null);
+  assert.equal(autoMessages({ auto_messages: [visitOnly] }, { localStorage: visit.localStorage, sessionStorage: visit.sessionStorage }).autoMessageForOpen({ auto_messages: [visitOnly] }), null);
+  assert.equal(autoMessages({ auto_messages: [visitOnly] }, { localStorage: visit.localStorage }).autoMessageForOpen({ auto_messages: [visitOnly] }).id, "am_2", "without «once» it returns on the next visit");
+});
+test("the rule opens the window and types briefly, while a refusal or another page keeps it shut", () => {
+  const popup = autoMessages({ auto_messages: [{ ...greeting, sender_name: "" }] });
+  popup.fireAutoMessage({ ...greeting, sender_name: "" });
+  assert.equal(popup.state.openReason, "auto");
+  assert.ok(popup.run().includes(2000));
+  assert.equal(popup.state.autoWelcome.sender, "Живая Сказка", "without a sender name the header title signs the message");
+  const refused = autoMessages({ auto_messages: [greeting] }, { autoShowAllowed: () => false });
+  refused.fireAutoMessage(greeting);
+  assert.equal(refused.state.open, false);
+  assert.equal(refused.localStorage.getItem("zw_automsg_am_1"), null, "an unseen message waits until the visitor opens the chat");
+  const checkoutOnly = { ...greeting, page_filter: "/checkout" };
+  const catalog = autoMessages({ auto_messages: [checkoutOnly] });
+  catalog.fireAutoMessage(checkoutOnly);
+  assert.equal(catalog.state.open, false);
+});
+test("an auto message is dropped when the visitor writes first or closes the window, and keeps its sender in history", () => {
+  const wrote = autoMessages({ auto_messages: [greeting] });
+  wrote.state.open = true; wrote.autoMessageOnOpen(null, false);
+  wrote.state.session = { id: "chat" };
+  wrote.run();
+  assert.equal(wrote.state.autoWelcome, null);
+  assert.equal(wrote.localStorage.getItem("zw_automsg_am_1"), null);
+  const closed = autoMessages({ auto_messages: [greeting] });
+  closed.state.open = true; closed.autoMessageOnOpen(null, false);
+  closed.state.open = false; closed.stopAutoTyping();
+  closed.run();
+  assert.equal(closed.state.autoWelcome, null);
+  assert.equal(closed.autoMessageForOpen(closed.state.config).id, "am_1", "it is typed again when the visitor comes back to the chat");
+  assert.equal(closed.autoSenderName({ sender: "ai", metadata: '{"kind":"auto_message","sender_name":"Команда"}' }), "Команда");
+  assert.equal(closed.autoSenderName({ sender: "ai", metadata: { kind: "buttons" } }), "", "the product guide keeps its own label");
+});
 test("the chat button lifts above a bar at the bottom of the site and steps aside for a large panel", () => {
   const vh = 812, host = {}, body = {}, html = {};
   const layer = (top, height, style) => ({ parentElement: null, style, box: { top, bottom: top + height, height } });

@@ -1,4 +1,4 @@
-import type { ChatSession } from "@/types/chat";
+import type { ChatMessage, ChatSession } from "@/types/chat";
 
 export type InboxFilter = "all" | "ai" | "with_operator" | "closed";
 
@@ -71,6 +71,14 @@ export function getSessionStatusLabel(status: string) {
   }
 
   return status;
+}
+
+/** Автосообщение сайта: имя, от которого его видел посетитель; для остальных сообщений — null. */
+export function autoMessageSender(message: Pick<ChatMessage, "sender" | "metadata">): string | null {
+  if (message.sender !== "ai") return null;
+  let meta = message.metadata;
+  if (typeof meta === "string") { try { meta = JSON.parse(meta); } catch { return null; } }
+  return meta && typeof meta === "object" && meta.kind === "auto_message" ? meta.sender_name?.trim() || "Команда" : null;
 }
 
 export function getSenderLabel(sender: string) {

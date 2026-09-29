@@ -69,6 +69,8 @@ export interface ChatMessage {
   ai_confidence?: number | null;
   ai_intent?: string | null;
   ai_escalate_reason?: string | null;
+  /** Служебные данные: у автосообщения сайта — kind "auto_message" и имя, от которого его видел посетитель. */
+  metadata?: { kind?: string; sender_name?: string } | string | null;
   is_edited?: boolean;
   is_deleted?: boolean;
   is_internal?: boolean;

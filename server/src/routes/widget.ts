@@ -27,6 +27,7 @@ const visitorSessionSchema = z.object({
   current_page: z.string().max(2000).optional(),
   user_agent: z.string().max(500).optional(),
   auto_message_id: z.string().max(100).optional(),
+  auto_message_shown_at: z.string().max(40).optional(),
 });
 
 // Публичный виджетный постинг: посетитель может слать ТОЛЬКО как 'visitor'.
@@ -478,7 +479,14 @@ export function registerWidgetRoutes(app: FastifyInstance) {
         const config = typeof saved === "string" ? JSON.parse(saved) : saved;
         const auto = Array.isArray(config?.auto_messages) ? config.auto_messages.find((item: { id?: unknown; enabled?: unknown }) => String(item?.id) === parsed.data.auto_message_id && item?.enabled) : null;
         if (auto && typeof auto.message === "string" && auto.message.trim()) {
-          await client.query("INSERT INTO widget_chat_messages(session_id,sender,message,message_type,status,created_at) VALUES($1,'ai',$2,'text','delivered',now()-interval '1 second')", [rows[0].id, auto.message.trim().slice(0, 1000)]);
+          // Подпись та же, что видел посетитель: «от имени» из настроек, иначе заголовок окна.
+          const senderName = (typeof auto.sender_name === "string" && auto.sender_name.trim()) || (typeof config?.header_title === "string" && config.header_title.trim()) || "Команда поддержки";
+          const metadata = { kind: "auto_message", auto_message_id: String(auto.id), sender_name: senderName.slice(0, 100) };
+          // Время, когда посетитель увидел сообщение, — если оно правдоподобно по часам базы: за последние сутки и раньше ответа.
+          const shownAt = Date.parse(parsed.data.auto_message_shown_at || "");
+          await client.query(`INSERT INTO widget_chat_messages(session_id,sender,message,message_type,status,metadata,created_at)
+            VALUES($1,'ai',$2,'text','delivered',$3,CASE WHEN $4::timestamptz BETWEEN now()-interval '1 day' AND now()-interval '1 second' THEN $4::timestamptz ELSE now()-interval '1 second' END)`,
+            [rows[0].id, auto.message.trim().slice(0, 1000), JSON.stringify(metadata), Number.isFinite(shownAt) ? new Date(shownAt).toISOString() : null]);
         }
       }
       return {session:rows[0],created:true};

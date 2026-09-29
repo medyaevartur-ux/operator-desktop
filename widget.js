@@ -188,9 +188,11 @@
   async function api(method,path,body,extraHeaders) {
     if(method==="POST"&&path==="/api/widget/sessions") {
       if(creatingSession)return creatingSession;
+      // Посетитель заговорил первым — недопечатанное автосообщение уже не нужно.
+      if(state.autoTyping)stopAutoTyping();
       // Показанное автосообщение сервер запишет в историю первым — у оператора та же картина, что у клиента.
-      if(state.autoWelcome&&body&&!body.auto_message_id)body={...body,auto_message_id:String(state.autoWelcome.id)};
-      creatingSession=requestApi(method,path,body,extraHeaders).then(result=>{if(result&&result.id)state.autoWelcome=null;return result;}).finally(()=>{creatingSession=null;});
+      if(state.autoWelcome&&body&&!body.auto_message_id)body={...body,auto_message_id:String(state.autoWelcome.id),auto_message_shown_at:state.autoWelcome.at};
+      creatingSession=requestApi(method,path,body,extraHeaders).then(result=>{if(result&&result.id){state.autoWelcome=null;forgetVisitAutoMessage();}return result;}).finally(()=>{creatingSession=null;});
       return creatingSession;
     }
     return requestApi(method,path,body,extraHeaders);
@@ -322,8 +324,8 @@
     exitShown: !!sessionStorage.getItem("zw_exit_trigger"),
     scrollShown: !!sessionStorage.getItem("zw_scroll_trigger"),
     idleTimer: null, idleShown: !!sessionStorage.getItem("zw_idle_trigger"),
-    // auto messages
-    autoMsgShown: {}, autoMsgTimers: [],
+    // auto messages: показанное сообщение, «печатает…» до его появления, срок по правилу, номер визита
+    autoWelcome: null, autoTyping: null, autoDue: {}, autoVisits: 1,
     // offline form
     offlineFormSent: false,
     showOfflineLeadForm: false,
@@ -1494,6 +1496,8 @@ ${safeCss}`;
     const autoOpened = state.openReason === "auto";
     state.open = false;
     state.openReason = null;
+    // В закрытое окно сообщение не «допечатываем»: покажем, когда посетитель откроет чат снова.
+    if (state.autoTyping) stopAutoTyping();
     unlockBodyScroll();
     if (state._autoMinTimer) { clearTimeout(state._autoMinTimer); state._autoMinTimer = null; }
     if (!window.__zsPreviewConfig) { try { localStorage.setItem(OPEN_KEY, "0"); } catch (e) { /* ignore */ } }
@@ -1505,7 +1509,8 @@ ${safeCss}`;
 
   // reason: "user" — нажатие посетителя, "invitation" — принял приглашение,
   // "restore" — возврат открытого окна после перехода, "auto" — правило владельца.
-  function openChat(reason) {
+  // autoMessage — автосообщение, ради которого окно открылось само.
+  function openChat(reason, autoMessage) {
     reason = reason || "user";
     if (reason === "auto" && !autoShowAllowed()) return;
     state.open = true;
@@ -1515,6 +1520,8 @@ ${safeCss}`;
     if (reason !== "auto") { dismissMobInvite(false); cancelAutoTimers(); }
     state.pendingInvitation = null;
     markVisibleAsRead();
+    // Окно открылось — команда «печатает» первое сообщение. После принятого приглашения пишет оператор.
+    if (reason !== "invitation") autoMessageOnOpen(autoMessage || null, reason === "auto");
 
     // Перемещаем хост на самый верх дерева DOM, чтобы z-index работал безотказно
     if (document.body && document.body.lastChild !== host) {
@@ -1858,7 +1865,7 @@ ${safeCss}`;
     let lastDate = "";
     // Автосообщение до начала диалога показывается как первое сообщение; сервер сохранит его при старте диалога.
     const list = !state.session && state.autoWelcome
-      ? [{ id: "auto-welcome", sender: "ai", message: state.autoWelcome.text, created_at: new Date().toISOString(), status: "delivered", _sender_name: state.autoWelcome.sender }].concat(state.messages)
+      ? [{ id: "auto-welcome", sender: "ai", message: state.autoWelcome.text, created_at: state.autoWelcome.at || new Date().toISOString(), status: "delivered", _sender_name: state.autoWelcome.sender }].concat(state.messages)
       : state.messages;
 
     list.forEach((msg) => {
@@ -1884,6 +1891,7 @@ ${safeCss}`;
       }
 
       const isV = msg.sender === "visitor";
+      const autoName = isV ? "" : autoSenderName(msg);
       const imgUrl = msg.is_deleted ? null : getMsgImg(msg);
       const files=getMsgFiles(msg);
       const hasImg = !!imgUrl;
@@ -1906,6 +1914,9 @@ ${safeCss}`;
         } else {
           ava.textContent = (state.session?.operator_name || "Сказка").slice(0,1);
         }
+      } else if (autoName) {
+        ava.className = "zw-ava op";
+        brandAvatar(ava, autoName);
       } else {
         ava.className = "zw-ava ai";
         ava.textContent = "ЖС";
@@ -1919,8 +1930,8 @@ ${safeCss}`;
 
       if (!isV) {
         const snd = document.createElement("div");
-        snd.className = "zw-sender " + (msg.sender === "operator" ? "sop" : "sai");
-        snd.textContent = msg.sender === "ai" ? "AI-бот" : (state.session?.operator_name || "Оператор");
+        snd.className = "zw-sender " + (msg.sender === "operator" || autoName ? "sop" : "sai");
+        snd.textContent = autoName || (msg.sender === "ai" ? "AI-бот" : (state.session?.operator_name || "Оператор"));
         bbl.appendChild(snd);
       }
 
@@ -2153,6 +2164,21 @@ ${safeCss}`;
       formWrap.appendChild(formBbl);
       formRow.appendChild(formWrap);
       c.appendChild(formRow);
+    }
+
+    // Команда «печатает» автосообщение: то же лицо и имя, что будут у сообщения.
+    if (!state.session && state.autoTyping) {
+      const at = document.createElement("div");
+      at.className = "zw-typ show";
+      const aAva = document.createElement("div");
+      aAva.className = "zw-ava op";
+      brandAvatar(aAva, state.autoTyping.sender);
+      at.appendChild(aAva);
+      const aBbl = document.createElement("div");
+      aBbl.className = "zw-typ-bbl";
+      aBbl.innerHTML = '<div class="zw-typ-dots"><span></span><span></span><span></span></div><span class="zw-typ-lbl">' + esc(state.autoTyping.sender) + " печатает…</span>";
+      at.appendChild(aBbl);
+      c.appendChild(at);
     }
 
     // Typing indicator
@@ -3341,11 +3367,126 @@ ${safeCss}`;
   }
 
   // ═══ AUTO MESSAGES ═══
-  // Автосообщение показывается в окне как приветствие и не создаёт диалог само по себе.
-  // Если посетитель ответит, сервер запишет это сообщение в историю первым — оператор увидит то же, что и клиент.
+  // Первое сообщение от команды: посетитель видит «Команда печатает…», затем текст.
+  // Срок правила наступил, а окно закрыто — окно открывается само и пару секунд «печатает».
+  // Посетитель открыл чат раньше срока — «печатает…» идёт до срока (не дольше 10 секунд).
+  // «Один раз» — больше никогда в этом браузере; выключено — раз за визит. До конца визита сообщение
+  // остаётся в окне и на других страницах. Ответ посетителя делает его началом диалога на сервере.
+  const AUTO_SEEN_PREFIX = "zw_automsg_";
+  const AUTO_VISIT_KEY = "zw_automsg_visit";
+  const AUTO_TYPING_MIN_MS = 1500;
+  const AUTO_TYPING_POPUP_MS = 2000;
+  const AUTO_TYPING_MAX_MS = 10000;
+  const CART_PAGE = /cart|checkout|корзин/i;
+
+  function autoMessageText(am) {
+    return am && am.enabled ? String(am.message || "").trim() : "";
+  }
+  function autoMessageSender(am, cfg) {
+    return String(am.sender_name || "").trim() || cfg.header_title || "Команда поддержки";
+  }
+  function autoMessageSeen(am) {
+    try { return (am.show_once ? localStorage : sessionStorage).getItem(AUTO_SEEN_PREFIX + am.id) === "1"; } catch (e) { return false; }
+  }
+  function markAutoMessageSeen(am, at) {
+    try { (am.show_once ? localStorage : sessionStorage).setItem(AUTO_SEEN_PREFIX + am.id, "1"); } catch (e) { /* ignore */ }
+    try { sessionStorage.setItem(AUTO_VISIT_KEY, JSON.stringify({ id: String(am.id), at })); } catch (e) { /* ignore */ }
+  }
+  function forgetVisitAutoMessage() {
+    try { sessionStorage.removeItem(AUTO_VISIT_KEY); } catch (e) { /* ignore */ }
+  }
+  function autoMessageOnThisPage(am) {
+    if (!am.page_filter) return true;
+    const url = location.href.toLowerCase();
+    return String(am.page_filter).split(",").some((p) => { p = p.trim().toLowerCase(); return !!p && url.indexOf(p) !== -1; });
+  }
+
+  // Окно уже открыто: подходит сообщение, чьё условие выполнено («бездействие» ждёт своей паузы).
+  function autoMessageForOpen(cfg) {
+    const visits = state.autoVisits || 1;
+    const list = Array.isArray(cfg.auto_messages) ? cfg.auto_messages : [];
+    return list.find((am) => autoMessageText(am) && !autoMessageSeen(am) && autoMessageOnThisPage(am) &&
+      (am.trigger === "on_page" || (am.trigger === "first_visit" && visits <= 1) || (am.trigger === "return_visit" && visits > 1) ||
+        (am.trigger === "cart_abandon" && CART_PAGE.test(location.href)))) || null;
+  }
+
+  function startAutoTyping(am, ms) {
+    const text = autoMessageText(am);
+    if (!text || state.autoTyping || state.autoWelcome || state.session) return false;
+    state.autoTyping = { id: am.id, text, sender: autoMessageSender(am, state.config || {}), timer: null };
+    // Пока открыта форма знакомства, «печатает…» не видно — текст сразу встаёт в её приветствие.
+    if (!state.prechatDone && state.prechat && state.prechat.enabled) { deliverAutoMessage(am); return true; }
+    state.autoTyping.timer = setTimeout(() => deliverAutoMessage(am), Math.max(AUTO_TYPING_MIN_MS, ms || 0));
+    scheduleRender();
+    setTimeout(() => scrollBottom(true), 50);
+    return true;
+  }
+  function stopAutoTyping() {
+    if (!state.autoTyping) return;
+    clearTimeout(state.autoTyping.timer);
+    state.autoTyping = null;
+    scheduleRender();
+  }
+  function deliverAutoMessage(am) {
+    const typing = state.autoTyping;
+    state.autoTyping = null;
+    // Пока «печатали», посетитель мог написать сам или закрыть окно — тогда молчим.
+    if (!typing || typing.id !== am.id || state.session || !state.open) { scheduleRender(); return; }
+    state.autoWelcome = { id: am.id, text: typing.text, sender: typing.sender, at: new Date().toISOString() };
+    markAutoMessageSeen(am, state.autoWelcome.at);
+    playSound();
+    scheduleRender();
+    setTimeout(() => scrollBottom(true), 50);
+  }
+
+  // Окно открылось (само или посетителем): команда «печатает» подходящее сообщение.
+  function autoMessageOnOpen(preferred, popup) {
+    const cfg = state.config || {};
+    if (cfg.auto_invite_enabled !== true || window.__zsPreviewConfig || state.autoTyping || state.autoWelcome || state.session) return;
+    const am = preferred || autoMessageForOpen(cfg);
+    if (!am) return;
+    const due = state.autoDue[am.id];
+    startAutoTyping(am, popup || !due ? AUTO_TYPING_POPUP_MS : Math.min(AUTO_TYPING_MAX_MS, due - Date.now()));
+  }
+
+  // Срок правила наступил.
+  function fireAutoMessage(am) {
+    if (state.autoWelcome || state.autoTyping || state.session || autoMessageSeen(am) || !autoMessageOnThisPage(am)) return;
+    if (state.open) { autoMessageOnOpen(am, true); return; }
+    // После отказа окно само не открываем: сообщение подождёт, пока посетитель откроет чат сам.
+    if (!autoShowAllowed()) return;
+    openChat("auto", am);
+    scheduleRender();
+  }
+
+  // Показанное в этом визите сообщение остаётся в окне: ответить можно и со следующей страницы.
+  function restoreVisitAutoMessage(cfg) {
+    let shown = null;
+    try { shown = JSON.parse(sessionStorage.getItem(AUTO_VISIT_KEY) || "null"); } catch (e) { return; }
+    const am = shown && (Array.isArray(cfg.auto_messages) ? cfg.auto_messages : []).find((item) => item && String(item.id) === String(shown.id) && autoMessageText(item));
+    if (am && !state.session && !state.autoWelcome && !state.autoTyping) state.autoWelcome = { id: am.id, text: autoMessageText(am), sender: autoMessageSender(am, cfg), at: shown.at };
+  }
+
+  // Автосообщение подписано именем из настроек — и в окне, и в истории после ответа посетителя.
+  function autoSenderName(msg) {
+    if (msg._sender_name) return msg._sender_name;
+    if (msg.sender !== "ai") return "";
+    let md = msg.metadata;
+    if (typeof md === "string") { try { md = JSON.parse(md); } catch (e) { md = null; } }
+    return md && md.kind === "auto_message" ? String(md.sender_name || "").trim() || "Команда" : "";
+  }
+  // Лицо команды — как в шапке: оператор в сети в командном режиме, иначе аватар из настроек, иначе буква.
+  function brandAvatar(ava, name) {
+    const cfg = state.config || {};
+    const op = cfg.team_mode && !offlineNow() ? (state.teamOperators || []).find((item) => item && item.avatar_url) : null;
+    const src = op ? API_BASE + op.avatar_url : cfg.avatar_url ? (cfg.avatar_url.indexOf("http") === 0 ? cfg.avatar_url : API_BASE + cfg.avatar_url) : "";
+    if (src) ava.innerHTML = '<img src="' + esc(src) + '" alt="' + esc(name) + '">';
+    else ava.textContent = String(name || "К").slice(0, 1).toUpperCase();
+  }
+
   function setupAutoMessages(cfg) {
-    const msgs = cfg.auto_messages;
-    if (!msgs?.length) return;
+    const msgs = Array.isArray(cfg.auto_messages) ? cfg.auto_messages : [];
+    if (!msgs.length) return;
 
     // Счётчик визитов обновляем до проверок, чтобы «первый визит» срабатывал только на первом.
     const counted = sessionStorage.getItem("zw_visit_counted");
@@ -3354,41 +3495,30 @@ ${safeCss}`;
       localStorage.setItem("zw_visit_count", String(visits));
       sessionStorage.setItem("zw_visit_counted", "1");
     }
+    state.autoVisits = visits;
+    restoreVisitAutoMessage(cfg);
 
     msgs.forEach((am) => {
-      if (!am.enabled) return;
-      const storageKey = "zw_automsg_" + am.id;
-      if (am.show_once && localStorage.getItem(storageKey)) return;
-
-      const fire = () => {
-        if (state.autoMsgShown[am.id] || state.session || state.open || !autoShowAllowed()) return;
-        if (am.page_filter) {
-          const url = location.href.toLowerCase();
-          const patterns = am.page_filter.split(",").map((s) => s.trim().toLowerCase());
-          if (!patterns.some((p) => p && url.indexOf(p) !== -1)) return;
-        }
-        state.autoMsgShown[am.id] = true;
-        if (am.show_once) localStorage.setItem(storageKey, "1");
-        state.autoWelcome = { id: am.id, text: am.message, sender: am.sender_name || (cfg.header_title || "Команда поддержки") };
-        playSound();
-        openChat("auto");
-        scheduleRender();
+      if (!autoMessageText(am) || autoMessageSeen(am)) return;
+      const fire = () => fireAutoMessage(am);
+      const plan = (seconds, fallback) => {
+        const ms = (Number(seconds) || fallback) * 1000;
+        state.autoDue[am.id] = Date.now() + ms;
+        laterAuto(fire, ms);
       };
-
-      const delay = (seconds, fallback) => (Number(seconds) || fallback) * 1000;
       if (am.trigger === "first_visit") {
-        if (visits <= 1) laterAuto(fire, delay(am.delay_seconds, 0));
+        if (visits <= 1) plan(am.delay_seconds, 0);
       } else if (am.trigger === "return_visit") {
-        if (visits > 1) laterAuto(fire, delay(am.delay_seconds, 0));
+        if (visits > 1) plan(am.delay_seconds, 0);
       } else if (am.trigger === "on_page") {
-        laterAuto(fire, delay(am.delay_seconds, 0));
+        plan(am.delay_seconds, 0);
       } else if (am.trigger === "after_idle") {
         let idleAm;
-        const resetAmIdle = () => { clearTimeout(idleAm); idleAm = setTimeout(fire, delay(am.delay_seconds, 30)); };
+        const resetAmIdle = () => { clearTimeout(idleAm); idleAm = setTimeout(fire, (Number(am.delay_seconds) || 30) * 1000); };
         ["mousemove", "keydown", "scroll", "click", "touchstart"].forEach((ev) => document.addEventListener(ev, resetAmIdle, { passive: true }));
         resetAmIdle();
       } else if (am.trigger === "cart_abandon") {
-        if (/cart|checkout|корзин/i.test(location.href)) laterAuto(fire, delay(am.delay_seconds, 15));
+        if (CART_PAGE.test(location.href)) plan(am.delay_seconds, 15);
       }
     });
   }
