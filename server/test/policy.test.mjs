@@ -72,3 +72,39 @@ test('updater compares prerelease versions correctly',async()=>{
   assert.equal(isNewerRelease('7.1.0','8.0.0-beta.1'),false);
   assert.equal(isNewerRelease('invalid','8.0.0'),false);
 });
+test('chat files go to S3 when it is on, and every file stays readable during the move and after a rollback',async()=>{
+  const {createChatFileStore,s3Settings}=await import('../src/services/file-store.ts');
+  const {GetObjectCommand,PutObjectCommand}=await import('@aws-sdk/client-s3');
+  const {Readable}=await import('node:stream');
+  const {mkdtemp,writeFile,readFile}=await import('node:fs/promises');
+  const {tmpdir}=await import('node:os');
+  const path=await import('node:path');
+  process.env.PRIVATE_UPLOAD_DIR=await mkdtemp(path.join(tmpdir(),'chat-files-'));
+  const bucket=new Map(),logs=[];let down=false;
+  const s3={send:async command=>{
+    if(down)throw Object.assign(new Error('offline'),{name:'TimeoutError'});
+    if(command instanceof PutObjectCommand){bucket.set(command.input.Key,command.input.Body);return {};}
+    if(command instanceof GetObjectCommand){if(!bucket.has(command.input.Key))throw Object.assign(new Error('missing'),{name:'NoSuchKey'});return {Body:Readable.from([bucket.get(command.input.Key)])};}
+    return {};
+  }};
+  const text=async stream=>{const chunks=[];for await(const chunk of stream)chunks.push(Buffer.from(chunk));return Buffer.concat(chunks).toString();};
+  const [a,b,c]=['1','2','3'].map(digit=>`${digit.repeat(8)}-${digit.repeat(4)}-4${digit.repeat(3)}-8${digit.repeat(3)}-${digit.repeat(12)}.bin`);
+  const cloud=createChatFileStore({mode:'s3',s3,bucket:'bucket',prefix:'chat-v8/',log:message=>logs.push(message)});
+  assert.equal(await cloud.put(a,Buffer.from('photo'),'image/png'),'s3');
+  assert.equal(bucket.has(`chat-v8/files/${a}`),true);
+  assert.equal(await text(await cloud.open(a)),'photo');
+  await writeFile(path.join(process.env.PRIVATE_UPLOAD_DIR,b),'old attachment');
+  assert.equal(await text(await cloud.open(b)),'old attachment','a file not copied yet is read from the disk');
+  down=true;
+  assert.equal(await cloud.put(c,Buffer.from('sent while S3 was down'),'image/png'),'local','an outage never loses the upload');
+  assert.equal(await readFile(path.join(process.env.PRIVATE_UPLOAD_DIR,c),'utf8'),'sent while S3 was down');
+  assert.match(logs[0],/S3/);
+  down=false;
+  const disk=createChatFileStore({mode:'local',s3,bucket:'bucket',prefix:'chat-v8/'});
+  assert.equal(await text(await disk.open(a)),'photo','after a rollback to the disk, files from S3 still open');
+  assert.equal(await disk.open('44444444-4444-4444-8444-444444444444.bin'),null);
+  await assert.rejects(cloud.open('../../etc/passwd'),/Invalid storage key/);
+  assert.equal(s3Settings({CHAT_S3_ENDPOINT:'https://s3.twcstorage.ru',CHAT_S3_BUCKET:'b'}),null,'without keys S3 stays off');
+  const settings=s3Settings({CHAT_S3_ENDPOINT:'https://s3.twcstorage.ru',CHAT_S3_BUCKET:'b',CHAT_S3_ACCESS_KEY:'k',CHAT_S3_SECRET_KEY:'s'});
+  assert.equal(settings.region,'ru-1');assert.equal(settings.prefix,'chat-v8/');assert.equal(settings.pathStyle,false);
+});

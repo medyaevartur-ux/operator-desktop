@@ -1,12 +1,11 @@
 import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
 import {randomUUID,createHash} from 'node:crypto';
-import {mkdir,writeFile,unlink,stat} from 'node:fs/promises';
-import {createReadStream} from 'node:fs';
 import {pool} from '../db.js';
 import {operatorOf,uuid} from '../core/security.js';
 import {createMessage} from '../services/messages.js';
-import {MAX_ATTACHMENT_BYTES,attachmentMime,safeFilename,filePath,privateFileDirectory,hydrateAttachments,validFileCapability} from '../services/private-files.js';
+import {chatFiles} from '../services/file-store.js';
+import {MAX_ATTACHMENT_BYTES,attachmentMime,safeFilename,hydrateAttachments,validFileCapability} from '../services/private-files.js';
 
 let uploadsInProgress=0;
 const fail=(statusCode:number,message:string)=>Object.assign(new Error(message),{statusCode});
@@ -20,7 +19,7 @@ export function registerUploadRoutes(app:FastifyInstance) {
     if(!operatorUpload&&('visitorId' in actor)&&actor.visitorId!==sessions[0].visitor_id)throw fail(403,'Нет доступа к диалогу');
     const clientId=request.headers['x-client-message-id']?uuid.parse(request.headers['x-client-message-id']):undefined;
     uploadsInProgress++;
-    let written:string|undefined,fileId:string|undefined,linked=false;
+    let stored=false,storageName='',fileId:string|undefined,linked=false;
     try {
       const data=await request.file();
       if(!data)throw fail(400,'Выберите файл');
@@ -37,10 +36,9 @@ export function registerUploadRoutes(app:FastifyInstance) {
       if(!mime)throw fail(415,'Поддерживаются изображения, PDF, текст, DOCX, XLSX и ZIP');
       const sha=createHash('sha256').update(buffer).digest('hex');
       fileId=randomUUID();
-      const storageName=fileId+'.bin';
-      written=filePath(storageName);
-      await mkdir(privateFileDirectory(),{recursive:true,mode:0o700});
-      await writeFile(written,buffer,{flag:'wx',mode:0o600});
+      storageName=fileId+'.bin';
+      await chatFiles().put(storageName,buffer,mime);
+      stored=true;
       await pool.query('INSERT INTO chat_v8_files(id,session_id,operator_id,storage_name,filename,mime_type,byte_size,sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
         [fileId,sessionId,operatorUpload?operatorOf(request).id:null,storageName,filename,mime,buffer.length,sha]);
       const result=await createMessage(sessionId,{message:filename,client_message_id:clientId,is_internal:internal},actor,{
@@ -54,7 +52,7 @@ export function registerUploadRoutes(app:FastifyInstance) {
       uploadsInProgress--;
       if(!linked&&fileId) {
         await pool.query('DELETE FROM chat_v8_files WHERE id=$1',[fileId]).catch(()=>{});
-        if(written)await unlink(written).catch(()=>{});
+        if(stored)await chatFiles().remove(storageName).catch(()=>{});
       }
     }
   };
@@ -68,12 +66,12 @@ export function registerUploadRoutes(app:FastifyInstance) {
       AND EXISTS(SELECT 1 FROM widget_chat_messages m WHERE m.session_id=f.session_id AND m.is_deleted IS NOT TRUE AND m.attachments @> $2::jsonb)`,
       [id,JSON.stringify([{file_id:id}])]);
     if(!rows[0])return reply.code(404).send({error:'Файл недоступен'});
-    const file=rows[0],filename=filePath(file.storage_name);
-    if(!(await stat(filename).catch(()=>null))?.isFile())return reply.code(404).send({error:'Файл недоступен'});
+    const file=rows[0],body=await chatFiles().open(file.storage_name);
+    if(!body)return reply.code(404).send({error:'Файл недоступен'});
     reply.type(file.mime_type).header('Cache-Control','private, no-store');
     const disposition=file.mime_type.startsWith('image/')&&query.download!=='1'?'inline':'attachment';
     reply.header('Content-Disposition',`${disposition}; filename*=UTF-8''${encodeURIComponent(file.filename)}`);
-    return reply.send(createReadStream(filename));
+    return reply.send(body);
   });
 }
 
