@@ -41,7 +41,10 @@ async function getListen() {
 /** Счётчик на иконке приложения; заголовок окна ставит AppShell. */
 export async function setBadgeCount(count: number): Promise<void> {
   const inv = await getInvoke();
-  if (inv) await inv("set_badge_count", { count });
+  if (inv) { await inv("set_badge_count", { count }); return; }
+  // Веб-приложение с экрана «Домой» (iPhone с iOS 16.4, установленный Chrome) показывает число на иконке.
+  const nav = navigator as Navigator & { setAppBadge?: (count?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+  try { if (count > 0) await nav.setAppBadge?.(count); else await nav.clearAppBadge?.(); } catch { /* браузер не умеет — не страшно */ }
 }
 
 // ═══ Close to Tray ═══

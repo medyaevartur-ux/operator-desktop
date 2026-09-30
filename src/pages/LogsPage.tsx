@@ -6,6 +6,7 @@ import {
 import { getLogs, clearLogs, subscribeLogs } from "@/lib/logger";
 import { startDeviceRegistration } from "@/lib/fcm";
 import { requestPushPermission } from "@/lib/pwa";
+import { isIos } from "@/lib/ios-web";
 import { readDeviceDiagnostics, openSystemSettings, saveJsonFile, type DeviceDiagnostics } from "@/lib/tauri-bridge";
 import { offlineQueue, type OfflineMessage } from "@/lib/offline-queue";
 import { useOutbox } from "@/features/inbox/use-outbox";
@@ -70,7 +71,7 @@ function deviceChecks(input: {
   if (!device) checks.push({ key: "device", level: "fail", title: "Устройство не зарегистрировано для уведомлений", detail: "Сервер не знает, куда отправлять уведомления.", action: { label: "Зарегистрировать", run: input.register } });
   else if (!device.enabled) checks.push({ key: "device", level: "fail", title: "Сервер отключил доставку на это устройство", detail: errorLabel(device.last_error) || "Обычно после смены токена или ошибок доставки.", action: { label: "Подключить снова", run: input.register } });
   else if (device.provider === "fcm") checks.push({ key: "device", level: "ok", title: "Уведомления через Firebase", detail: "Приходят даже когда приложение закрыто. В уведомлении нет текста переписки — детали загружаются после входа." });
-  else if (device.provider === "webpush") checks.push({ key: "device", level: "ok", title: "Уведомления браузера (Web Push)", detail: "Приходят, пока браузер запущен." });
+  else if (device.provider === "webpush") checks.push({ key: "device", level: "ok", title: "Уведомления браузера (Web Push)", detail: isIos() ? "Приходят, даже когда приложение закрыто." : "Приходят, пока браузер запущен." });
   else checks.push({ key: "device", level: "info", title: isNative() ? "Уведомления, пока приложение запущено" : "Уведомления, пока вкладка открыта", detail: isNative() ? "Свёрнутое в трей приложение уведомления получает. После «Закрыть полностью» — нет: Windows не будит закрытое приложение." : "Закройте вкладку — уведомления перестанут приходить. Для фоновых уведомлений нужна установленная версия." });
 
   if (!report) checks.push({ key: "permission", level: "wait", title: "Проверяем разрешение устройства", detail: "" });

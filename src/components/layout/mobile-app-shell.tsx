@@ -6,6 +6,7 @@ import { useInboxStore } from "@/store/inbox.store";
 import { useSocketStore, reconnectSocket } from "@/lib/socket";
 import { queueCount } from "@/features/inbox/conversation-list";
 import { NotificationBanner } from "./notification-banner";
+import { WebPushPrompt } from "./web-push-prompt";
 import { MobileChatList } from "./mobile-chat-list";
 import { MobileMore } from "./mobile-more";
 import { ChatMain } from "./chat-main";
@@ -60,6 +61,7 @@ export function MobileAppShell() {
         )}
       </header>
       <NotificationBanner />
+      <WebPushPrompt />
       <main className={s.content}>
         {view === "chat-list" && <MobileChatList />}
         {view === "queue" && <WorkspaceScreen screen="queue" />}

@@ -14,6 +14,7 @@ import { CommandPalette } from "./command-palette";
 import { InboxHome } from "./inbox-home";
 import { MobileAppShell } from "./mobile-app-shell";
 import { NotificationBanner } from "./notification-banner";
+import { WebPushPrompt } from "./web-push-prompt";
 import { Sidebar, SidebarRail } from "./sidebar";
 import s from "./AppShell.module.css";
 
@@ -67,6 +68,7 @@ export function AppShell() {
       {collapsed ? <SidebarRail onOpenPalette={() => setPaletteOpen(true)} /> : <Sidebar onOpenPalette={() => setPaletteOpen(true)} />}
       <main className={s.main}>
         <NotificationBanner />
+        <WebPushPrompt />
         <ErrorBoundary key={inbox ? "inbox" : screen}>
           {inbox ? (sessionId ? <ChatMain /> : <InboxHome />) : <div className={`${s.workspace} scrollbar-thin`}><WorkspaceScreen /></div>}
         </ErrorBoundary>

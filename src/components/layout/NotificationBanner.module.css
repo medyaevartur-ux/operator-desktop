@@ -39,6 +39,9 @@
   color: var(--text-muted);
 }
 .close:hover { background: var(--surface-hover); color: var(--text-primary); }
+/* Подсказка веб-версии: экран «Домой» на iPhone и разрешение уведомлений. */
+.hint { flex: 1; min-width: 0; margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
+.icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--accent); }
 .close svg { width: 16px; height: 16px; }
 
 @media (max-width: 767px) {

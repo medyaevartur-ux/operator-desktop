@@ -378,6 +378,7 @@
 .mobile .message { max-width: 88%; }
 .mobile .messageMore { opacity: 0.55; width: 26px; }
 .mobile .composer { padding: 0 8px max(8px, env(safe-area-inset-bottom)); }
+:global(html[data-keyboard]) .mobile .composer { padding-bottom: 8px; }
 .mobile .menu [role="menuitem"] { min-height: 44px; }
 .mobile .search { padding: 6px 10px; }
 

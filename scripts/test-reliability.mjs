@@ -292,6 +292,44 @@ test("a pasted screenshot without a file name is attached as a picture", async (
   assert.equal(pastedFiles({ files: [photo], items: [] })[0], photo, "a file copied in Explorer keeps its name");
   assert.deepEqual(pastedFiles({ files: [], items: [{ kind: "string", getAsFile: () => null }] }), []);
 });
+function bootWorker(globals) {
+  const handlers = {}, shown = [];
+  const self = { addEventListener: (type, handler) => { handlers[type] = handler; }, location: { origin: "https://operator.zhivaya-skazka.ru" }, navigator: {}, clients: {},
+    registration: { showNotification: async (title, options) => { shown.push({ title, ...options }); }, getNotifications: async () => [] } };
+  vm.runInNewContext(source("public/sw.js"), { self, caches: {}, URL, AbortSignal, Response, console: quiet, setTimeout: () => 0, ...globals });
+  const push = (data) => { let work; handlers.push({ data, waitUntil: (promise) => { work = promise; } }); return work; };
+  return { shown, push };
+}
+const PUSH_HINT = { delivery_id: "11111111-1111-4111-8111-111111111111", session_id: "22222222-2222-4222-8222-222222222222", title: "Живая Сказка", body: "Новое сообщение" };
+test("every web push ends with a notification, so Safari on iPhone never revokes the subscription", async () => {
+  // Нет сохранённого входа (хранилище недоступно) и нет сети — худший случай для фонового push.
+  const { shown, push } = bootWorker({ indexedDB: { open() { throw new Error("no storage"); } }, fetch: async () => { throw new Error("offline"); } });
+  await push({ json: () => PUSH_HINT });
+  await push({ json: () => JSON.parse("not json") });
+  await push(null);
+  assert.equal(shown.length, 3, "a push without a visible notification makes Safari drop the subscription");
+  assert.equal(shown[0].body, "Новое сообщение");
+  assert.equal(shown[0].data.sessionId, "22222222-2222-4222-8222-222222222222", "the notification still opens the right chat");
+  assert.equal(shown[1].title, "Живая Сказка");
+  assert.equal(shown[2].tag, "chat-new");
+});
+test("a slow network never holds back the push notification", async () => {
+  // Вход сохранён, но сеть «висит»: уведомление появляется по истечении срока, не дожидаясь ответа сервера.
+  const later = fn => Promise.resolve().then(fn), saved = new Map([["context", { apiBase: "https://zhivaya-skazka.ru", installationId: "33333333-3333-4333-8333-333333333333", operatorId: "44444444-4444-4444-8444-444444444444" }]]);
+  const store = transaction => ({
+    get: key => { const request = {}; later(() => { request.result = saved.get(key); request.onsuccess(); transaction.oncomplete?.(); }); return request; },
+    put: (value, key) => { saved.set(key, value); later(() => transaction.oncomplete?.()); },
+  });
+  const indexedDB = { open: () => { const request = {}; later(() => { request.result = { close() {}, transaction() { const transaction = {}; transaction.objectStore = () => store(transaction); return transaction; } }; request.onsuccess(); }); return request; } };
+  let release; const network = new Promise(resolve => { release = resolve; });
+  const { shown, push } = bootWorker({ indexedDB, fetch: () => network.then(() => { throw new Error("offline"); }), setTimeout: (callback, _ms, ...args) => { later(() => callback(...args)); return 0; } });
+  const work = push({ json: () => PUSH_HINT });
+  for (let i = 0; i < 20 && !shown.length; i++) await tick();
+  assert.equal(shown.length, 1, "the notification must not wait for a slow network");
+  assert.equal(shown[0].data.sessionId, PUSH_HINT.session_id, "the quick notification still opens the right chat");
+  release(); await work;
+  assert.deepEqual([...saved.get("seen")], [PUSH_HINT.delivery_id], "a repeat of the same push stays quiet");
+});
 test("the chat button lifts above a bar at the bottom of the site and steps aside for a large panel", () => {
   const vh = 812, host = {}, body = {}, html = {};
   const layer = (top, height, style) => ({ parentElement: null, style, box: { top, bottom: top + height, height } });

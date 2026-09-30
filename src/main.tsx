@@ -12,6 +12,9 @@ import "./styles/global.css";
 import "@/lib/logger";
 // Тема и плотность применяются до первого кадра, в том числе на экране входа.
 import "@/store/theme.store";
+import { setupWebAppChrome } from "@/lib/ios-web";
+
+setupWebAppChrome();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

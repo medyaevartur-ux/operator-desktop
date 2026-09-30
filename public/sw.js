@@ -76,29 +76,39 @@ async function authenticated(context,path,method='GET',body) {
   if(!response.ok)throw new Error('request_unavailable');
   return response.json();
 }
+// Каждый push обязан закончиться уведомлением: Safari на iPhone отзывает подписку после нескольких «немых» push.
+// Подробности ждём не дольше PUSH_DETAILS_MS, а без входа или сети показываем общее «Новое сообщение»
+// из самого push — оно тоже открывает нужный диалог. Повтор того же уведомления тихо заменяет прежнее.
+const PUSH_DETAILS_MS=5000;
 self.addEventListener('push',event=>event.waitUntil((async()=>{
-  let hint;try{hint=event.data?.json()}catch{return}
-  if(!UUID.test(hint?.delivery_id))return;
-  const context=await getState('context');if(!context)return;
-  const notice=await authenticated(context,'/api/chat-v8/notifications/'+hint.delivery_id);
-  if(!UUID.test(notice.session_id)||(await getState('context'))?.operatorId!==context.operatorId)return;
-  const seen=await getState('seen')||[];
-  if(!seen.includes(notice.delivery_id)) {
-    await self.registration.showNotification(notice.title||'Живая Сказка',{body:notice.body||'Новое сообщение',tag:'chat-'+notice.session_id,icon:'/app-icon.png',badge:'/book-mark.svg',data:{sessionId:notice.session_id,deliveryId:notice.delivery_id},actions:[{action:'read',title:'Прочитано'}]});
-    await setState('seen',[...seen,notice.delivery_id].slice(-500));
-  }
-  await authenticated(context,'/api/chat-v8/notifications/'+notice.delivery_id+'/ack','POST',{outcome:'displayed'});
-})().catch(()=>undefined)));
+  let hint={};try{hint=event.data?.json()||{}}catch{/* покажем общее уведомление */}
+  const details=(async()=>{
+    const context=UUID.test(hint.delivery_id)?await getState('context'):null;
+    if(!context)return null;
+    const loaded=await authenticated(context,'/api/chat-v8/notifications/'+hint.delivery_id);
+    return UUID.test(loaded.session_id)&&(await getState('context'))?.operatorId===context.operatorId?{notice:loaded,context}:null;
+  })().catch(()=>null);
+  const found=await Promise.race([details,new Promise(resolve=>setTimeout(resolve,PUSH_DETAILS_MS,null))]);
+  const notice=found?.notice||{title:hint.title,body:hint.body,session_id:hint.session_id,delivery_id:hint.delivery_id};
+  const seen=await getState('seen').catch(()=>null)||[];
+  const session=UUID.test(notice.session_id)?notice.session_id:null,fresh=!seen.includes(notice.delivery_id);
+  await self.registration.showNotification(notice.title||'Живая Сказка',{body:notice.body||'Новое сообщение',tag:'chat-'+(session||'new'),renotify:fresh,silent:!fresh,icon:'/app-icon.png',badge:'/book-mark.svg',data:{sessionId:session,deliveryId:notice.delivery_id},actions:session&&found?[{action:'read',title:'Прочитано'}]:[]});
+  if(fresh&&UUID.test(notice.delivery_id))await setState('seen',[...seen,notice.delivery_id].slice(-500)).catch(()=>undefined);
+  // Опоздавшую проверку входа всё равно дожидаемся: иначе телефон может усыпить worker посреди обновления сессии.
+  const context=(found||await details)?.context;
+  if(context)await authenticated(context,'/api/chat-v8/notifications/'+notice.delivery_id+'/ack','POST',{outcome:'displayed'}).catch(()=>undefined);
+})()));
 self.addEventListener('notificationclick',event=>{
   event.notification.close();
   event.waitUntil((async()=>{
     const {sessionId,deliveryId}=event.notification.data||{};
-    if(!UUID.test(sessionId))return;
+    const open=(await self.clients.matchAll({type:'window',includeUncontrolled:true})).find(client=>new URL(client.url).origin===self.location.origin);
+    // Общее уведомление без диалога — просто открываем приложение.
+    if(!UUID.test(sessionId)){if(open)await open.focus();else await self.clients.openWindow('/');return;}
     const context=await getState('context');
     if(event.action==='read'&&context) {
       try {await authenticated(context,'/api/sessions/'+sessionId+'/read','PATCH',{});if(UUID.test(deliveryId))await authenticated(context,'/api/chat-v8/notifications/'+deliveryId+'/ack','POST',{outcome:'read'});return;}catch{/* Open the app when the action cannot be confirmed. */}
     }
-    const open=(await self.clients.matchAll({type:'window',includeUncontrolled:true})).find(client=>new URL(client.url).origin===self.location.origin);
     if(open){await open.focus();open.postMessage({type:'OPEN_CHAT',sessionId,deliveryId})}
     else await self.clients.openWindow('/?session_id='+encodeURIComponent(sessionId)+'&delivery_id='+encodeURIComponent(deliveryId||''));
   })());

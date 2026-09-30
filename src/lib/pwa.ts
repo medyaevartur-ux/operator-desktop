@@ -1,5 +1,9 @@
 import { API_BASE, fetchWithDeadline, isNative } from "./api-config";
 import { getSession, onSessionChange } from "./auth-session";
+import { isIos, isStandalone } from "./ios-web";
+
+export const IOS_INSTALL_HINT = "На iPhone уведомления приходят в приложение с экрана «Домой»: в Safari нажмите «Поделиться» → «На экран «Домой»» и откройте приложение оттуда.";
+const UPDATE_RELOAD = "zs_update_reload_at";
 let registration: ServiceWorkerRegistration | undefined;
 export async function registerOperatorWorker() {
   if (!("serviceWorker" in navigator)) return;
@@ -10,6 +14,15 @@ export async function registerOperatorWorker() {
     }
     return;
   }
+  // После выкладки файлов старых экранов на сервере уже нет: открытое приложение перезагружается на новую версию
+  // (не чаще раза в минуту, чтобы настоящий сбой сети не зациклил перезагрузку).
+  window.addEventListener("vite:preloadError", () => {
+    try {
+      if (Date.now() - Number(sessionStorage.getItem(UPDATE_RELOAD) || 0) < 60_000) return;
+      sessionStorage.setItem(UPDATE_RELOAD, String(Date.now()));
+    } catch { return; }
+    location.reload();
+  });
   registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
   const sync = () => {
     const session = getSession(), target = registration?.active;
@@ -36,6 +49,7 @@ export async function requestPushPermission() {
       if ((await readDeviceDiagnostics()).permission !== "granted") throw new Error("Уведомления выключены в настройках устройства. Откройте настройки и разрешите их для «Живой Сказки».");
     }
   } else {
+    if (isIos() && !isStandalone()) throw new Error(IOS_INSTALL_HINT);
     if (!("Notification" in window) || !("PushManager" in window)) throw new Error("Этот браузер не поддерживает push-уведомления");
     if (await Notification.requestPermission() !== "granted") throw new Error("Разрешите уведомления для приложения в настройках браузера");
     const worker = registration || await navigator.serviceWorker.getRegistration();
