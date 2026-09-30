@@ -8,6 +8,7 @@ import { useInboxStore } from "@/store/inbox.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useNavigationStore } from "@/store/navigation.store";
 import { useVisitorsStore } from "@/store/visitors.store";
+import { useNotificationStore } from "@/store/notification.store";
 import { editMessage, deleteMessage, toggleReaction, leaveChatSession, blockVisitorBySession, markChatSessionRead } from "@/features/inbox/inbox.api";
 import { waitingLabel, waitingMinutes } from "@/features/inbox/conversation-list";
 import { autoMessageSender } from "@/features/inbox/inbox.utils";
@@ -99,7 +100,10 @@ export function ChatMain({ mobile = false }: { mobile?: boolean }) {
   useEffect(() => { if (state.focusedMessageId) document.getElementById(`message-${state.focusedMessageId}`)?.scrollIntoView({ block: "center" }); }, [state.focusedMessageId, state.isMessagesLoading]);
   useEffect(() => {
     const read = () => {
-      if (!state.focusedMessageId && session?.id && document.hasFocus() && !document.hidden && nearBottom.current && (session.unread_count || 0) > 0) {
+      if (!session?.id || !document.hasFocus() || document.hidden) return;
+      // Оператор смотрит этот диалог: строка «Открыть» над ним и повтор звука больше не нужны.
+      useNotificationStore.getState().clearNotifications(session.id);
+      if (!state.focusedMessageId && nearBottom.current && (session.unread_count || 0) > 0) {
         void markChatSessionRead(session.id).then(() => state.loadSessions()).catch(() => undefined);
       }
     };
@@ -144,7 +148,7 @@ export function ChatMain({ mobile = false }: { mobile?: boolean }) {
           <Avatar name={name} size="sm" status={visitorOnline ? "online" : undefined} />
           <span className={s.identityText}>
             <span className={s.name}>{name}</span>
-            <span className={s.status} data-state={closed ? "closed" : !session.operator_id ? "waiting" : mine ? "mine" : "other"}>{statusLine(session, mine)}{visitorOnline && !closed ? " · на сайте" : ""}</span>
+            <span className={s.status} data-state={closed ? "closed" : !session.operator_id ? "waiting" : mine ? "mine" : "other"}>{statusLine(session, mine)}{!closed && <span className={s.presence} data-online={visitorOnline || undefined}>{visitorOnline ? " · на сайте" : " · не на сайте"}</span>}</span>
           </span>
         </button>
         <div className={s.headerActions}>

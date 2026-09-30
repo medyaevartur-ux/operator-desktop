@@ -2,7 +2,7 @@ import { z } from "zod";
 import { operatorOf } from "../core/security.js";
 import type { FastifyInstance } from "fastify";
 import { pool, transaction } from "../db.js";
-import { lockOperator, operatorCapacity } from "../services/routing.js";
+import { lockOperator, activeOperator } from "../services/routing.js";
 import { randomUUID } from "node:crypto";
 
 export function registerVisitorRoutes(app: FastifyInstance) {
@@ -122,7 +122,7 @@ export function registerVisitorRoutes(app: FastifyInstance) {
       if(existing.rows[0])return existing.rows[0].id;
       const visitor=(await client.query('SELECT * FROM site_visitors WHERE visitor_id=$1',[id])).rows[0];
       if(!visitor)throw Object.assign(new Error('Посетитель не найден'),{statusCode:404});
-      const sessionId=randomUUID();await lockOperator(client,actor.id);await operatorCapacity(client,actor.id,sessionId);
+      const sessionId=randomUUID();await lockOperator(client,actor.id);await activeOperator(client,actor.id);
       await client.query("INSERT INTO widget_chat_sessions(id,visitor_id,operator_id,status,current_page,operator_joined_at) VALUES($1,$2,$3,'with_operator',$4,now())",[sessionId,id,actor.id,visitor.current_page]);
       await client.query('UPDATE site_visitors SET has_chat=true,chat_session_id=$2 WHERE visitor_id=$1',[id,sessionId]);return sessionId;
     });

@@ -47,10 +47,15 @@ export async function handleDelivery(id: string) {
       const nativeWindow=(await import("@tauri-apps/api/webviewWindow")).getCurrentWebviewWindow();
       focused=await nativeWindow.isFocused() && await nativeWindow.isVisible();
     }
-    const active = viewing && useInboxStore.getState().readingLatest && !useInboxStore.getState().focusedMessageId && useInboxStore.getState().activeSession?.id === delivery.session_id && focused;
+    const inbox = useInboxStore.getState();
+    const viewingChat = viewing && focused && inbox.activeSession?.id === delivery.session_id;
+    const active = viewingChat && inbox.readingLatest && !inbox.focusedMessageId;
     let outcome: "read" | "displayed" | "blocked" = "displayed";
     if (active) {
       await api(`/api/sessions/${delivery.session_id}/read`, { method: "PATCH" }); outcome = "read";
+    } else if (viewingChat) {
+      // Диалог открыт, оператор лишь пролистал выше: новое видно по кнопке «вниз», строка «Открыть» не нужна.
+      useNotificationStore.getState().playSound(/escalation|operator.request/.test(delivery.kind) ? "operator_request" : "new_message");
     } else {
       useNotificationStore.getState().addNotification(delivery.session_id, delivery.title, delivery.body, /escalation|operator.request/.test(delivery.kind) ? "operator_request" : "new_message", !focused);
       if (!focused) outcome = await showDeliveryNotification(delivery) ? "displayed" : "blocked";

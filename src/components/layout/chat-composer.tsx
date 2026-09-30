@@ -10,6 +10,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { useDraftsStore } from "@/store/drafts.store";
 import { useTemplatesStore, applyTemplate, type QuickTemplate } from "@/store/templates.store";
 import { richText } from "@/features/inbox/rich-text";
+import { pastedFiles } from "@/lib/pasted-files";
 import { Tooltip } from "@/components/ui";
 import { FileThumb } from "./FileThumb";
 import s from "./ChatComposer.module.css";
@@ -99,22 +100,28 @@ export function ChatComposer() {
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const images: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith("image/")) {
-          const file = items[i].getAsFile();
-          if (file) images.push(file);
-        }
-      }
-      if (images.length > 0) {
-        e.preventDefault();
-        addFiles(images);
-      }
+      const files = pastedFiles(e.clipboardData);
+      if (!files.length) return;
+      // Текст, если он тоже есть в буфере, вставляется как обычно.
+      if (!e.clipboardData.getData("text/plain")) e.preventDefault();
+      addFiles(files);
     },
     [addFiles],
   );
+
+  // Ctrl+V с картинкой, когда курсор не в поле ввода (например, читали переписку), тоже прикрепляет её.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if ((event.target as HTMLElement | null)?.closest?.("input, textarea, [contenteditable='true']")) return;
+      const files = pastedFiles(event.clipboardData);
+      if (!files.length) return;
+      event.preventDefault();
+      addFiles(files);
+      textareaRef.current?.focus();
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [addFiles]);
 
   const activeSessionId = activeSession?.id ?? "";
   useEffect(() => {

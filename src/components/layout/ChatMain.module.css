@@ -39,6 +39,8 @@
 .name { font-size: 14.5px; font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status[data-state="waiting"] { color: var(--warning); }
+.presence { color: var(--text-muted); }
+.presence[data-online] { color: var(--success); }
 
 .headerActions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .headerActions > button:first-child:not(.icon) { margin-right: 6px; }

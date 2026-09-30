@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useNotificationStore } from "@/store/notification.store";
+import { useInboxStore } from "@/store/inbox.store";
+import { useNavigationStore } from "@/store/navigation.store";
 import { Avatar, Button } from "@/components/ui";
 import s from "./NotificationBanner.module.css";
 
@@ -17,8 +19,13 @@ export function NotificationBanner() {
   const pending = useNotificationStore(st => st.pending);
   const clearNotifications = useNotificationStore(st => st.clearNotifications);
   const clearAll = useNotificationStore(st => st.clearAll);
+  // Диалог, открытый перед оператором, в строке не нужен: его сообщения и так на экране.
+  const activeId = useInboxStore(st => st.activeSession?.id);
+  const onChat = useNavigationStore(st => st.screen === "inbox" && (window.innerWidth >= 768 || st.mobileView === "chat-conversation"));
 
-  const items = useMemo(() => Object.values(pending).sort((a, b) => b.timestamp - a.timestamp), [pending]);
+  const items = useMemo(() => Object.values(pending)
+    .filter(item => !(onChat && item.sessionId === activeId))
+    .sort((a, b) => b.timestamp - a.timestamp), [pending, onChat, activeId]);
   const latest = items[0];
   const extraChats = items.length - 1;
 

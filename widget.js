@@ -59,22 +59,44 @@
   const SOUND_KEY = "zs_sound_enabled";
 
   // ═══ SOUND ═══
+  // Один общий AudioContext: браузер ограничивает их число, и новый на каждый звук со временем глохнет.
+  let audioCtx = null;
+  function audioContext() {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioCtx = new Ctx();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    return audioCtx;
+  }
+  // Звук разрешают только после действия посетителя: «будим» его, когда он сам открыл чат или написал —
+  // тогда ответ оператора прозвучит и при закрытом окне. Посетителей, не трогавших чат, не касается.
+  function primeSound() {
+    try { audioContext(); } catch (e) { /* звук — не главное */ }
+  }
+  // Мягкий «колокольчик»: две ноты (ми и си) с тихим обертоном и плавным затуханием.
   function playSound() {
     if (localStorage.getItem(SOUND_KEY) === "0") return;
     // принудительное отключение со стороны оператора
     if (typeof state !== "undefined" && state.config && state.config.disable_sound_for_visitor === true) return;
     try {
-      const c = new (window.AudioContext || window.webkitAudioContext)();
-      const o = c.createOscillator();
-      const g = c.createGain();
-      o.connect(g); g.connect(c.destination);
-      o.frequency.setValueAtTime(800, c.currentTime);
-      o.frequency.setValueAtTime(600, c.currentTime + 0.1);
-      o.frequency.setValueAtTime(800, c.currentTime + 0.2);
-      g.gain.setValueAtTime(0.3, c.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.4);
-      o.start(c.currentTime); o.stop(c.currentTime + 0.4);
-    } catch(e) { console.warn("[ZS] Sound error:", e); }
+      const c = audioContext();
+      if (!c) return;
+      const t = c.currentTime + 0.02;
+      [[659.25, 0], [987.77, 0.14]].forEach(([freq, at]) => {
+        [[freq, 0.14], [freq * 2, 0.035]].forEach(([f, peak]) => {
+          const o = c.createOscillator(), g = c.createGain();
+          o.type = "sine";
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, t + at);
+          g.gain.exponentialRampToValueAtTime(peak, t + at + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.85);
+          o.connect(g); g.connect(c.destination);
+          o.start(t + at); o.stop(t + at + 0.9);
+        });
+      });
+    } catch (e) { /* звук — не главное */ }
   }
 
   // ВАЖНО: isSoundOn вызывается во время инициализации state — нельзя обращаться к state здесь.
@@ -307,6 +329,8 @@
     visitorName: localStorage.getItem("zs_visitor_name") || "",
     prechatDone: !!savedIdentity() && !!localStorage.getItem("zs_prechat_done"),
     socket: null, unread: 0, typing: false, typingTimeout: null,
+    // последний ответ оператора, пришедший при закрытом окне: карточка у кнопки чата
+    notice: null,
     connected: false, soundOn: isSoundOn(), uploading: false,
     lightboxUrl: null, deliveredIds: {}, readIds: {},
     sessionPollTimer: null, showRating: false, ratingSubmitted: false,
@@ -750,6 +774,9 @@ ${hdrStyle === "accent"
 .zw-greet.show{opacity:1;transform:translateY(0);pointer-events:all;}
 .zw-greet-x{position:absolute;top:6px;right:10px;background:none;border:none;cursor:pointer;font-size:16px;color:#b5a99a;line-height:1;}
 .zw-greet-x:hover{color:#8c8072;}
+.zw-note{padding:12px 34px 12px 16px;white-space:normal;width:max-content;max-width:min(280px,calc(100vw - 32px));}
+.zw-note-from{font-size:12px;font-weight:600;opacity:.72;margin-bottom:2px;}
+.zw-note-text{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 
 /* Lightbox */
 .zw-lb{position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px;animation:zw-fade .2s ease;pointer-events:auto;}
@@ -1125,7 +1152,30 @@ ${safeCss}`;
     const greetSeen = cfg.greet_once === true && !window.__zsPreviewConfig && localStorage.getItem("zs_greet_seen") === "1";
     // greetDismissed персистится в sessionStorage — поллинг/сокеты больше не «перепоказывают» пузырь.
     // Пузырь — это автоматическое предложение: только при включённой автоматике и без отказа.
-    if (!state.open && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen && !state.greetDismissed && autoShowAllowed()) {
+    // Ответ оператора при закрытом окне: карточка у кнопки (кто и что написал). Клик — открыть чат, × — скрыть.
+    if (!state.open && state.notice && !window.__zsPreviewConfig) {
+      const note = document.createElement("div");
+      note.className = "zw-greet zw-note show";
+      note.setAttribute("role", "status");
+      const from = document.createElement("div");
+      from.className = "zw-note-from";
+      from.textContent = noticeFrom(state.notice, cfg);
+      const text = document.createElement("div");
+      text.className = "zw-note-text";
+      text.textContent = noticeText(state.notice);
+      note.appendChild(from);
+      note.appendChild(text);
+      const nx = document.createElement("button");
+      nx.className = "zw-greet-x";
+      nx.textContent = "×";
+      nx.setAttribute("aria-label", "Скрыть уведомление");
+      nx.onclick = (e) => { e.stopPropagation(); state.notice = null; scheduleRender(); };
+      note.appendChild(nx);
+      note.onclick = () => { openChat("user"); scheduleRender(); };
+      root.appendChild(note);
+    }
+
+    if (!state.open && !state.notice && cfg.greeting && !state.prechatDone && lt === "icon_only" && !greetSeen && !state.greetDismissed && autoShowAllowed()) {
       const g = document.createElement("div");
       g.className = "zw-greet show";
       g.textContent = cfg.greeting;
@@ -1140,7 +1190,8 @@ ${safeCss}`;
     }
 
     // 5. Launcher card
-    const cardDismissed = state.cardDismissed;
+    // Пока висит карточка ответа, вместо карточки-кнопки обычная кнопка — иначе они перекрывают друг друга.
+    const cardDismissed = state.cardDismissed || !!state.notice;
     if (!state.open && lt === "card" && !cardDismissed) {
       const lc = document.createElement("div");
       lc.className = "zw-launcher-card";
@@ -1516,6 +1567,9 @@ ${safeCss}`;
     state.open = true;
     state.openReason = reason;
     state.unread = 0;
+    state.notice = null;
+    // Открытие человеком — жест, после которого браузер разрешит звук ответа и при закрытом окне.
+    if (reason === "user" || reason === "invitation") primeSound();
     dismissGreet(false);
     if (reason !== "auto") { dismissMobInvite(false); cancelAutoTimers(); }
     state.pendingInvitation = null;
@@ -1850,6 +1904,20 @@ ${safeCss}`;
 
     c.appendChild(btn);
     return c;
+  }
+
+  // ═══ NOTICE ═══
+  // Подпись карточки ответа: имя оператора; у автосообщения — «от имени» из настроек; иначе заголовок окна.
+  function noticeFrom(msg, cfg) {
+    if (msg.sender === "operator") return state.session?.operator_name || cfg.header_title || "Оператор";
+    return autoSenderName(msg) || cfg.header_title || "Живая Сказка";
+  }
+  // Текст карточки: фото и файлы — словами, длинное сообщение — первые строки.
+  function noticeText(msg) {
+    if (getMsgImg(msg)) return "📷 Фото";
+    if (getMsgFiles(msg).length) return "📎 Файл";
+    const text = String(msg.message || "").replace(/[*_`~]/g, "").replace(/\s+/g, " ").trim();
+    return text.length > 140 ? text.slice(0, 139) + "…" : text;
   }
 
   // ═══ MESSAGES ═══
@@ -2668,6 +2736,7 @@ ${safeCss}`;
   async function doSend(inp) {
     const text = inp.value.trim();
     if (!text || state.sending) return;
+    primeSound();
     if(!state.session) {
       state.sending=true;inp.disabled=true;await startSession({});state.sending=false;inp.disabled=false;
       if(!state.session){showToast("Не удалось подключиться. Текст останется в поле — попробуйте ещё раз.","error");return;}
@@ -2892,6 +2961,12 @@ ${safeCss}`;
       setTimeout(scrollBottom, 400);
       autoDelivered();
       if (state.open) markVisibleAsRead();
+      else {
+        // Окно закрыто (например, перешли на другую страницу): непрочитанные ответы — на кнопке и карточкой, без звука.
+        const unread = msgs.filter((m) => m.sender === "operator" && m.status !== "read" && !(state.readIds || {})[m.id]);
+        state.unread = unread.length;
+        state.notice = unread.length ? unread[unread.length - 1] : null;
+      }
     }
   }
 
@@ -3099,6 +3174,8 @@ ${safeCss}`;
       playSound();
       if (!state.open) {
         state.unread++;
+        // Окно закрыто — ответ виден карточкой у кнопки, как в мессенджере.
+        if (msg.sender === "operator" || msg.sender === "ai") state.notice = msg;
       } else if (msg.sender === "operator") {
         state.deliveredIds[msg.id] = true;
         state.readIds[msg.id] = true;

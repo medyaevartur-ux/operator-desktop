@@ -200,15 +200,19 @@ test('uploaded files use expiring capabilities and retries preserve the original
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM chat_v8_files WHERE session_id=$1',[s.id])).rows[0].n,1);
 });
 
-test('two operators cannot claim the same conversation and capacity is enforced',async()=>{
+test('two operators cannot claim the same conversation, and an operator may take chats beyond the auto limit',async()=>{
   const a=await actor(),b=await actor(),s=await session();
   const claim=op=>app.inject({method:'PATCH',url:`/api/sessions/${s.id}/assign`,headers:headers(op),payload:{operator_id:op.id}});
   const results=await Promise.all([claim(a),claim(b)]);
   assert.deepEqual(results.map(result=>result.statusCode).sort(),[200,409]);
   const owner=results[0].statusCode===200?a:b;
+  // Лимит — только для автоматической раздачи: человек сам решает, сколько диалогов вести.
   await pool.query('UPDATE chat_operators SET max_concurrent_chats=1 WHERE id=$1',[owner.id]);
   const another=await session();
-  assert.equal((await app.inject({method:'PATCH',url:`/api/sessions/${another.id}/assign`,headers:headers(owner),payload:{operator_id:owner.id}})).statusCode,409);
+  assert.equal((await app.inject({method:'PATCH',url:`/api/sessions/${another.id}/assign`,headers:headers(owner),payload:{operator_id:owner.id}})).statusCode,200);
+  const third=await session();
+  const reply=await app.inject({method:'POST',url:`/api/sessions/${third.id}/messages`,headers:headers(owner),payload:{message:'Здравствуйте!',client_message_id:randomUUID()}});
+  assert.equal(reply.statusCode,200,'replying to a waiting chat takes it even over the limit');
 });
 test('transfer comments stay internal and an unrelated operator cannot close the chat',async()=>{
   const a=await actor(),b=await actor(),outsider=await actor(),s=await session(a);

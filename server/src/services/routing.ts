@@ -6,12 +6,10 @@ const fail=(statusCode:number,message:string)=>Object.assign(new Error(message),
 export async function lockOperator(client:PoolClient,id:string) {
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['chat-routing:'+id]);
 }
-export async function operatorCapacity(client:PoolClient,id:string,sessionId:string) {
-  const {rows}=await client.query(`SELECT o.id,o.name,o.max_concurrent_chats,
-    (SELECT count(*)::int FROM widget_chat_sessions s WHERE s.operator_id=o.id AND s.status<>'closed' AND s.id<>$2) AS load
-    FROM chat_operators o WHERE o.id=$1 AND o.is_active`,[id,sessionId]);
+// Сколько диалогов вести, человек решает сам: max_concurrent_chats ограничивает только автоматическую раздачу (distributeQueue).
+export async function activeOperator(client:PoolClient,id:string) {
+  const {rows}=await client.query('SELECT o.id,o.name FROM chat_operators o WHERE o.id=$1 AND o.is_active',[id]);
   if(!rows[0])throw fail(404,'Оператор недоступен');
-  if(rows[0].load>=Math.max(1,rows[0].max_concurrent_chats||5))throw fail(409,'У оператора достигнут лимит диалогов');
   return rows[0];
 }
 export async function assignInTransaction(client:PoolClient,id:string,targetId:string,actor:OperatorClaims,mode:'claim'|'transfer'='claim',comment='') {
@@ -23,7 +21,7 @@ export async function assignInTransaction(client:PoolClient,id:string,targetId:s
   if(mode==='claim'&&session.operator_id&&session.operator_id!==targetId)throw fail(409,'Диалог уже принят другим оператором');
   if(mode==='transfer'&&actor.role==='operator'&&session.operator_id!==actor.id)throw fail(403,'Передать можно только свой диалог');
   if(session.operator_id===targetId&&session.status==='with_operator')return {session,changed:false};
-  const target=await operatorCapacity(client,targetId,id);
+  const target=await activeOperator(client,targetId);
   const {rows:updated}=await client.query(`UPDATE widget_chat_sessions SET operator_id=$2,status='with_operator',operator_joined_at=now(),closed_at=NULL,queued_at=NULL,updated_at=now() WHERE id=$1 RETURNING *`,[id,targetId]);
   const text=mode==='transfer'?`Диалог передан оператору ${target.name}`:`${target.name} принял диалог`;
   await client.query("INSERT INTO widget_chat_messages(session_id,sender,message) VALUES($1,'system',$2)",[id,text]);

@@ -135,7 +135,7 @@ function widgetFunction(name, context) {
   assert.notEqual(start, -1);
   const end = widget.indexOf("\n  }", start);
   assert.notEqual(end, -1);
-  return vm.runInNewContext(`(${widget.slice(start, end + 4)})`, { console: quiet, localStorage:storage(),DRAFT_KEY:"fixture-draft",PENDING_KEY:"fixture-pending",messageId:()=>webcrypto.randomUUID(), ...context });
+  return vm.runInNewContext(`(${widget.slice(start, end + 4)})`, { console: quiet, localStorage:storage(),DRAFT_KEY:"fixture-draft",PENDING_KEY:"fixture-pending",messageId:()=>webcrypto.randomUUID(),primeSound(){}, ...context });
 }
 function showPolicy(config = {}, extra = {}) {
   const shared = storage(), state = { open: false, session: null, config, pendingInvitation: null, mobileInviteShown: false, idleTimer: null, openReason: null, _autoMinTimer: null };
@@ -264,6 +264,33 @@ test("an auto message is dropped when the visitor writes first or closes the win
   assert.equal(closed.autoMessageForOpen(closed.state.config).id, "am_1", "it is typed again when the visitor comes back to the chat");
   assert.equal(closed.autoSenderName({ sender: "ai", metadata: '{"kind":"auto_message","sender_name":"Команда"}' }), "Команда");
   assert.equal(closed.autoSenderName({ sender: "ai", metadata: { kind: "buttons" } }), "", "the product guide keeps its own label");
+});
+test("an operator reply that arrived while the chat was closed is shown on the button and in a notice after a page change", async () => {
+  const state = { session: { id: "chat" }, messages: [], open: false, readIds: {} };
+  const history = [
+    { id: "v1", sender: "visitor", message: "Сейчас обговорю с мужем" },
+    { id: "o1", sender: "operator", message: "Какой выбираете?", status: "read" },
+    { id: "o2", sender: "operator", message: "Хорошо, ждём", status: "delivered" },
+  ];
+  const load = widgetFunction("loadMessages", { state, messagesLoadVersion: 0, api: async () => history, scheduleRender() {}, setTimeout() {}, scrollBottom() {}, autoDelivered() {}, markVisibleAsRead() {} });
+  await load("chat");
+  assert.equal(state.unread, 1, "only the reply the visitor has not read counts");
+  assert.equal(state.notice.id, "o2");
+  const text = widgetFunction("noticeText", { getMsgImg: (m) => m.image_url || null, getMsgFiles: (m) => m.files || [] });
+  assert.equal(text({ message: "  **Хорошо**,\n ждём " }), "Хорошо, ждём");
+  assert.equal(text({ image_url: "https://zhivaya-skazka.ru/a.png" }), "📷 Фото");
+  assert.equal(text({ message: "", files: [{ url: "/f.pdf" }] }), "📎 Файл");
+  assert.equal(text({ message: "а".repeat(200) }).length, 140);
+});
+test("a pasted screenshot without a file name is attached as a picture", async () => {
+  const { pastedFiles } = await loadModule("src/lib/pasted-files.ts", { File, Array, Date });
+  const shot = new File([new Uint8Array([137, 80, 78, 71])], "", { type: "image/png" });
+  const [named] = pastedFiles({ files: [], items: [{ kind: "file", getAsFile: () => shot }] });
+  assert.match(named.name, /^Снимок .+\.png$/);
+  assert.equal(named.type, "image/png");
+  const photo = new File(["x"], "обложка.jpg", { type: "image/jpeg" });
+  assert.equal(pastedFiles({ files: [photo], items: [] })[0], photo, "a file copied in Explorer keeps its name");
+  assert.deepEqual(pastedFiles({ files: [], items: [{ kind: "string", getAsFile: () => null }] }), []);
 });
 test("the chat button lifts above a bar at the bottom of the site and steps aside for a large panel", () => {
   const vh = 812, host = {}, body = {}, html = {};

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { pool, transaction } from '../db.js';
 import type { OperatorClaims } from '../core/security.js';
 import { hydrateAttachments } from './private-files.js';
-import { lockOperator, operatorCapacity } from './routing.js';
+import { lockOperator, activeOperator } from './routing.js';
 
 const messageSchema = z.object({
   message: z.string().trim().min(1).max(10000),
@@ -39,7 +39,7 @@ export async function createMessage(sessionId: string, input: MessageInput, acto
     if (session.status === 'closed' && !body.is_internal) throw fail(409, 'Диалог завершён. Откройте его снова перед ответом.');
     if (operator && operator.role === 'operator' && session.operator_id && session.operator_id !== operator.id) throw fail(403, 'Диалог ведёт другой оператор');
     if (operator && !body.is_internal && !session.operator_id) {
-      await operatorCapacity(client,operator.id,sessionId);
+      await activeOperator(client,operator.id);
       await client.query("UPDATE widget_chat_sessions SET operator_id=$2,status='with_operator',queued_at=NULL,operator_joined_at=now() WHERE id=$1",[sessionId,operator.id]);
     }
     if (!operator) {
