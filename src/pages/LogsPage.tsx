@@ -6,7 +6,7 @@ import {
 import { getLogs, clearLogs, subscribeLogs } from "@/lib/logger";
 import { startDeviceRegistration } from "@/lib/fcm";
 import { requestPushPermission } from "@/lib/pwa";
-import { readDeviceDiagnostics, openSystemSettings, type DeviceDiagnostics } from "@/lib/tauri-bridge";
+import { readDeviceDiagnostics, openSystemSettings, saveJsonFile, type DeviceDiagnostics } from "@/lib/tauri-bridge";
 import { offlineQueue, type OfflineMessage } from "@/lib/offline-queue";
 import { useOutbox } from "@/features/inbox/use-outbox";
 import { pickConversation } from "@/lib/open-conversation";
@@ -157,9 +157,7 @@ export default function LogsPage() {
 
   const exportLogs = () => {
     const data = { version: __APP_VERSION__, time: new Date().toISOString(), connection: socket, checks: checks.map(({ key, level, title }) => ({ key, level, title })), device: device ? { platform: device.platform, provider: device.provider, enabled: device.enabled } : null, report, events: logs };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a"); link.href = url; link.download = `zhivaya-diagnostics-${new Date().toISOString().slice(0, 10)}.json`; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    void saveJsonFile(`zhivaya-diagnostics-${new Date().toISOString().slice(0, 10)}.json`, data);
   };
 
   return (

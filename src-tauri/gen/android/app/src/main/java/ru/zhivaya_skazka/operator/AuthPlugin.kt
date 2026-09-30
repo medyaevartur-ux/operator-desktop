@@ -1,6 +1,9 @@
 package ru.zhivaya_skazka.operator
 
 import android.app.Activity
+import android.content.Intent
+import androidx.activity.result.ActivityResult
+import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -9,6 +12,7 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import kotlin.concurrent.thread
 
 @InvokeArg
 class SaveSessionArgs { var data: String = "" }
@@ -27,6 +31,9 @@ class InstallUpdateArgs { var versionCode: Long = 0 }
 
 @InvokeArg
 class SettingsArgs { var kind: String = "notifications" }
+
+@InvokeArg
+class SaveFileArgs { var name: String = ""; var text: String = "" }
 
 @TauriPlugin
 class AuthPlugin(private val activity: Activity) : Plugin(activity) {
@@ -129,6 +136,29 @@ class AuthPlugin(private val activity: Activity) : Plugin(activity) {
                 activity.startActivity(intent)
                 invoke.resolve(JSObject())
             } catch (_: Exception) { invoke.reject("settings_unavailable") }
+        }
+    }
+    /** WebView молча игнорирует <a download>, поэтому JSON сохраняем через системное «Сохранить как»: папку выбирает оператор. */
+    @Command
+    fun saveFile(invoke: Invoke) {
+        val name = invoke.parseArgs(SaveFileArgs::class.java).name
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE, name)
+        activity.runOnUiThread {
+            try { startActivityForResult(invoke, intent, "saveFileResult") } catch (_: Exception) { invoke.reject("save_unavailable") }
+        }
+    }
+    @ActivityCallback
+    fun saveFileResult(invoke: Invoke, result: ActivityResult) {
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) { invoke.resolve(JSObject().put("saved", false)); return }
+        thread {
+            try {
+                val text = invoke.parseArgs(SaveFileArgs::class.java).text
+                val resolver = activity.contentResolver
+                // «wt» затирает прежнее содержимое, если выбран уже существующий файл; провайдеры без «wt» получают обычный «w».
+                (runCatching { resolver.openOutputStream(uri, "wt") }.getOrNull() ?: resolver.openOutputStream(uri))!!.use { it.write(text.toByteArray()) }
+                invoke.resolve(JSObject().put("saved", true))
+            } catch (_: Exception) { invoke.reject("save_failed") }
         }
     }
     @Command

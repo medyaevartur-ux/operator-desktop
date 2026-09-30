@@ -4,7 +4,6 @@ import {
   Smartphone, Tablet, Upload, Wand2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui";
-import { isAndroid } from "@/lib/api-config";
 import { Segmented } from "./controls";
 import { useWidgetSettings, type WidgetEditor } from "./use-widget-settings";
 import { LookTab } from "./tab-look";
@@ -114,8 +113,7 @@ export function WidgetSettingsScreen() {
         <div className={s.headerActions}>
           <button type="button" className={s.smallButton} onClick={() => setPreviewOpen(true)} data-narrow-only><Eye aria-hidden />Предпросмотр</button>
           <button type="button" className={s.smallButton} onClick={() => importInput.current?.click()} title="Загрузить настройки из файла" data-compact><Upload aria-hidden /><span>Импорт</span></button>
-          {/* Android WebView не сохраняет файлы из страницы — кнопка там молчала бы. */}
-          {!isAndroid() && <button type="button" className={s.smallButton} onClick={w.exportJson} title="Сохранить настройки в файл" data-compact><Download aria-hidden /><span>Экспорт</span></button>}
+          <button type="button" className={s.smallButton} onClick={w.exportJson} title="Сохранить настройки в файл" data-compact><Download aria-hidden /><span>Экспорт</span></button>
           <input ref={importInput} type="file" accept="application/json,.json" hidden onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void w.importJson(file); }} />
         </div>
       </header>

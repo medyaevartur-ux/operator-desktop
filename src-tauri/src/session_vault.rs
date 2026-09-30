@@ -216,6 +216,17 @@ pub async fn open_system_settings(app: tauri::AppHandle, kind: String) -> Result
     { let _=(app,kind); Err("unsupported_platform".into()) }
 }
 
+/// Android WebView молча игнорирует `<a download>`: JSON сохраняем через системное «Сохранить как».
+/// true — файл записан, false — оператор закрыл диалог.
+#[tauri::command]
+pub async fn save_json_file(app: tauri::AppHandle, name: String, text: String) -> Result<bool, String> {
+    if name.len() > 120 || !name.ends_with(".json") || name.contains('/') || text.len() > 5_000_000 { return Err("invalid_file".into()); }
+    #[cfg(target_os = "android")]
+    { return app.state::<AndroidSession>().0.run_mobile_plugin_async::<Value>("saveFile",json!({"name":name,"text":text})).await.map(|value|value["saved"].as_bool().unwrap_or(false)).map_err(|_|"save_failed".into()); }
+    #[cfg(not(target_os = "android"))]
+    { let _=(app,name,text); Err("unsupported_platform".into()) }
+}
+
 #[tauri::command]
 pub fn take_native_notification() -> Option<String> {
     #[cfg(windows)] { return crate::native_notifications::take_pending_open(); }

@@ -428,3 +428,15 @@ test('the widget constructor stops settings that would break the site before sav
   assert.equal(pathOnly('admin'),'/admin');assert.equal(pathOnly('  '),'');
   assert.deepEqual({...sameKind({hidden_paths:[],color:'#aa5129',avatar_url:null},{hidden_paths:null,color:'#1f2937',avatar_url:'/a.png',unknown:1})},{color:'#1f2937',avatar_url:'/a.png'});assert.deepEqual({...sameKind({a:1},'text')},{});
 });
+test('a JSON export downloads in the browser and is never silently dropped on Android',async()=>{
+  const clicks=[],toasts=[];let saved;
+  const load=android=>loadModule('src/lib/tauri-bridge.ts',{...browser(),Blob,isAndroid:()=>android,
+    toast:{success:(...args)=>toasts.push(['success',...args]),error:(...args)=>toasts.push(['error',...args])},
+    URL:{createObjectURL:blob=>{saved=blob;return 'blob:fixture'},revokeObjectURL(){}},
+    document:{createElement:()=>({click(){clicks.push({href:this.href,download:this.download})}})}});
+  await (await load(false)).saveJsonFile('report.json',{ok:true});
+  assert.deepEqual(clicks,[{href:'blob:fixture',download:'report.json'}]);assert.equal(await saved.text(),'{\n  "ok": true\n}');
+  await (await load(true)).saveJsonFile('report.json',{ok:true});
+  assert.equal(clicks.length,1,'Android WebView ignores <a download>, so the export must not rely on it');
+  assert.equal(toasts[0]?.[0],'error','without the native save the operator sees an error, not silence');
+});

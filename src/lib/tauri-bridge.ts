@@ -2,6 +2,8 @@
  * Bridge between frontend and Tauri native APIs
  * Gracefully degrades to no-op when not in Tauri environment
  */
+import { toast } from "@/components/ui";
+import { isAndroid } from "./api-config";
 
 function isTauri(): boolean {
   return !!(window as any).__TAURI_INTERNALS__;
@@ -118,4 +120,27 @@ export async function focusMainWindow(): Promise<void> {
     await win.unminimize();
     await win.setFocus();
   } catch {}
+}
+
+// ═══ Files ═══
+
+/**
+ * Сохранить JSON в файл. Браузер и Windows — обычная загрузка через <a download>.
+ * Android WebView такие загрузки молча игнорирует, поэтому там системное «Сохранить как» (AuthPlugin.saveFile).
+ */
+export async function saveJsonFile(name: string, data: unknown): Promise<void> {
+  const text = JSON.stringify(data, null, 2);
+  if (isAndroid()) {
+    try {
+      const inv = await getInvoke();
+      if (!inv) throw new Error("unsupported_platform");
+      if (await inv("save_json_file", { name, text })) toast.success("Файл сохранён", name);
+    } catch {
+      toast.error("Не удалось сохранить файл", "Попробуйте ещё раз или выберите другую папку.");
+    }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const link = document.createElement("a"); link.href = url; link.download = name; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

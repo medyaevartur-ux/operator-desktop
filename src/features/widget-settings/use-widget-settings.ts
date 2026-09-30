@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/components/ui";
+import { saveJsonFile } from "@/lib/tauri-bridge";
 import {
   getWidgetConfig, saveWidgetConfig, getPrechatFormConfig, savePrechatFormConfig, getBusinessHours, saveBusinessHours,
   getDomainSettings, saveDomainSettings, getABStats, getOfflineLeads, uploadWidgetAvatar,
@@ -138,10 +139,7 @@ export function useWidgetSettings() {
 
   const exportJson = useCallback(() => {
     if (!draft) return;
-    const blob = new Blob([JSON.stringify({ widget_config: draft.config, prechat_form: draft.prechat, business_hours: draft.hours }, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a"); link.href = url; link.download = `vidzhet-zhivaya-skazka-${new Date().toISOString().slice(0, 10)}.json`; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    void saveJsonFile(`vidzhet-zhivaya-skazka-${new Date().toISOString().slice(0, 10)}.json`, { widget_config: draft.config, prechat_form: draft.prechat, business_hours: draft.hours });
   }, [draft]);
 
   const importJson = useCallback(async (file: File) => {

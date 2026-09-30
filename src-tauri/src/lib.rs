@@ -122,6 +122,7 @@ pub fn run() {
             session_vault::take_native_notification,
             session_vault::notification_diagnostics,
             session_vault::open_system_settings,
+            session_vault::save_json_file,
             session_vault::android_update_check,
             session_vault::android_update_download,
             session_vault::android_update_install,
