@@ -3,7 +3,7 @@ import { Toggle } from "@/components/ui";
 import type { WidgetConfig } from "@/features/settings/settings.api";
 import { ChoiceCards, Row, Section, Segmented, TextField } from "./controls";
 import { InheritArt, LauncherArt, MobileModeArt, ShapeIcon, SideIcon } from "./art";
-import type { WidgetEditor } from "./use-widget-settings";
+import { MESSENGERS, messengerLinkOk, type WidgetEditor } from "./use-widget-settings";
 
 const LAUNCHERS: Array<{ value: WidgetConfig["launcher_type"]; label: string }> = [
   { value: "icon_only", label: "Круглая кнопка" }, { value: "icon_text", label: "Кнопка с текстом" },
@@ -82,6 +82,15 @@ export function ButtonTab({ w }: { w: WidgetEditor }) {
           ]} />
         </Row>
         <Toggle label="Подпись «Живая Сказка» внизу окна" checked={c.show_powered_by !== false} onChange={show_powered_by => w.upd({ show_powered_by })} />
+      </Section>
+
+      <Section title="Мессенджеры" description="Кнопки «Написать в …» под шапкой окна: посетитель может сразу написать вам туда, не дожидаясь ответа в чате. Пустое поле — кнопки нет.">
+        {MESSENGERS.map(m => (
+          <Row key={m.key} label={m.name}>
+            <TextField label={`Ссылка на ${m.name}`} value={c[m.key] ?? ""} maxLength={300} placeholder={m.example}
+              invalid={!messengerLinkOk(c[m.key], m.hosts)} onChange={value => w.upd({ [m.key]: value } as Partial<WidgetConfig>)} />
+          </Row>
+        ))}
       </Section>
 
       <Section title="На телефоне" description="Экран маленький, поэтому кнопка и окно настраиваются отдельно.">

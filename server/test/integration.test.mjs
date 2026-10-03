@@ -365,6 +365,22 @@ test('widget settings keep valid fields when one is invalid and page rules canno
     assert.deepEqual(settings.hidden_paths,['/admin','/upload']);
   } finally { await pool.query("DELETE FROM chat_settings WHERE key='widget_config'"); }
 });
+test('messenger buttons take only https links to the messenger itself; an empty link hides the button',async()=>{
+  const admin=await actor('admin');
+  try {
+    const response=await app.inject({method:'PUT',url:'/api/widget-settings/config',headers:headers(admin),payload:{
+      messenger_telegram:'https://t.me/jivaya_skazka',messenger_max:'javascript:alert(1)',messenger_whatsapp:'https://evil.example/wa.me/79990000000'}});
+    assert.equal(response.statusCode,200);
+    const {config,dropped}=response.json();
+    assert.deepEqual([...dropped].sort(),['messenger_max','messenger_whatsapp']);
+    assert.equal(config.messenger_telegram,'https://t.me/jivaya_skazka');
+    const settings=(await app.inject({method:'GET',url:'/api/widget/settings'})).json().widget_config;
+    assert.match(settings.messenger_max,/^https:\/\/max\.ru\//,'a rejected link falls back to the shop link');
+    assert.equal(settings.messenger_whatsapp,'');
+    const hidden=await app.inject({method:'PUT',url:'/api/widget-settings/config',headers:headers(admin),payload:{messenger_telegram:''}});
+    assert.equal(hidden.json().config.messenger_telegram,'');
+  } finally { await pool.query("DELETE FROM chat_settings WHERE key='widget_config'"); }
+});
 test('widget values the constructor sends are kept: widget shadows, numbers outside the range are clamped',async()=>{
   const admin=await actor('admin');
   try {

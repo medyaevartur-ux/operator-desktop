@@ -132,6 +132,10 @@ export interface WidgetConfig {
   auto_invite_message: string;
   auto_invite_cooldown_hours: number; // пауза после отказа посетителя (1–720)
   hidden_paths: string[];             // служебные разделы сайта без виджета
+  // Кнопки «Написать в …» под шапкой окна; пустая строка — кнопки нет
+  messenger_telegram: string;
+  messenger_max: string;
+  messenger_whatsapp: string;
   _ab_variant?: string;
 }
 
@@ -167,6 +171,9 @@ export const DEFAULT_WIDGET_CONFIG: WidgetConfig = {
   auto_invite_message: "Здравствуйте! Если появятся вопросы — напишите, мы на связи.",
   auto_invite_cooldown_hours: 24,
   hidden_paths: ["/admin", "/upload"],
+  messenger_telegram: "https://t.me/jivaya_skazka",
+  messenger_max: "https://max.ru/u/f9LHodD0cOLON76f9D71fs93QCwuU58kn05IwTExjxLGij5r5ZwZCrwg83M",
+  messenger_whatsapp: "",
   position: "bottom-right",
   color: "#C15F3C",
   greeting: "Привет! Чем помочь?",

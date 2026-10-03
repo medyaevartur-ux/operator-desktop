@@ -435,6 +435,10 @@
     help: '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>',
     // Sparkles/искра — для button_icon:"custom" (третий вариант в UI настроек).
     custom: '<svg viewBox="0 0 24 24"><path d="M12 2l1.9 5.1L19 9l-5.1 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 2zm6 12l.95 2.55L21.5 17.5l-2.55.95L18 21l-.95-2.55L14.5 17.5l2.55-.95L18 14zM6 15l.8 2.2L9 18l-2.2.8L6 21l-.8-2.2L3 18l2.2-.8L6 15z"/></svg>',
+    // Знаки мессенджеров — те же, что в подвале сайта (components/ui/SocialIcons): только сам знак, цвет задаёт кнопка.
+    telegram: '<svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(-7.311 -9.255) scale(1.70473)"><path d="M17.293 8.293l-1.815 8.566c-.137.612-.494.762-1 .475l-2.762-2.035-1.332 1.282a.69.69 0 0 1-.551.27l.197-2.79 5.084-4.594c.222-.196-.048-.305-.343-.11l-6.287 3.96-2.708-.846c-.589-.184-.6-.59.123-.875l10.589-4.082c.49-.18.918.112.805.78Z"/></g></svg>',
+    max: '<svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(0.879 0.879) scale(0.02224)"><path fill-rule="evenodd" clip-rule="evenodd" d="M508.211 878.328c-75.007 0-109.864-10.95-170.453-54.75-38.325 49.275-159.686 87.783-164.979 21.9 0-49.456-10.95-91.248-23.36-136.873-14.782-56.21-31.572-118.807-31.572-209.508 0-216.626 177.754-379.597 388.357-379.597 210.785 0 375.947 171.001 375.947 381.604.707 207.346-166.595 376.118-373.94 377.224m3.103-571.585c-102.564-5.292-182.499 65.7-200.201 177.024-14.6 92.162 11.315 204.398 33.397 210.238 10.585 2.555 37.23-18.98 53.837-35.587a189.8 189.8 0 0 0 92.71 33.032c106.273 5.112 197.08-75.794 204.215-181.95 4.154-106.382-77.67-196.486-183.958-202.574Z"/></g></svg>',
+    whatsapp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>',
   };
   // ═══ CSS ═══
   function getCSS(cfg) {
@@ -612,6 +616,11 @@ ${hdrStyle === "accent" ? `
 .zw-hdr-acts{display:flex;gap:6px;z-index:1;}
 .zw-hdr-btn{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
 .zw-hdr-btn svg{width:16px;height:16px;}
+.zw-msgr{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;}
+.zw-msgr-t{font-size:12px;color:var(--sys-text);}
+.zw-msgr-a{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 9px;border:1px solid var(--border);border-radius:999px;color:var(--text);font-size:12px;font-weight:600;line-height:1;text-decoration:none;transition:border-color .15s,color .15s,background .15s;}
+.zw-msgr-a:hover,.zw-msgr-a:focus-visible{border-color:var(--accent-40);color:var(--accent);background:var(--accent-08);outline:none;}
+.zw-msgr-a svg{width:15px;height:15px;fill:currentColor;flex-shrink:0;}
 
 /* Team avatars */
 .zw-team{display:flex;align-items:center;}
@@ -1097,7 +1106,7 @@ ${safeCss}`;
     const cssText = getCSS(cfg) + `
 .zw-win{border:1px solid rgba(121,86,56,.13);border-radius:18px;box-shadow:0 18px 60px rgba(55,37,20,.16);height:590px;max-height:calc(100dvh - 104px)}
 .zw-hdr{min-height:72px}.zw-hdr-name{font-weight:600;letter-spacing:-.02em}.zw-msgs{padding:18px 16px}.zw-bbl{border-radius:4px 14px 14px 14px;box-shadow:none}.zw-row.v .zw-bbl{border-radius:14px 4px 14px 14px;background:var(--fab-bg)}.zw-txt{font-size:14px;line-height:1.65}.zw-sender{font-weight:500;font-size:11px}.zw-file{display:flex;flex-direction:column;gap:5px;padding:12px 13px;min-width:150px;max-width:260px;border:1px solid rgba(126,94,61,.2);border-radius:9px;color:inherit;text-decoration:none;overflow-wrap:anywhere}.zw-file strong{font-size:13px;font-weight:600}.zw-file span{font-size:11px;opacity:.7}.zw-inp{font-size:14px;line-height:1.55}.zw-send{border-radius:11px}.zw-ava{font-size:12px;font-weight:600}
-@media(max-width:480px){.zw-inp{font-size:16px}.zw-hdr-btn{min-width:42px;min-height:42px}.zw-msgs{padding:16px}}
+@media(max-width:480px){.zw-inp{font-size:16px}.zw-hdr-btn{min-width:42px;min-height:42px}.zw-msgs{padding:16px}.zw-msgr-a{height:34px;padding:0 13px 0 11px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}`;
     if (style.textContent !== cssText) {
       style.textContent = cssText;
@@ -1250,6 +1259,8 @@ ${safeCss}`;
     win.innerHTML = ""; // rebuild inner contents safely
 
     win.appendChild(mkHeader(cfg));
+    const messengers = mkMessengers(cfg);
+    if (messengers) win.appendChild(messengers);
 
     if (!state.prechatDone && state.prechat && state.prechat.enabled) {
       win.appendChild(mkPrechat(cfg));
@@ -1767,6 +1778,47 @@ ${safeCss}`;
     h.appendChild(acts);
 
     return h;
+  }
+  // ═══ MESSENGERS ═══
+  // «Написать в: Telegram · MAX · WhatsApp» под шапкой — посетитель может сразу уйти в мессенджер, не дожидаясь ответа здесь.
+  // Только https-ссылки на сам мессенджер: правило страницы или ошибка в настройках не подставят чужой адрес.
+  function messengerLinks(cfg) {
+    const links = [];
+    [
+      { key: "messenger_telegram", label: "Telegram", icon: "telegram", hosts: ["t.me", "telegram.me"] },
+      { key: "messenger_max", label: "MAX", icon: "max", hosts: ["max.ru"] },
+      { key: "messenger_whatsapp", label: "WhatsApp", icon: "whatsapp", hosts: ["wa.me", "api.whatsapp.com", "chat.whatsapp.com"] },
+    ].forEach((m) => {
+      const value = typeof cfg?.[m.key] === "string" ? cfg[m.key].trim() : "";
+      if (!value) return;
+      try {
+        const url = new URL(value);
+        if (url.protocol === "https:" && m.hosts.indexOf(url.hostname) !== -1) links.push({ label: m.label, icon: m.icon, url: url.href });
+      } catch (e) { /* не ссылка — кнопки нет */ }
+    });
+    return links;
+  }
+  function mkMessengers(cfg) {
+    const links = messengerLinks(cfg);
+    if (!links.length) return null;
+    const bar = document.createElement("div");
+    bar.className = "zw-msgr";
+    const title = document.createElement("span");
+    title.className = "zw-msgr-t";
+    title.textContent = "Написать в:";
+    bar.appendChild(title);
+    links.forEach((m) => {
+      const a = document.createElement("a");
+      a.className = "zw-msgr-a";
+      a.href = m.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.setAttribute("aria-label", "Написать в " + m.label + " — откроется в новой вкладке");
+      a.innerHTML = IC[m.icon];
+      a.appendChild(document.createTextNode(m.label));
+      bar.appendChild(a);
+    });
+    return bar;
   }
   // ═══ PRECHAT ═══
   function mkPrechat(cfg) {

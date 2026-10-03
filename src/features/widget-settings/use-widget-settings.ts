@@ -38,9 +38,24 @@ export const hostOnly = (value: string) => value.trim().toLowerCase().replace(/^
 /** Служебный раздел сайта всегда начинается с «/». */
 export const pathOnly = (value: string) => { const v = value.trim(); return !v ? "" : v.startsWith("/") ? v : `/${v}`; };
 
+/** Кнопки мессенджеров в окне чата. Правило ссылки то же, что на сервере и в самом виджете. */
+export const MESSENGERS = [
+  { key: "messenger_telegram", name: "Telegram", hosts: ["t.me", "telegram.me"], example: "https://t.me/имя" },
+  { key: "messenger_max", name: "MAX", hosts: ["max.ru"], example: "https://max.ru/…" },
+  { key: "messenger_whatsapp", name: "WhatsApp", hosts: ["wa.me", "api.whatsapp.com", "chat.whatsapp.com"], example: "https://wa.me/79990000000" },
+] as const;
+/** Пусто — кнопки нет; иначе только https-ссылка на сам мессенджер. */
+export function messengerLinkOk(value: string | undefined, hosts: readonly string[]): boolean {
+  const text = value?.trim();
+  if (!text) return true;
+  try { const url = new URL(text); return url.protocol === "https:" && hosts.includes(url.hostname); } catch { return false; }
+}
+
 /** Что помешает сохранению или сломает виджет — одной фразой, с разделом, где поправить. */
 export function firstProblem(draft: WidgetDraft): string | null {
   const { config, prechat, hours } = draft;
+  const badMessenger = MESSENGERS.find(m => !messengerLinkOk(config[m.key], m.hosts));
+  if (badMessenger) return `Ссылка на ${badMessenger.name} должна вести на сам мессенджер и начинаться с https://${badMessenger.hosts[0]}/ — раздел «Кнопка и окно».`;
   if (config.auto_invite_enabled && !config.auto_invite_message.trim()) return "Впишите текст автоматического приглашения — раздел «Автоматика».";
   if (prechat.enabled && !prechat.fields.length) return "Добавьте в форму перед чатом хотя бы одно поле или выключите форму.";
   if (prechat.enabled && prechat.fields.some(field => !field.label.trim())) return "У каждого поля формы должно быть название — раздел «Форма перед чатом».";

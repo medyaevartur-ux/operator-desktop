@@ -57,6 +57,11 @@ const ratingSchema = z.object({
 const colorRegex = /^#[0-9a-fA-F]{3,8}$/;
 /** Число вне диапазона приводится к ближайшей границе: одно лишнее значение не должно выбрасывать всю настройку. */
 const within = (min: number, max: number) => z.number().transform(value => Math.min(max, Math.max(min, Math.round(value))));
+/** Кнопка мессенджера в окне чата: только https-ссылка на сам мессенджер; пустая строка — кнопки нет. */
+const messengerLink = (...hosts: string[]) => z.string().trim().max(300).refine(value => {
+  if (!value) return true;
+  try { const url = new URL(value); return url.protocol === "https:" && hosts.includes(url.hostname); } catch { return false; }
+});
 
 const autoMessageSchema = z.object({
   id: z.string().max(50),
@@ -186,6 +191,10 @@ const widgetConfigSchema = z.object({
   auto_invite_message: z.string().trim().min(1).max(500).optional(),
   auto_invite_cooldown_hours: within(1, 720).optional(),
   hidden_paths: z.array(z.string().max(200)).max(50).optional(),
+  // ═══ Кнопки мессенджеров под шапкой окна ═══
+  messenger_telegram: messengerLink("t.me", "telegram.me").optional(),
+  messenger_max: messengerLink("max.ru").optional(),
+  messenger_whatsapp: messengerLink("wa.me", "api.whatsapp.com", "chat.whatsapp.com").optional(),
 }).passthrough();
 
 /** Сохраняем только проверенные значения: ошибочное поле откатывается к умолчанию, остальное не теряется. */
@@ -385,6 +394,10 @@ const DEFAULT_WIDGET_CONFIG = {
   ...AUTO_INVITE_DEFAULTS,
   // Служебные страницы магазина, где виджет не нужен
   hidden_paths: ["/admin", "/upload"],
+  // Мессенджеры магазина (те же ссылки, что в подвале сайта); пустая строка — кнопки нет
+  messenger_telegram: "https://t.me/jivaya_skazka",
+  messenger_max: "https://max.ru/u/f9LHodD0cOLON76f9D71fs93QCwuU58kn05IwTExjxLGij5r5ZwZCrwg83M",
+  messenger_whatsapp: "",
 };
 
 const DEFAULT_PRECHAT = {
