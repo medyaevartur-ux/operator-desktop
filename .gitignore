@@ -25,6 +25,6 @@ server/.test-uploads/
 # Reviewed release packages contain local build output, not repository sources.
 prepared-v8/
 server/build-manifest.json
-# Установщики v8 хранятся рядом с выпуском, не в Git
-releases/8.*/
+# Установщики хранятся рядом с выпуском и в выпусках GitHub, не в Git
+releases/
 __pycache__/

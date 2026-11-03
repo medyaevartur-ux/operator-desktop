@@ -23,7 +23,8 @@ Push-Location $root
 try {
   & npm.cmd run test:reliability
   if ($LASTEXITCODE -ne 0) { throw 'Reliability checks failed.' }
-  & npm.cmd run tauri -- build --bundles nsis
+  # --ci: without it the CLI waits for the updater key password at a hidden prompt (Windows PowerShell drops an empty env var), and the build "hangs" after NSIS.
+  & npm.cmd run tauri -- build --bundles nsis --ci
   if ($LASTEXITCODE -ne 0) { throw 'Native Windows build failed.' }
   $bundle=Join-Path $root 'src-tauri/target/release/bundle/nsis'
   $zip=Get-ChildItem -LiteralPath $bundle -Filter "*_${Version}_x64-setup.nsis.zip" | Select-Object -First 1
