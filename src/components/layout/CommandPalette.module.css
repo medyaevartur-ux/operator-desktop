@@ -3,7 +3,7 @@
   inset: 0;
   z-index: var(--z-overlay);
   background: var(--scrim);
-  animation: fadeIn var(--duration-fast) var(--ease-out);
+  animation: global(fadeIn) var(--duration-fast) var(--ease-out);
 }
 
 .content {

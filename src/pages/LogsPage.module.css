@@ -21,7 +21,7 @@
 .check[data-level="warn"] .checkIcon { color: var(--warning); }
 .check[data-level="fail"] .checkIcon { color: var(--error); }
 .check[data-level="info"] .checkIcon { color: var(--info); }
-.check[data-level="wait"] .checkIcon { animation: spin 2.4s linear infinite; }
+.check[data-level="wait"] .checkIcon { animation: global(spin) 2.4s linear infinite; }
 .checkText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .checkText strong { font-size: 14px; font-weight: var(--weight-medium); }
 .checkText span { font-size: 13px; line-height: 1.45; color: var(--text-muted); }

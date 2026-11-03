@@ -41,4 +41,4 @@
 
 .fullWidth { width: 100%; }
 .loading { pointer-events: none; opacity: 0.8; }
-.spinner { animation: spin 0.9s linear infinite; }
+.spinner { animation: global(spin) 0.9s linear infinite; }

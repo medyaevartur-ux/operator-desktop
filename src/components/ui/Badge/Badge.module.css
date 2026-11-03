@@ -69,7 +69,7 @@
   background: var(--badge-unread);
   color: white;
   box-shadow: 0 0 0 2px var(--surface-1);
-  animation: scaleInBounce var(--duration-slow) var(--ease-spring);
+  animation: global(scaleInBounce) var(--duration-slow) var(--ease-spring);
 }
 
 /* ── Dot variant ── */

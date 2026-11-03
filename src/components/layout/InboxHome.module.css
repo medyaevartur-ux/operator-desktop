@@ -9,7 +9,7 @@
   overflow: auto;
   padding: var(--space-8) var(--space-6) 12vh;
   text-align: center;
-  animation: fadeInUp var(--duration-slow) var(--ease-out);
+  animation: global(fadeInUp) var(--duration-slow) var(--ease-out);
 }
 
 .mark { width: 34px; height: 34px; margin-bottom: var(--space-3); }

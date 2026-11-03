@@ -302,7 +302,7 @@
   font-size: 12.5px;
   font-weight: var(--weight-medium);
   color: var(--text-primary);
-  animation: fadeInUp var(--duration-normal) var(--ease-out);
+  animation: global(fadeInUp) var(--duration-normal) var(--ease-out);
 }
 .down:active { transform: translateX(-50%) scale(0.98); }
 .down svg { width: 15px; height: 15px; color: var(--accent); }

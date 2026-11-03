@@ -2,7 +2,7 @@
   border-radius: var(--radius-md);
   background: linear-gradient(90deg, var(--surface-pressed) 25%, var(--surface-hover) 50%, var(--surface-pressed) 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
+  animation: global(shimmer) 1.6s ease-in-out infinite;
 }
 .circle { border-radius: var(--radius-full); }
 .text { border-radius: var(--radius-xs); }

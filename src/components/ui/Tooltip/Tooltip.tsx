@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import s from "./Tooltip.module.css";
+
+// Подсказки нужны только там, где есть настоящее наведение мышью. На телефоне (касание, S Pen)
+// их нечем «увести», и они висели поверх кнопок.
+const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
+const subscribeHover = (notify: () => void) => {
+  const query = window.matchMedia(HOVER_QUERY);
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
+};
+const canHover = () => window.matchMedia(HOVER_QUERY).matches;
 
 interface TooltipProps {
   children: ReactNode;
@@ -23,6 +33,14 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
 export function Tooltip({ children, content, kbd, side = "top", delayDuration }: TooltipProps) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const hoverable = useSyncExternalStore(subscribeHover, canHover, () => true);
+
+  // Закрывшееся меню (быстрые ответы, эмодзи, форматирование) возвращает фокус на свою кнопку,
+  // и Radix открывал подсказку без курсора над ней. Открываем только под курсором или с клавиатуры.
+  const handleOpenChange = (next: boolean) => {
+    if (next && !trigger.current?.matches(":hover, :focus-visible")) return;
+    setOpen(next);
+  };
 
   // Radix закрывает подсказку, когда курсор уходит с кнопки. Но заблокированная кнопка
   // («Отправить» после отправки по Enter) и системное окно выбора файла этого не сообщают,
@@ -50,8 +68,10 @@ export function Tooltip({ children, content, kbd, side = "top", delayDuration }:
     };
   }, [open]);
 
+  if (!hoverable) return <>{children}</>;
+
   return (
-    <TooltipPrimitive.Root open={open} onOpenChange={setOpen} delayDuration={delayDuration}>
+    <TooltipPrimitive.Root open={open} onOpenChange={handleOpenChange} delayDuration={delayDuration}>
       <TooltipPrimitive.Trigger asChild ref={trigger}>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content

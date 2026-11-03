@@ -67,5 +67,5 @@
 .errorText {
   font-size: var(--text-xs);
   color: var(--error);
-  animation: fadeInUp var(--duration-fast) var(--ease-out);
+  animation: global(fadeInUp) var(--duration-fast) var(--ease-out);
 }
