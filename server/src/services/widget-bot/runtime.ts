@@ -113,7 +113,7 @@ function defaultNext(sc: Scenario, nodeId: string): string | null {
   return outs.length ? outs[0].target : null;
 }
 
-async function sendBot(io: Server, sessionId: string, text: string, metadata: any, attachments?: any) {
+export async function sendBot(io: Server, sessionId: string, text: string, metadata: any, attachments?: any) {
   const { rows } = await pool.query(
     `INSERT INTO widget_chat_messages (session_id, sender, message, message_type, status, metadata, attachments)
      VALUES ($1, 'ai', $2, 'text', 'sent', $3, $4) RETURNING *`,

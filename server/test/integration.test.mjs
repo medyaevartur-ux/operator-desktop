@@ -223,6 +223,20 @@ test('transfer comments stay internal and an unrelated operator cannot close the
   assert.equal(history.json().some(message=>message.message==='Внутренний контекст передачи'),false);
   assert.equal((await app.inject({method:'PATCH',url:`/api/sessions/${s.id}/close`,headers:headers(outsider),payload:{operator_id:outsider.id}})).statusCode,403);
 });
+test('quick reply «Как заказать» answers once with the order guide; starter templates are seeded',async()=>{
+  const s=await session(),client_message_id=randomUUID();
+  const send=()=>visitorMessage(s,'Как заказать?',{client_message_id,quick_reply:'how_to_order'});
+  assert.equal((await send()).statusCode,200);
+  assert.equal((await send()).statusCode,200);
+  const {rows}=await pool.query('SELECT sender,metadata FROM widget_chat_messages WHERE session_id=$1',[s.id]);
+  const guides=rows.map(row=>({...row,metadata:typeof row.metadata==='string'?JSON.parse(row.metadata):row.metadata})).filter(row=>row.sender==='ai'&&row.metadata?.kind==='guide');
+  assert.equal(guides.length,1,'the retry of the same message must not add a second guide');
+  assert.equal(guides[0].metadata.guide,'how_to_order');
+  assert.ok(guides[0].metadata.steps.length>=3&&guides[0].metadata.buttons[0].url.startsWith('https://'));
+  assert.equal((await visitorMessage(s,'Другое',{quick_reply:'anything_else'})).statusCode,400);
+  const templates=await pool.query('SELECT shortcut FROM chat_v8_templates WHERE shortcut=ANY($1)',[['/тарифы','/заказ','/связь','/номер']]);
+  assert.equal(templates.rowCount,4);
+});
 test('shared templates reject lost updates instead of overwriting another edit',async()=>{
   const a=await actor(),shortcut='/test-'+randomUUID().slice(0,8);
   const body={title:'Тестовый шаблон',shortcut,body:'Исходный текст',category:'Тест'};

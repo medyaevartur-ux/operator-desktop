@@ -699,6 +699,21 @@ ${hdrStyle === "accent"
 .zw-card-desc{font-size:13px;color:var(--text);opacity:.82;line-height:1.45;margin-bottom:9px;}
 .zw-card-btns{display:flex;flex-wrap:wrap;gap:6px;}
 .zw-guide-btn{border-style:dashed;font-weight:700;}
+.zw-howto{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
+.zw-howto-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;}
+.zw-howto-step{position:relative;display:flex;gap:12px;align-items:flex-start;padding:7px 0;}
+.zw-howto-step:not(:last-child)::before{content:"";position:absolute;left:21px;top:56px;bottom:-4px;width:2px;border-radius:2px;background:var(--op-bubble-border);}
+.zw-howto-pic{position:relative;flex:none;width:44px;height:44px;border-radius:13px;background:var(--accent-08);}
+.zw-howto-pic img{width:100%;height:100%;border-radius:inherit;object-fit:cover;display:block;}
+.zw-howto-n{position:absolute;right:-5px;bottom:-5px;min-width:19px;height:19px;padding:0 4px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;line-height:19px;text-align:center;box-shadow:0 0 0 2px var(--op-bubble-bg);}
+.zw-howto-body{flex:1;min-width:0;}
+.zw-howto-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;}
+.zw-howto-head b{font-size:13.5px;font-weight:700;color:var(--text);}
+.zw-howto-time{font-size:11.5px;color:var(--text);opacity:.6;white-space:nowrap;}
+.zw-howto-text{margin-top:2px;font-size:13px;line-height:1.45;color:var(--text);opacity:.85;}
+.zw-howto-note{padding:9px 11px;border-radius:12px;background:var(--accent-08);font-size:12.5px;line-height:1.45;color:var(--text);}
+.zw-cbtn.zw-howto-cta{background:var(--accent);border-color:var(--accent);color:#fff;}
+.zw-cbtn.zw-howto-cta:hover{background:var(--accent);color:#fff;filter:brightness(1.07);}
 
 /* Typing */
 .zw-typ{display:none;align-items:flex-end;gap:8px;margin-bottom:6px;}
@@ -1279,7 +1294,7 @@ ${safeCss}`;
             btn.textContent = text;
             btn.onclick = () => {
               const inp = shadow.querySelector(".zw-inp");
-              if (inp) { inp.value = text; doSend(inp); }
+              if (inp) { inp.value = text; doSend(inp, quickReplyGuide(text)); }
             };
             qr.appendChild(btn);
           });
@@ -2051,7 +2066,9 @@ ${safeCss}`;
       if (!isV) {
         const snd = document.createElement("div");
         snd.className = "zw-sender " + (msg.sender === "operator" || autoName ? "sop" : "sai");
-        snd.textContent = autoName || (msg.sender === "ai" ? "AI-бот" : (state.session?.operator_name || "Оператор"));
+        // Подсказка на быстрый ответ — не «AI-бот»: текст написали мы, сервер только показывает его.
+        const aiLabel = msgMeta(msg)?.kind === "guide" ? "Подсказка" : "AI-бот";
+        snd.textContent = autoName || (msg.sender === "ai" ? aiLabel : (state.session?.operator_name || "Оператор"));
         bbl.appendChild(snd);
       }
 
@@ -2137,6 +2154,8 @@ ${safeCss}`;
           const bw = document.createElement("div"); bw.className = "zw-btns";
           _md.buttons.forEach((b) => bw.appendChild(makeBotBtn(b, _md.node)));
           bbl.appendChild(bw);
+        } else if (_md.kind === "guide" && Array.isArray(_md.steps)) {
+          bbl.appendChild(mkHowTo(_md));
         }
       }
 
@@ -2762,11 +2781,83 @@ ${safeCss}`;
     btn.className = "zw-cbtn" + (b.color === "positive" ? " pos" : b.color === "negative" ? " neg" : "");
     btn.textContent = b.label || "Выбрать";
     btn.onclick = () => {
-      if (b.url) { try { window.open(b.url, "_blank", "noopener"); } catch (e) {} return; }
+      if (b.url) { openBotLink(b.url); return; }
       btn.disabled = true;
       sendBotEvent(nodeId, b.handle, b.label);
     };
     return btn;
+  }
+
+  // Ссылка на этот же сайт открывается здесь, а не в новой вкладке. Якорь на текущей странице
+  // («Выбрать тариф» → #prices) — закрываем чат и прокручиваем к нему: посетитель видит, куда нажать.
+  function openBotLink(href) {
+    let url;
+    try { url = new URL(href, location.href); } catch (e) { return; }
+    if (url.protocol !== "https:" && url.protocol !== "http:") return;
+    if (url.origin !== location.origin) { try { window.open(url.href, "_blank", "noopener"); } catch (e) {} return; }
+    const target = url.hash && url.pathname === location.pathname ? document.getElementById(decodeURIComponent(url.hash.slice(1))) : null;
+    if (!target) { location.assign(url.href); return; }
+    closeChat("system");
+    scheduleRender();
+    setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }
+
+  // Быстрые ответы, на которые сервер сразу отвечает подсказкой (server/src/services/widget-guides.ts).
+  function quickReplyGuide(text) {
+    return /как\s+(сделать\s+)?заказ/i.test(text) ? "how_to_order" : undefined;
+  }
+
+  function msgMeta(msg) {
+    let md = msg && msg.metadata;
+    if (typeof md === "string") { try { md = JSON.parse(md); } catch (e) { md = null; } }
+    return md && typeof md === "object" ? md : null;
+  }
+
+  // Подсказка «Как заказать»: шаги с картинкой и сроком, совет и кнопка к тарифам. Текст — только textContent.
+  function mkHowTo(md) {
+    const box = document.createElement("div");
+    box.className = "zw-howto";
+    const list = document.createElement("ol");
+    list.className = "zw-howto-steps";
+    md.steps.forEach((step, i) => {
+      const li = document.createElement("li");
+      li.className = "zw-howto-step";
+      const pic = document.createElement("span");
+      pic.className = "zw-howto-pic";
+      if (typeof step.image === "string" && /^https:\/\//.test(step.image)) {
+        const im = document.createElement("img");
+        im.loading = "lazy"; im.decoding = "async"; im.alt = ""; im.width = 44; im.height = 44;
+        im.onerror = () => im.remove();
+        im.src = step.image;
+        pic.appendChild(im);
+      }
+      const n = document.createElement("span");
+      n.className = "zw-howto-n";
+      n.textContent = String(i + 1);
+      pic.appendChild(n);
+      const body = document.createElement("div");
+      body.className = "zw-howto-body";
+      const head = document.createElement("div");
+      head.className = "zw-howto-head";
+      const title = document.createElement("b");
+      title.textContent = step.title || "";
+      head.appendChild(title);
+      if (step.time) { const t = document.createElement("span"); t.className = "zw-howto-time"; t.textContent = step.time; head.appendChild(t); }
+      body.appendChild(head);
+      if (step.text) { const p = document.createElement("div"); p.className = "zw-howto-text"; p.textContent = step.text; body.appendChild(p); }
+      li.appendChild(pic);
+      li.appendChild(body);
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+    if (md.note) { const note = document.createElement("div"); note.className = "zw-howto-note"; note.textContent = md.note; box.appendChild(note); }
+    if (Array.isArray(md.buttons) && md.buttons.length) {
+      const bw = document.createElement("div");
+      bw.className = "zw-btns";
+      md.buttons.forEach((b, i) => { const btn = makeBotBtn(b, md.node); if (i === 0) btn.classList.add("zw-howto-cta"); bw.appendChild(btn); });
+      box.appendChild(bw);
+    }
+    return box;
   }
 
   async function startProductGuide() {
@@ -2785,7 +2876,7 @@ ${safeCss}`;
     await api("POST", "/api/widget/sessions/" + sid + "/bot-start", {});
   }
 
-  async function doSend(inp) {
+  async function doSend(inp, quickReply) {
     const text = inp.value.trim();
     if (!text || state.sending) return;
     primeSound();
@@ -2824,7 +2915,7 @@ ${safeCss}`;
     scheduleRender();
     setTimeout(scrollBottom, 50);
 
-    const saved = await api("POST", "/api/widget/sessions/" + sid + "/messages", { sender: "visitor", message: text,client_message_id:clientId }) || state.messages.find(item=>item.client_message_id===clientId&&!item.isPending);
+    const saved = await api("POST", "/api/widget/sessions/" + sid + "/messages", { sender: "visitor", message: text,client_message_id:clientId, quick_reply: quickReply }) || state.messages.find(item=>item.client_message_id===clientId&&!item.isPending);
     state.sending = false;inp.disabled=false;
     if (state.session?.id !== sid) return;
     if (!saved || !saved.id) {

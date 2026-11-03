@@ -416,6 +416,37 @@ test("visitor retries keep the same client ID after an unknown HTTP outcome",asy
   const send=widgetFunction("doSend",{state,api:async(_method,_path,body)=>{bodies.push(body);return bodies.length===1?null:{id:"saved",...body}},scheduleRender(){},setTimeout(){},scrollBottom(){},showToast(){},loadMessages(){}});
   await send(input);await send(input);assert.equal(bodies.length,2);assert.equal(bodies[0].client_message_id,bodies[1].client_message_id);assert.equal(state.messages.length,1);
 });
+test("«Как заказать?» asks the server for the order guide; other quick replies stay plain messages",async()=>{
+  const guide=widgetFunction("quickReplyGuide");
+  assert.equal(guide("Как заказать?"),"how_to_order");
+  assert.equal(guide("как сделать заказ"),"how_to_order");
+  assert.equal(guide("Сколько стоит доставка?"),undefined);
+  const state={session:{id:"session-a"},config:{},messages:[],sending:false},input={value:"Как заказать?",style:{}},bodies=[];
+  const send=widgetFunction("doSend",{state,api:async(_method,_path,body)=>{bodies.push(body);return {id:"saved",...body}},scheduleRender(){},setTimeout(){},scrollBottom(){},showToast(){},loadMessages(){}});
+  await send(input,"how_to_order");
+  assert.equal(bodies[0].quick_reply,"how_to_order");assert.equal(bodies[0].message,"Как заказать?");
+});
+test("guide links: own-page anchor closes the chat and scrolls, own site opens in place, others in a new tab",()=>{
+  const actions=[],target={scrollIntoView:(options)=>actions.push(["scroll",options.block])};
+  const open=widgetFunction("openBotLink",{URL,setTimeout:(fn)=>fn(),
+    location:{href:"https://zhivaya-skazka.ru/",origin:"https://zhivaya-skazka.ru",pathname:"/",assign:(href)=>actions.push(["assign",href])},
+    document:{getElementById:(id)=>id==="prices"?target:null},window:{open:(href,name)=>actions.push(["open",href,name])},closeChat:(reason)=>actions.push(["close",reason]),scheduleRender:()=>actions.push(["render"])});
+  open("https://zhivaya-skazka.ru/#prices");assert.deepEqual(actions.splice(0),[["close","system"],["render"],["scroll","start"]]);
+  open("https://zhivaya-skazka.ru/delivery");assert.deepEqual(actions.splice(0),[["assign","https://zhivaya-skazka.ru/delivery"]]);
+  open("https://t.me/jivaya_skazka");assert.deepEqual(actions.splice(0),[["open","https://t.me/jivaya_skazka","_blank"]]);
+  open("javascript:alert(1)");assert.deepEqual(actions,[]);
+});
+test("order guide renders steps as plain text, skips non-https pictures and marks the main button",()=>{
+  const made=[],buttons=[];
+  const el=(tag)=>({tag,children:[],classList:{list:[],add(name){this.list.push(name)}},appendChild(child){this.children.push(child);return child},remove(){}});
+  const document={createElement:(tag)=>{const node=el(tag);made.push(node);return node}};
+  const mk=widgetFunction("mkHowTo",{document,makeBotBtn:(b)=>{const node=el("button");buttons.push(node);return node}});
+  const box=mk({kind:"guide",note:"Совет",steps:[{title:"<b>Выберите</b>",text:"Шаг",time:"2 минуты",image:"https://zhivaya-skazka.ru/a.webp"},{title:"Два",image:"javascript:alert(1)"}],buttons:[{label:"Выбрать тариф",url:"https://zhivaya-skazka.ru/#prices"},{label:"Ещё"}]});
+  assert.equal(box.children[0].children.length,2);
+  assert.equal(made.filter(node=>node.tag==="img").length,1,"only the https picture is loaded");
+  assert.equal(made.find(node=>node.tag==="b").textContent,"<b>Выберите</b>","titles are text, never HTML");
+  assert.deepEqual(buttons.map(node=>node.classList.list),[["zw-howto-cta"],[]]);
+});
 test("visitor API includes signed identity and never sends site cookies",async()=>{
   const state={visitorId:"signed-visitor",visitorToken:"signed-token"};let sent;
   const request=widgetFunction("requestApi",{state,API_BASE:"https://chat.invalid",FormData,AbortController,encodeURIComponent,setTimeout,clearTimeout,ensureIdentity:async()=>true,fetch:async(url,options)=>{sent={url,...options};return Response.json({id:"ok"})}});

@@ -4,6 +4,7 @@ import { pool, transaction } from "../db.js";
 import { sendPushToSession } from "../services/push.js";
 import { createMessage, enrichMessages } from "../services/messages.js";
 import { AUTO_INVITE_DEFAULTS, AUTO_INVITE_KEYS, forgetWidgetConfig } from "../services/auto-invite.js";
+import { QUICK_REPLY_GUIDES, sendQuickReplyGuide } from "../services/widget-guides.js";
 
 // ═══ SETTINGS KEYS ═══
 const SETTINGS_KEYS = {
@@ -38,6 +39,8 @@ const messageSchema = z.object({
   sender: z.literal("visitor"),
   client_message_id: z.string().uuid().optional(),
   message: z.string().min(1).max(10000),
+  // Кнопка быстрого ответа, на которую сервер сразу отвечает подсказкой (services/widget-guides.ts).
+  quick_reply: z.enum(QUICK_REPLY_GUIDES).optional(),
 });
 
 const statusSchema = z.object({
@@ -563,9 +566,11 @@ export function registerWidgetRoutes(app: FastifyInstance) {
     config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
   }, async (request) => {
     const id = z.string().uuid().parse((request.params as any).id);
-    const body = messageSchema.parse(request.body);
+    const { quick_reply, ...body } = messageSchema.parse(request.body);
     const result = await createMessage(id, body, { visitorId: String(request.headers["x-visitor-id"] || "") });
     if (result.created) (app as any).io.emit("session_updated", { session_id: id });
+    // Только для нового сообщения: повтор того же client_message_id вторую подсказку не шлёт.
+    if (result.created && quick_reply) await sendQuickReplyGuide((app as any).io, id, quick_reply);
     return result.message;
   });
 
