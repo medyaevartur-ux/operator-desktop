@@ -1,0 +1,6 @@
+# Миграции сверяются по SHA-256 содержимого (server/scripts/migrate.mjs), а на сервере записаны
+# суммы файлов с LF. Без этого правила Git на Windows выдаёт их с CRLF, и выпуск останавливается
+# на «Applied migration checksum changed».
+server/migrations/*.sql text eol=lf
+# 004 применена с одним CRLF в строке 6 — храним байт в байт, иначе сумма не сойдётся.
+server/migrations/004_contacts_and_leads.sql -text
