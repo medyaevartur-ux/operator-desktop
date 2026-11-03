@@ -1,0 +1,45 @@
+name: Operator native checks
+# Windows cargo tests of the Tauri shell. They take about 9 minutes on windows-latest (billed double),
+# so they run only when src-tauri/** changes (pull request or push to main) and by hand.
+on:
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/verify-native.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/verify-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verify-native-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  windows-source:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_JOBS: '1'
+      # Makes the cache key follow the pinned toolchain instead of the runner's default Rust.
+      RUSTUP_TOOLCHAIN: '1.94.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - run: rustup toolchain install 1.94.0 --profile minimal
+      # Pull requests only read the cache saved from main, so the shared cache is not filled with per-PR copies.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo +1.94.0 test --manifest-path src-tauri/Cargo.toml --locked --lib -j 1

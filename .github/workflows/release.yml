@@ -1,0 +1,506 @@
+name: Operator release
+
+# Builds the release installers on GitHub runners and leaves them in a DRAFT GitHub Release.
+# Nothing is uploaded to the production server from here: after checking the draft, the owner runs
+# scripts/publish-release.ps1 (plan first, then -Apply).
+#
+# Start:  git tag -a v8.0.0-beta.9 -m "text shown in the update dialog" && git push origin v8.0.0-beta.9
+#         or Actions -> Operator release -> Run workflow with the name of an EXISTING tag. A manual run
+#         on main saves the Rust build cache under main, which later tag runs can reuse.
+# The tag version must equal package.json, src-tauri/tauri.conf.json and server/package.json.
+# The annotated tag message becomes the update notes (a lightweight tag gets "Версия X").
+#
+# One-time setup (repository -> Settings -> Secrets and variables -> Actions):
+#   secret   TAURI_SIGNING_PRIVATE_KEY   content of src-tauri/keys/update.key (empty key password: no password secret)
+#   secret   ANDROID_KEYSTORE_PASSWORD   storePassword from src-tauri/gen/android/keystore.properties
+#   secret   ANDROID_KEY_PASSWORD        keyPassword from the same file
+#   variable ANDROID_KEY_ALIAS           keyAlias from the same file
+#   variable ANDROID_CERT_SHA256         SHA-256 of the signing certificate of the APKs that are already installed
+# release.keystore is tracked in git. build.gradle.kts reads the three Android values from environment
+# variables when keystore.properties is absent, so no properties file is written on the runner.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing git tag to build, for example v8.0.0-beta.9'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  VITE_API_URL: https://zhivaya-skazka.ru
+
+jobs:
+  # Cheap Linux job first: a wrong tag, a version mismatch, a missing or wrong signing secret or a failing
+  # regression test must not start the expensive Windows and Android builds.
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      sha: ${{ steps.meta.outputs.sha }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      notes_b64: ${{ steps.meta.outputs.notes_b64 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - name: Check tag and versions
+        id: meta
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          re='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          if [[ ! "$TAG" =~ $re ]]; then
+            echo "::error::The tag must look like v8.0.0 or v8.0.0-beta.9"
+            exit 1
+          fi
+          version="${TAG#v}"
+          fail=0
+          for spec in package.json:.version src-tauri/tauri.conf.json:.version server/package.json:.version; do
+            file="${spec%%:*}"
+            query="${spec#*:}"
+            got="$(jq -r "$query" "$file")"
+            if [ "$got" != "$version" ]; then
+              echo "::error file=$file::version in the file is '$got' but the tag is $TAG"
+              fail=1
+            fi
+          done
+          if ! jq -e '.bundle.android.versionCode | type == "number" and . == floor and . > 0 and . <= 2100000000' src-tauri/tauri.conf.json > /dev/null; then
+            echo "::error file=src-tauri/tauri.conf.json::bundle.android.versionCode must be an integer from 1 to 2100000000"
+            fail=1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > /dev/null 2>&1; then
+            echo "::error::A published GitHub release for $TAG already exists; use a new tag"
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] || exit 1
+
+          # Update notes = message of the annotated tag. It is read through the API because a shallow
+          # checkout turns an annotated tag into a lightweight one. Failures here are not fatal.
+          notes=""
+          obj="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha' 2>/dev/null || true)"
+          if [ -n "$obj" ]; then
+            notes="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$obj" --jq '.message' 2>/dev/null | sed '/^-----BEGIN PGP SIGNATURE-----/,$d' || true)"
+          fi
+          notes="${notes:0:8000}"
+
+          {
+            echo "tag=$TAG"
+            echo "version=$version"
+            echo "sha=$(git rev-parse HEAD)"
+            case "$version" in
+              *-*) echo "prerelease=true" ;;
+              *) echo "prerelease=false" ;;
+            esac
+            echo "notes_b64=$(printf '%s' "$notes" | base64 -w0)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release $TAG ($version) from commit $(git rev-parse --short HEAD)"
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Check the signing secrets
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS }}
+          ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in TAURI_SIGNING_PRIVATE_KEY ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS ANDROID_CERT_SHA256; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not set (setup list: top of .github/workflows/release.yml)"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          # A password that was stored with a trailing line break would make keytool and Gradle fail much later.
+          for name in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD ANDROID_KEY_ALIAS ANDROID_CERT_SHA256; do
+            value="${!name}"
+            if [[ "$value" == *$'\n' || "$value" == *$'\r' ]]; then
+              echo "::error::$name ends with a line break: set it again without one"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+
+          # Updater key: base64 of a minisign secret key file. The build job later checks that the signature
+          # really matches the public key in tauri.conf.json.
+          first="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '[:space:]' | base64 -d 2>/dev/null | head -n 1 || true)"
+          if [[ "$first" != "untrusted comment:"* ]]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is not a Tauri secret key (it must hold the content of update.key)"
+            exit 1
+          fi
+
+          # Android: store password, alias, key type and certificate, before the 15-minute build.
+          ks=src-tauri/gen/android/release.keystore
+          header="$(keytool -list -keystore "$ks" -storepass:env ANDROID_KEYSTORE_PASSWORD)" || {
+            echo "::error::keytool cannot open release.keystore: wrong ANDROID_KEYSTORE_PASSWORD"
+            exit 1
+          }
+          if grep -q 'Keystore type: PKCS12' <<<"$header" && [ "$ANDROID_KEY_PASSWORD" != "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "::error::release.keystore is PKCS12: ANDROID_KEY_PASSWORD must equal ANDROID_KEYSTORE_PASSWORD"
+            exit 1
+          fi
+          listing="$(keytool -list -v -keystore "$ks" -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD)" || {
+            echo "::error::keytool cannot find the alias ANDROID_KEY_ALIAS in release.keystore"
+            exit 1
+          }
+          grep -q 'Entry type: PrivateKeyEntry' <<<"$listing" || { echo "::error::The alias is not a private key entry in release.keystore"; exit 1; }
+          have="$(sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' <<<"$listing" | head -1 | tr -d ': ' | tr '[:upper:]' '[:lower:]')"
+          want="$(printf '%s' "$ANDROID_CERT_SHA256" | tr -d ': \n' | tr '[:upper:]' '[:lower:]')"
+          if [ "$have" != "$want" ]; then
+            echo "::error::release.keystore certificate SHA-256 is $have but ANDROID_CERT_SHA256 is $want"
+            exit 1
+          fi
+          echo "Signing secrets look right; release.keystore certificate SHA-256 $have matches ANDROID_CERT_SHA256"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run test:reliability
+
+  windows:
+    name: Windows installer
+    needs: preflight
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: '1.94.0'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install Rust 1.94.0
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal --no-self-update
+          rustc -V
+          cargo -V
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+      - run: npm ci
+      - name: Build NSIS installer and updater signature
+        env:
+          # The key has an empty password; with --ci the CLI uses an empty password when
+          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not set (a GitHub secret cannot be empty).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY is not set"
+            exit 1
+          fi
+          # The CLI does not trim the key; base64 never contains whitespace, so a stray line break can go.
+          TAURI_SIGNING_PRIVATE_KEY="$(printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" | tr -d '[:space:]')"
+          export TAURI_SIGNING_PRIVATE_KEY
+          npm run tauri -- build --bundles nsis --ci
+      - name: Collect files and write latest.json
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          NOTES_B64: ${{ needs.preflight.outputs.notes_b64 }}
+        run: |
+          set -euo pipefail
+          dir=src-tauri/target/release/bundle/nsis
+          mkdir -p out
+          shopt -s nullglob
+          zips=("$dir"/*_"$VERSION"_x64-setup.nsis.zip)
+          exes=("$dir"/*_"$VERSION"_x64-setup.exe)
+          if [ "${#zips[@]}" -ne 1 ] || [ "${#exes[@]}" -ne 1 ]; then
+            echo "::error::Expected one updater zip and one installer for $VERSION in $dir"
+            ls -la "$dir" || true
+            exit 1
+          fi
+          for f in "${zips[0]}" "${zips[0]}.sig" "${exes[0]}"; do
+            if [ ! -s "$f" ]; then
+              echo "::error::Missing or empty build output: $f"
+              exit 1
+            fi
+            cp "$f" out/
+          done
+          if [ -s "${exes[0]}.sig" ]; then cp "${exes[0]}.sig" out/; fi
+          node - <<'JS'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+          const zips = fs.readdirSync('out').filter((n) => n.endsWith(`_${version}_x64-setup.nsis.zip`));
+          if (zips.length !== 1) throw new Error(`expected one updater zip, found ${zips.length}`);
+          const zip = zips[0];
+          if (!/^[\w.-]+$/.test(zip)) throw new Error(`unexpected characters in file name ${zip}`);
+          const signature = fs.readFileSync(`out/${zip}.sig`, 'utf8').trim();
+          // minisign key id: 8 bytes after the 2-byte algorithm tag in the second line of the decoded text.
+          const keyId = (b64) => {
+            const lines = Buffer.from(b64, 'base64').toString('utf8').split(/\r?\n/);
+            if (!/^untrusted comment:/.test(lines[0] || '') || !lines[1]) throw new Error('not a minisign file');
+            return Buffer.from(lines[1].trim(), 'base64').subarray(2, 10).toString('hex');
+          };
+          const expected = keyId(conf.plugins.updater.pubkey);
+          const actual = keyId(signature);
+          if (expected !== actual) {
+            throw new Error(`updater signature was made with key ${actual}, but tauri.conf.json trusts ${expected}: wrong TAURI_SIGNING_PRIVATE_KEY secret`);
+          }
+          const notes = (Buffer.from(process.env.NOTES_B64 || '', 'base64').toString('utf8').trim() || `Версия ${version}`).slice(0, 4000);
+          const manifest = {
+            version,
+            notes,
+            pub_date: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+            platforms: {
+              'windows-x86_64': { signature, url: `https://zhivaya-skazka.ru/updates/operator-desktop/${zip}` },
+            },
+          };
+          fs.writeFileSync('out/latest.json', JSON.stringify(manifest, null, 2) + '\n');
+          console.log(`latest.json: ${version}, signature key ${actual} matches tauri.conf.json`);
+          JS
+          (cd out && sha256sum -- *)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-release
+          path: out
+          if-no-files-found: error
+          retention-days: 3
+
+  android:
+    name: Android APK
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      RUSTUP_TOOLCHAIN: '1.94.0'
+      CI_ANDROID_PLATFORM: android-36
+      # Default build-tools of the Android Gradle Plugin 8.11, installed up front so that Gradle does not download it mid-build.
+      CI_ANDROID_BUILD_TOOLS: 35.0.0
+      # Same build-tools as on the owner's PC; only aapt, apksigner and zipalign are used from it, to verify the APK.
+      CI_ANDROID_VERIFY_TOOLS: 36.1.0
+      # The NDK used for the previous APKs (NDK_HOME on the owner's PC).
+      CI_ANDROID_NDK: 30.0.14904198
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK platform, build-tools and NDK
+        run: |
+          set -euo pipefail
+          # A fresh SDK root owned by the runner user: no dependence on what the runner image ships or on its permissions.
+          mgr="$(command -v sdkmanager || true)"
+          if [ -z "$mgr" ]; then mgr="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"; fi
+          sdk="$HOME/android-sdk"
+          mkdir -p "$sdk"
+          yes | "$mgr" --sdk_root="$sdk" --licenses > /dev/null || true
+          "$mgr" --sdk_root="$sdk" --install "platforms;$CI_ANDROID_PLATFORM" "build-tools;$CI_ANDROID_BUILD_TOOLS" "build-tools;$CI_ANDROID_VERIFY_TOOLS" "ndk;$CI_ANDROID_NDK"
+          test -d "$sdk/ndk/$CI_ANDROID_NDK"
+          # The runner image exports ANDROID_NDK_HOME / ANDROID_NDK_ROOT for its own NDK: point all of them at ours.
+          {
+            echo "ANDROID_HOME=$sdk"
+            echo "ANDROID_SDK_ROOT=$sdk"
+            echo "NDK_HOME=$sdk/ndk/$CI_ANDROID_NDK"
+            echo "ANDROID_NDK_HOME=$sdk/ndk/$CI_ANDROID_NDK"
+            echo "ANDROID_NDK_ROOT=$sdk/ndk/$CI_ANDROID_NDK"
+          } >> "$GITHUB_ENV"
+      - name: Install Rust 1.94.0 with the Android target
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal --no-self-update --target aarch64-linux-android
+          rustc -V
+          cargo -V
+          java -version
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+          key: ndk-${{ env.CI_ANDROID_NDK }}
+          cache-on-failure: true
+      - run: npm ci
+      - name: Make gradlew executable
+        # The file is stored in git with mode 100644 (added on Windows).
+        run: chmod +x src-tauri/gen/android/gradlew
+      - name: Build signed ARM64 APK
+        env:
+          # build.gradle.kts falls back to these variables when keystore.properties does not exist.
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS }}
+        run: npm run tauri -- android build --apk --target aarch64 --ci
+      - name: Verify the APK and write android-latest.json
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          NOTES_B64: ${{ needs.preflight.outputs.notes_b64 }}
+          ANDROID_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/$CI_ANDROID_VERIFY_TOOLS"
+          mapfile -t apks < <(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' -path '*release*')
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one release APK, found ${#apks[@]}"
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          case "$apk" in *unsigned*) echo "::error::The APK is not signed: $apk"; exit 1 ;; esac
+
+          badging="$("$bt/aapt" dump badging "$apk")"
+          pkg="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<<"$badging" | head -1)"
+          code="$(sed -n "s/^package:.* versionCode='\([0-9]*\)'.*/\1/p" <<<"$badging" | head -1)"
+          name="$(sed -n "s/^package:.* versionName='\([^']*\)'.*/\1/p" <<<"$badging" | head -1)"
+          want_code="$(jq -r '.bundle.android.versionCode' src-tauri/tauri.conf.json)"
+          [ "$pkg" = "ru.zhivaya_skazka.operator" ] || { echo "::error::Wrong application id: $pkg"; exit 1; }
+          [ "$code" = "$want_code" ] || { echo "::error::APK versionCode $code differs from tauri.conf.json $want_code"; exit 1; }
+          [ "$name" = "$VERSION" ] || { echo "::error::APK versionName $name differs from the tag version $VERSION"; exit 1; }
+
+          certs="$("$bt/apksigner" verify --print-certs "$apk")"
+          mapfile -t digests < <(grep -oE 'certificate SHA-256 digest: [0-9a-fA-F]+' <<<"$certs" | awk '{print tolower($NF)}')
+          want_cert="$(printf '%s' "$ANDROID_CERT_SHA256" | tr -d ': \n' | tr '[:upper:]' '[:lower:]')"
+          if [ -z "$want_cert" ] || [ "${#digests[@]}" -ne 1 ] || [ "${digests[0]}" != "$want_cert" ]; then
+            echo "::error::The APK was not signed by the expected certificate (found: ${digests[*]:-none}, expected: ${want_cert:-unset})"
+            exit 1
+          fi
+
+          "$bt/zipalign" -c -P 16 4 "$apk" || { echo "::error::Native libraries are not 16 KB aligned"; exit 1; }
+          libs="$(unzip -Z1 "$apk" | grep '^lib/' || true)"
+          grep -q '^lib/arm64-v8a/.*\.so$' <<<"$libs" || { echo "::error::The APK has no arm64-v8a native library"; exit 1; }
+          if grep -qv '^lib/arm64-v8a/' <<<"$libs"; then
+            echo "::error::The APK contains native libraries for other ABIs"
+            exit 1
+          fi
+
+          size="$(stat -c %s "$apk")"
+          if [ "$size" -gt $((250 * 1024 * 1024)) ]; then
+            echo "::error::The APK is larger than the 250 MB updater limit"
+            exit 1
+          fi
+          apk_name="operator-$VERSION-arm64.apk"
+          mkdir -p out
+          cp "$apk" "out/$apk_name"
+          sha="$(sha256sum "out/$apk_name" | cut -d' ' -f1)"
+
+          APK_NAME="$apk_name" APK_SHA256="$sha" APK_SIZE="$size" VERSION_CODE="$code" node - <<'JS'
+          const fs = require('fs');
+          const env = process.env;
+          const notes = (Buffer.from(env.NOTES_B64 || '', 'base64').toString('utf8').trim() || `Версия ${env.VERSION}`).slice(0, 4000);
+          const manifest = {
+            version: env.VERSION,
+            version_code: Number(env.VERSION_CODE),
+            url: `https://zhivaya-skazka.ru/api/updater/download/${env.APK_NAME}`,
+            sha256: env.APK_SHA256,
+            size: Number(env.APK_SIZE),
+            notes,
+          };
+          // Same limits as the zod schema in server/src/routes/updater.ts.
+          const problems = [];
+          if (!manifest.version || manifest.version.length > 80) problems.push('version');
+          if (!Number.isInteger(manifest.version_code) || manifest.version_code <= 0 || manifest.version_code > 2100000000) problems.push('version_code');
+          if (!/^[a-f0-9]{64}$/.test(manifest.sha256)) problems.push('sha256');
+          if (!Number.isInteger(manifest.size) || manifest.size <= 0 || manifest.size > 250 * 1024 * 1024) problems.push('size');
+          if (!/^[\w.-]+\.apk$/.test(env.APK_NAME)) problems.push('file name');
+          if (problems.length) throw new Error(`android-latest.json would be rejected by the server: ${problems.join(', ')}`);
+          fs.writeFileSync('out/android-latest.json', JSON.stringify(manifest, null, 2) + '\n');
+          console.log(`android-latest.json: ${manifest.version} (versionCode ${manifest.version_code}), ${manifest.size} bytes`);
+          JS
+          (cd out && sha256sum -- *)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-release
+          path: out
+          if-no-files-found: error
+          retention-days: 3
+
+  release:
+    name: Draft GitHub Release
+    needs: [preflight, windows, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.preflight.outputs.tag }}
+      VERSION: ${{ needs.preflight.outputs.version }}
+      SHA: ${{ needs.preflight.outputs.sha }}
+      PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+      NOTES_B64: ${{ needs.preflight.outputs.notes_b64 }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '*-release'
+          merge-multiple: true
+          path: assets
+      - name: Create SHA256SUMS.txt and the draft release
+        run: |
+          set -euo pipefail
+          for f in latest.json android-latest.json "operator-$VERSION-arm64.apk"; do
+            [ -s "assets/$f" ] || { echo "::error::Missing build output: $f"; exit 1; }
+          done
+          compgen -G "assets/*_${VERSION}_x64-setup.nsis.zip" > /dev/null || { echo "::error::Missing the Windows updater zip"; exit 1; }
+          (cd assets && sha256sum -- *) > SHA256SUMS.txt
+          mv SHA256SUMS.txt assets/
+          cat assets/SHA256SUMS.txt
+
+          notes="$(printf '%s' "$NOTES_B64" | base64 -d)"
+          [ -n "${notes//[[:space:]]/}" ] || notes="Версия $VERSION"
+          {
+            printf '%s\n\n---\n' "$notes"
+            printf 'Черновик собран CI из коммита `%s`: %s\n\n' "$SHA" "$RUN_URL"
+            printf 'Проверка и выкладка на сервер: `scripts/publish-release.ps1 -Tag %s` (план), затем с `-Apply`.\n' "$TAG"
+          } > release-notes.md
+
+          # A re-run replaces the draft of the same tag; a published release is never touched.
+          existing="$(gh api "repos/$GH_REPO/releases?per_page=100" --paginate --jq '.[] | [.id, .draft, .tag_name] | @tsv' | awk -v tag="$TAG" -F'\t' '$3 == tag {print $1, $2}')"
+          while read -r id draft; do
+            [ -n "${id:-}" ] || continue
+            if [ "$draft" != "true" ]; then
+              echo "::error::A published release for $TAG already exists"
+              exit 1
+            fi
+            gh api -X DELETE "repos/$GH_REPO/releases/$id"
+            echo "Deleted the earlier draft $id of $TAG"
+          done <<<"$existing"
+
+          args=(--draft --verify-tag --title "Живая Сказка — Оператор $VERSION" --notes-file release-notes.md)
+          if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+          url="$(gh release create "$TAG" "${args[@]}" assets/*)"
+          {
+            echo "### Draft release $TAG"
+            echo
+            echo "$url"
+            echo
+            echo '```'
+            cat assets/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$url"
