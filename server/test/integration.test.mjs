@@ -234,8 +234,10 @@ test('quick reply «Как заказать» answers once with the order guide;
   assert.equal(guides[0].metadata.guide,'how_to_order');
   assert.ok(guides[0].metadata.steps.length>=3&&guides[0].metadata.buttons[0].url.startsWith('https://'));
   assert.equal((await visitorMessage(s,'Другое',{quick_reply:'anything_else'})).statusCode,400);
-  const templates=await pool.query('SELECT shortcut FROM chat_v8_templates WHERE shortcut=ANY($1)',[['/тарифы','/заказ','/связь','/номер']]);
+  const templates=await pool.query('SELECT shortcut,body FROM chat_v8_templates WHERE shortcut=ANY($1)',[['/тарифы','/заказ','/связь','/номер']]);
   assert.equal(templates.rowCount,4);
+  assert.ok(templates.rows.every(row=>!/whatsapp|wa\.me/i.test(row.body)),'WhatsApp is no longer offered to clients (007)');
+  assert.ok(templates.rows.find(row=>row.shortcut==='/связь').body.includes('https://t.me/jivaya_skazka'));
 });
 test('shared templates reject lost updates instead of overwriting another edit',async()=>{
   const a=await actor(),shortcut='/test-'+randomUUID().slice(0,8);
