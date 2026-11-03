@@ -13,7 +13,8 @@ await db.connect();
 try {
   const {rows}=await db.query("SELECT count(*)::int AS tables FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'");
   if(rows[0].tables===0) {
-    const schema=(await readFile(new URL('../test/fixtures/baseline-schema.sql',import.meta.url),'utf8')).replace(/^\\.*$/gm,'');
+    // The fixture comes from pg_dump 17; CI runs Postgres 16, which does not know transaction_timeout.
+    const schema=(await readFile(new URL('../test/fixtures/baseline-schema.sql',import.meta.url),'utf8')).replace(/^\\.*$/gm,'').replace(/^SET transaction_timeout = .*$/gm,'');
     await db.query('BEGIN');
     try {
       await db.query(schema);
